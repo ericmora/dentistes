@@ -1,0 +1,72 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { DentistesClient, type MeResponse } from "@dentistes/sdk";
+
+interface SessionValue {
+  sdk: DentistesClient;
+  me: MeResponse | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (input: { tenant_name: string; subdomain: string; email: string; password: string; full_name: string }) => Promise<void>;
+  logout: () => Promise<void>;
+  reload: () => Promise<void>;
+}
+
+const SessionContext = createContext<SessionValue | null>(null);
+
+const sdk = new DentistesClient({
+  baseUrl: import.meta.env.VITE_API_URL ?? "http://localhost:8080",
+  mode: "browser",
+});
+
+export function SessionProvider({ children }: { children: ReactNode }) {
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    sdk.bootstrap().then((value) => {
+      if (active) {
+        setMe(value);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    await sdk.login(email, password);
+    setMe(await sdk.me());
+  }, []);
+
+  const signup = useCallback(
+    async (input: { tenant_name: string; subdomain: string; email: string; password: string; full_name: string }) => {
+      await sdk.signup(input);
+      setMe(await sdk.me());
+    },
+    [],
+  );
+
+  const logout = useCallback(async () => {
+    await sdk.logout();
+    setMe(null);
+  }, []);
+
+  const reload = useCallback(async () => {
+    setMe(await sdk.me());
+  }, []);
+
+  const value = useMemo(
+    () => ({ sdk, me, loading, login, signup, logout, reload }),
+    [me, loading, login, signup, logout, reload],
+  );
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+export function useSession(): SessionValue {
+  const ctx = useContext(SessionContext);
+  if (!ctx) throw new Error("useSession must be used within SessionProvider");
+  return ctx;
+}

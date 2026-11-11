@@ -1,0 +1,22 @@
+{
+  "name": "@dentistes/cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "dentistes": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dentistes/sdk": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Dentistes",
+    "slug": "dentistes",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "dentistes",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dentistes.app"
+    },
+    "android": {
+      "package": "com.dentistes.app"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "dentistes",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "scripts": {
+    "build": "pnpm run build:sdk && pnpm run build:web && pnpm run build:admin && pnpm run build:marketing && pnpm run build:cli",
+    "build:sdk": "pnpm --filter @dentistes/sdk build",
+    "build:web": "pnpm --filter @dentistes/web build",
+    "build:admin": "pnpm --filter @dentistes/admin build",
+    "build:marketing": "pnpm --filter @dentistes/marketing build",
+    "build:cli": "pnpm --filter @dentistes/cli build",
+    "check": "pnpm -r --if-present check && pnpm run check:api",
+    "check:api": "cd apps/api && go vet ./... && go test ./...",
+    "dev:api": "cd apps/api && go run ./cmd/api",
+    "dev:web": "pnpm --filter @dentistes/web dev",
+    "dev:admin": "pnpm --filter @dentistes/admin dev",
+    "dev:marketing": "pnpm --filter @dentistes/marketing dev",
+    "db:up": "docker compose up -d postgres",
+    "db:migrate": "cd apps/api && go run ./cmd/api migrate",
+    "deploy": "./deploy/deploy.sh"
+  }
+}

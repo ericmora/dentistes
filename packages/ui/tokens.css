@@ -1,0 +1,12 @@
+:root {
+  --color-critical: #dc2626;
+  --color-pending: #f59e0b;
+  --color-confirmed: #059669;
+  --color-inchair: #1d4ed8;
+  --color-dental-caries: #e11d48;
+  --color-dental-restored: #2563eb;
+  --color-dental-planned: #16a34a;
+  --color-dental-missing: #4b5563;
+  --surface: #f8fafc;
+  --ink: #0f172a;
+}

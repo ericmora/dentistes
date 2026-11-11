@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dentistes
+      POSTGRES_USER: dentistes
+      POSTGRES_PASSWORD: dentistes
+      APP_DB_PASSWORD: dentistes_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/10-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dentistes -d dentistes"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://dentistes_app:dentistes_app@postgres:5432/dentistes?sslmode=disable
+      MIGRATION_DATABASE_URL: postgres://dentistes:dentistes@postgres:5432/dentistes?sslmode=disable
+      JWT_SECRET: local-development-secret-change-me-please
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:5175
+      APP_URL: http://localhost:5173
+      ADMIN_URL: http://localhost:5174
+      MARKETING_URL: http://localhost:5175
+      COOKIE_SECURE: "false"
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+      BOOTSTRAP_ADMIN_PASSWORD: change-me-now-please
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    command: ["/app/api", "serve"]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+        VITE_APP_URL: http://localhost:5173
+    depends_on:
+      - api
+    ports:
+      - "5173:8080"
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+        VITE_APP_URL: http://localhost:5174
+    depends_on:
+      - api
+    ports:
+      - "5174:8080"
+
+  marketing:
+    build:
+      context: .
+      dockerfile: apps/marketing/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+        VITE_APP_URL: http://localhost:5173
+    depends_on:
+      - api
+    ports:
+      - "5175:8080"
+
+volumes:
+  pgdata:

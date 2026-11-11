@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+
+.env
+.env.*
+!.env.example
+*.local
+
+docs/drive/
+deploy/k3s/base/secret.yaml
+
+apps/api/api
+apps/api/bin/

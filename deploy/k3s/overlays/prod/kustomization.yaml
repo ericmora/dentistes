@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: dentistes/api
+    newName: 155.133.27.1:5000/dentistes/api
+    newTag: latest
+  - name: dentistes/web
+    newName: 155.133.27.1:5000/dentistes/web
+    newTag: latest
+  - name: dentistes/admin
+    newName: 155.133.27.1:5000/dentistes/admin
+    newTag: latest
+  - name: dentistes/marketing
+    newName: 155.133.27.1:5000/dentistes/marketing
+    newTag: latest
+  - name: dentistes/backup
+    newName: 155.133.27.1:5000/dentistes/backup
+    newTag: latest

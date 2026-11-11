@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dentistes
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: dentistes.2mes4.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: marketing
+                port:
+                  number: 8080
+    - host: app.dentistes.2mes4.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 8080
+    - host: admin.dentistes.2mes4.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin
+                port:
+                  number: 8080
+    - host: api.dentistes.2mes4.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - dentistes.2mes4.com
+        - app.dentistes.2mes4.com
+        - admin.dentistes.2mes4.com
+        - api.dentistes.2mes4.com
+      secretName: dentistes-tls

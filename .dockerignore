@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+**/dist
+.git
+docs/drive
+deploy/k3s/base/secret.yaml
+apps/api/api
+*.log
+.DS_Store
