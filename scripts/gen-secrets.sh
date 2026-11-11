@@ -4,14 +4,10 @@ set -euo pipefail
 NAMESPACE="${NAMESPACE:-dentistes}"
 OUT="${SECRET_FILE:-$HOME/.mcp/credentials/dentistes-k8s-secret.yaml}"
 
-rand_alnum() {
-  LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$1"
-}
-
-OWNER_PASS="$(rand_alnum 28)"
-APP_PASS="$(rand_alnum 28)"
+OWNER_PASS="$(openssl rand -hex 14)"
+APP_PASS="$(openssl rand -hex 14)"
 JWT_SECRET="$(openssl rand -hex 32)"
-ADMIN_PASS="$(rand_alnum 20)"
+ADMIN_PASS="$(openssl rand -hex 10)"
 ADMIN_EMAIL="${BOOTSTRAP_ADMIN_EMAIL:-ericmora82@gmail.com}"
 
 mkdir -p "$(dirname "$OUT")"
