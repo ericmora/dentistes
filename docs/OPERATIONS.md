@@ -45,6 +45,17 @@ Claves:
 
 Opcional: secreto `dentistes-rclone` con `rclone.conf` para copia offsite.
 
+## DNS
+
+Con un wildcard `*.dentistes.2mes4.com` apuntando al Ingress:
+
+- `dentistes.2mes4.com` → web comercial (marketing). **El wildcard no cubre el apex**: crea también el registro A/AAAA del dominio raíz.
+- `app.dentistes.2mes4.com` → webapp.
+- `admin.dentistes.2mes4.com` → panel global.
+- `api.dentistes.2mes4.com` → API.
+
+El Ingress usa certificados por host con `letsencrypt-prod` (HTTP-01). No se ha configurado un solver DNS-01; si se quiere un certificado wildcard `*.dentistes.2mes4.com` hay que añadir el solver DNS del proveedor en cert-manager.
+
 ## Despliegue
 
 ```bash
@@ -66,10 +77,25 @@ DNS necesario: `dentistes.2mes4.com`, `app.dentistes.2mes4.com`, `admin.dentiste
 - Migraciones embebidas en el binario (`apps/api/migrations`).
 - El rol de app se crea en el init de PostgreSQL (primer arranque del PVC). Si el PVC ya existía, crea el rol manualmente o recrea el volumen.
 
-## Stripe
+## Stripe y planes
 
-1. Crea productos/precios en Stripe (suscripción mensual).
-2. En el panel global → Planes, asigna el `price_...` a `starter`, `clinic`, `enterprise`.
+Los productos y precios mensuales se generan desde la tabla `plans`. El script es idempotente:
+
+1. Define los precios en la base de datos (panel global → Planes, o SQL sobre `plans.price_monthly_cents`).
+2. Sincroniza con Stripe (crea producto si falta, crea price nuevo si cambió importe/moneda, desactiva el anterior y guarda los IDs):
+
+```bash
+# dentro del clúster (usa STRIPE_SECRET_KEY del deployment)
+./scripts/stripe-sync.sh
+./scripts/stripe-sync.sh --dry-run
+
+# en local (lee .env)
+./scripts/stripe-sync.sh --local --dry-run
+```
+
+El comando es `api stripe-sync`; `--dry-run` muestra lo que haría sin llamar a Stripe.
+
+3. Copia el signing secret del webhook a `STRIPE_WEBHOOK_SECRET` y reinicia el deployment.
 3. Añade el webhook `https://api.dentistes.2mes4.com/v1/webhooks/stripe` con eventos:
    - `checkout.session.completed`
    - `customer.subscription.created`, `updated`, `deleted`

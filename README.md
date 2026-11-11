@@ -91,7 +91,7 @@ Los checkboxes del panel global escriben overrides por tenant y reflejan el esta
 - Solo `ACTIVE` y `TRIALING` vigentes desbloquean funcionalidades. `PAST_DUE`, `CANCELED`, `UNPAID` y trial caducado bloquean los módulos automáticamente.
 - El trial inicial es de 14 días (`TRIAL_DAYS`).
 
-Configura en Stripe el webhook `https://api.dentistes.2mes4.com/v1/webhooks/stripe` y guarda el secret en `STRIPE_WEBHOOK_SECRET`. Asigna el `price_...` de cada plan desde el panel global (Planes) o por SQL.
+Configura en Stripe el webhook `https://api.dentistes.2mes4.com/v1/webhooks/stripe` y guarda el secret en `STRIPE_WEBHOOK_SECRET`. Los productos y precios se generan desde la tabla `plans` con `./scripts/stripe-sync.sh` (idempotente; `--dry-run` para revisar).
 
 ## SDK
 

@@ -45,6 +45,7 @@ type Plan struct {
 	Description       string   `json:"description"`
 	PriceMonthlyCents int      `json:"price_monthly_cents"`
 	Currency          string   `json:"currency"`
+	StripeProductID   string   `json:"stripe_product_id,omitempty"`
 	StripePriceID     string   `json:"stripe_price_id,omitempty"`
 	IsActive          bool     `json:"is_active"`
 	Features          []string `json:"features"`

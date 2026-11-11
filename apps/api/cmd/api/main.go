@@ -18,6 +18,8 @@ import (
 	"github.com/ericmora/dentistes/apps/api/internal/db"
 	"github.com/ericmora/dentistes/apps/api/internal/httpapi"
 	"github.com/ericmora/dentistes/apps/api/internal/store"
+	"github.com/ericmora/dentistes/apps/api/internal/stripeapi"
+	"github.com/ericmora/dentistes/apps/api/internal/stripejobs"
 )
 
 func main() {
@@ -46,7 +48,7 @@ func main() {
 		}
 		slog.Info("migrations applied")
 		return
-	case "serve":
+	case "serve", "stripe-sync":
 		if err := runMigrations(ctx, cfg.MigrationDatabaseURL); err != nil {
 			slog.Error("migration failed", "error", err)
 			os.Exit(1)
@@ -62,6 +64,25 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
+
+	if command == "stripe-sync" {
+		dryRun := false
+		for _, arg := range os.Args[2:] {
+			if arg == "--dry-run" {
+				dryRun = true
+			}
+		}
+		client := stripeapi.New(cfg.StripeSecretKey)
+		if !dryRun && !client.Enabled() {
+			slog.Error("STRIPE_SECRET_KEY is required (or use --dry-run)")
+			os.Exit(1)
+		}
+		if err := stripejobs.SyncPlans(ctx, database, client, dryRun, os.Stdout); err != nil {
+			slog.Error("stripe plan sync failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if err := bootstrapAdmin(ctx, cfg, database); err != nil {
 		slog.Error("bootstrap admin failed", "error", err)

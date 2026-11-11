@@ -10,9 +10,9 @@ import (
 func (s *Store) GetPlanByKey(ctx context.Context, tx pgx.Tx, key string) (*Plan, error) {
 	var p Plan
 	var stripePrice *string
-	err := tx.QueryRow(ctx, `select key, name, description, price_monthly_cents, currency, stripe_price_id, is_active
+	err := tx.QueryRow(ctx, `select key, name, description, price_monthly_cents, currency, coalesce(stripe_product_id, ''), coalesce(stripe_price_id, ''), is_active
 		from plans where key = $1`, key).
-		Scan(&p.Key, &p.Name, &p.Description, &p.PriceMonthlyCents, &p.Currency, &stripePrice, &p.IsActive)
+		Scan(&p.Key, &p.Name, &p.Description, &p.PriceMonthlyCents, &p.Currency, &p.StripeProductID, &stripePrice, &p.IsActive)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -32,9 +32,9 @@ func (s *Store) GetPlanByKey(ctx context.Context, tx pgx.Tx, key string) (*Plan,
 
 func (s *Store) GetPlanByStripePrice(ctx context.Context, tx pgx.Tx, priceID string) (*Plan, error) {
 	var p Plan
-	err := tx.QueryRow(ctx, `select key, name, description, price_monthly_cents, currency, coalesce(stripe_price_id, ''), is_active
+	err := tx.QueryRow(ctx, `select key, name, description, price_monthly_cents, currency, coalesce(stripe_product_id, ''), coalesce(stripe_price_id, ''), is_active
 		from plans where stripe_price_id = $1`, priceID).
-		Scan(&p.Key, &p.Name, &p.Description, &p.PriceMonthlyCents, &p.Currency, &p.StripePriceID, &p.IsActive)
+		Scan(&p.Key, &p.Name, &p.Description, &p.PriceMonthlyCents, &p.Currency, &p.StripeProductID, &p.StripePriceID, &p.IsActive)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -45,7 +45,7 @@ func (s *Store) GetPlanByStripePrice(ctx context.Context, tx pgx.Tx, priceID str
 }
 
 func (s *Store) ListPlans(ctx context.Context, tx pgx.Tx, onlyActive bool) ([]Plan, error) {
-	query := `select p.key, p.name, p.description, p.price_monthly_cents, p.currency, coalesce(p.stripe_price_id, ''), p.is_active,
+	query := `select p.key, p.name, p.description, p.price_monthly_cents, p.currency, coalesce(p.stripe_product_id, ''), coalesce(p.stripe_price_id, ''), p.is_active,
 			coalesce(array_agg(pf.feature_key) filter (where pf.feature_key is not null), '{}') as features
 		from plans p
 		left join plan_features pf on pf.plan_key = p.key`
@@ -61,7 +61,7 @@ func (s *Store) ListPlans(ctx context.Context, tx pgx.Tx, onlyActive bool) ([]Pl
 	out := []Plan{}
 	for rows.Next() {
 		var p Plan
-		if err := rows.Scan(&p.Key, &p.Name, &p.Description, &p.PriceMonthlyCents, &p.Currency, &p.StripePriceID, &p.IsActive, &p.Features); err != nil {
+		if err := rows.Scan(&p.Key, &p.Name, &p.Description, &p.PriceMonthlyCents, &p.Currency, &p.StripeProductID, &p.StripePriceID, &p.IsActive, &p.Features); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -80,5 +80,11 @@ func (s *Store) UpsertTenantFeature(ctx context.Context, tx pgx.Tx, tenantID, fe
 		values ($1, $2, $3, $4::timestamptz)
 		on conflict (tenant_id, feature_key) do update set enabled = excluded.enabled, expires_at = excluded.expires_at, updated_at = now()`,
 		tenantID, featureKey, enabled, expiresAt)
+	return err
+}
+
+func (s *Store) UpdatePlanStripeIDs(ctx context.Context, tx pgx.Tx, key, productID, priceID string) error {
+	_, err := tx.Exec(ctx, "update plans set stripe_product_id = nullif($2, ''), stripe_price_id = nullif($3, '') where key = $1",
+		key, productID, priceID)
 	return err
 }

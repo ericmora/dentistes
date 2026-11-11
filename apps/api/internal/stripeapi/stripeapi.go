@@ -244,3 +244,74 @@ func VerifyWebhook(payload []byte, sigHeader, secret string) error {
 	}
 	return fmt.Errorf("stripe signature mismatch")
 }
+
+func (c *Client) CreateProduct(ctx context.Context, name, description, planKey string, active bool) (string, error) {
+	form := url.Values{}
+	form.Set("name", name)
+	form.Set("description", description)
+	form.Set("active", boolString(active))
+	form.Set("metadata[plan_key]", planKey)
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := c.postForm(ctx, "/products", form, &out); err != nil {
+		return "", err
+	}
+	return out.ID, nil
+}
+
+func (c *Client) UpdateProduct(ctx context.Context, id, name, description string, active bool) error {
+	form := url.Values{}
+	form.Set("name", name)
+	form.Set("description", description)
+	form.Set("active", boolString(active))
+	return c.postForm(ctx, "/products/"+url.PathEscape(id), form, nil)
+}
+
+type Price struct {
+	ID         string `json:"id"`
+	Product    string `json:"product"`
+	Currency   string `json:"currency"`
+	UnitAmount int64  `json:"unit_amount"`
+	Active     bool   `json:"active"`
+	Recurring  *struct {
+		Interval string `json:"interval"`
+	} `json:"recurring"`
+}
+
+func (c *Client) GetPrice(ctx context.Context, id string) (*Price, error) {
+	var out Price
+	if err := c.get(ctx, "/prices/"+url.PathEscape(id), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) CreatePrice(ctx context.Context, productID, currency, planKey string, unitAmount int64) (string, error) {
+	form := url.Values{}
+	form.Set("product", productID)
+	form.Set("currency", currency)
+	form.Set("unit_amount", strconv.FormatInt(unitAmount, 10))
+	form.Set("recurring[interval]", "month")
+	form.Set("metadata[plan_key]", planKey)
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := c.postForm(ctx, "/prices", form, &out); err != nil {
+		return "", err
+	}
+	return out.ID, nil
+}
+
+func (c *Client) DeactivatePrice(ctx context.Context, id string) error {
+	form := url.Values{}
+	form.Set("active", "false")
+	return c.postForm(ctx, "/prices/"+url.PathEscape(id), form, nil)
+}
+
+func boolString(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}

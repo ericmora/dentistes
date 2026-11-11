@@ -14,4 +14,5 @@ docs/drive/
 deploy/k3s/base/secret.yaml
 
 apps/api/api
+apps/api/api-linux-amd64
 apps/api/bin/

@@ -1,0 +1,8 @@
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 app
+COPY api-linux-amd64 /app/api
+RUN chmod +x /app/api
+USER app
+EXPOSE 8080
+ENTRYPOINT ["/app/api"]
+CMD ["serve"]
