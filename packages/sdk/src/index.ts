@@ -93,6 +93,16 @@ export interface Patient {
   created_at: string;
 }
 
+export interface TenantUser {
+  membership_id: string;
+  user_id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface TenantSummary {
   id: string;
   name: string;
@@ -317,6 +327,22 @@ export class DentistesClient {
   }): Promise<Patient> {
     return this.request("/v1/patients", { method: "POST", body: input });
   }
+
+  users = {
+    list: (): Promise<{ users: TenantUser[] }> => this.request("/v1/users"),
+    create: (input: {
+      email: string;
+      full_name: string;
+      password: string;
+      role: string;
+    }): Promise<{ membership_id: string; user_id: string; email: string; role: string; is_active: boolean }> =>
+      this.request("/v1/users", { method: "POST", body: input }),
+    update: (
+      membershipId: string,
+      input: { role?: string; is_active?: boolean },
+    ): Promise<{ membership_id: string; role: string; is_active: boolean }> =>
+      this.request(`/v1/users/${membershipId}`, { method: "PATCH", body: input }),
+  };
 
   billing = {
     subscription: (): Promise<{ subscription: Subscription | null; entitlements: Entitlements }> =>

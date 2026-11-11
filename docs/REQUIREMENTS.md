@@ -8,7 +8,7 @@ Estado de la base respecto a la documentación de Google Drive (carpeta `17YBDTd
 | RQ-002 | Esquema PostgreSQL 16 para clínica, agenda, odontograma, facturación y WhatsApp | `Arquitectura/Model de Dades - Especificació PostgreSQL 16+.md` (2026-11-11) | Esquema completo en migraciones; endpoints de negocio pendientes por módulo |
 | RQ-003 | Backend Go stateless con bajo consumo | `Arquitectura/Arquitectura Overview.md` (2026-11-11) | Implementado: Go 1.24, chi, pgx, JWT |
 | RQ-004 | RBAC por rol (ADMIN, DENTIST, HYGIENIST, RECEPTIONIST) | `Arquitectura/Arquitectura Overview.md` (2026-11-11) | Implementado con `OWNER` añadido para el tenant; matriz en `internal/auth/roles.go` |
-| RQ-005 | Gestión segura de usuarios multi-tenant | Requisito de producto | Implementado: Argon2id, JWT, refresh rotado, sesiones, bloqueo por usuario/tenant |
+| RQ-005 | Gestión segura de usuarios multi-tenant | Requisito de producto | Implementado: Argon2id, JWT, refresh rotado, sesiones, bloqueo por usuario/tenant, endpoints y UI de miembros/roles |
 | RQ-006 | Frontend React 18 + Vite + Tailwind + design system | `Arquitectura/Arquitectura de Frontend i Design System.md` (2026-11-11) | Base implementada: tokens, componentes, gates y tres apps web |
 | RQ-007 | App móvil, CLI, webapp y admin global | Requisito de producto | Scafolds funcionales: Expo, CLI Node, web y admin |
 | RQ-008 | Web comercial con precios | Requisito de producto | Implementada: landing + precios desde API + CTA a signup |

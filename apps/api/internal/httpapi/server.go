@@ -85,6 +85,13 @@ func (s *Server) Router() http.Handler {
 					r.With(s.requirePermission("patients:read")).Get("/", s.handleListPatients)
 					r.With(s.requirePermission("patients:write")).Post("/", s.handleCreatePatient)
 				})
+
+				r.Route("/users", func(r chi.Router) {
+					r.Use(s.requirePermission("users:manage"))
+					r.Get("/", s.handleListUsers)
+					r.Post("/", s.handleCreateUser)
+					r.Patch("/{id}", s.handleUpdateUser)
+				})
 			})
 
 			r.Route("/admin", func(r chi.Router) {
@@ -204,6 +211,12 @@ func (s *Server) tenantTx(next http.Handler) http.Handler {
 			return
 		}
 		err := s.db.WithTenant(r.Context(), claims.TenantID, claims.Subject, func(tx pgx.Tx) error {
+			membership, err := s.store.GetMembership(r.Context(), tx, claims.Subject, claims.TenantID)
+			if err != nil {
+				writeError(w, http.StatusForbidden, "NO_MEMBERSHIP", "user is not an active member of this tenant", nil)
+				return errRollbackErr
+			}
+			claims.Role = membership.Role
 			ctx := context.WithValue(r.Context(), ctxTx, tx)
 			ctx = context.WithValue(ctx, ctxEntCache, &entCache{})
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}

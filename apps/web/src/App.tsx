@@ -7,6 +7,7 @@ import { SignupPage } from "./pages/Signup";
 import { DashboardPage } from "./pages/Dashboard";
 import { PatientsPage } from "./pages/Patients";
 import { BillingPage } from "./pages/Billing";
+import { UsersPage } from "./pages/Users";
 
 export function App() {
   const { me, loading } = useSession();
@@ -33,6 +34,7 @@ export function App() {
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/patients" element={<PatientsPage />} />
                   <Route path="/billing" element={<BillingPage />} />
+                  <Route path="/users" element={<UsersPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Layout>

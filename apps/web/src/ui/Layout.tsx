@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { Badge, Button, cn } from "@dentistes/ui";
+import { can } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 
-const links = [
+const baseLinks = [
   { to: "/", label: "Resumen" },
   { to: "/patients", label: "Pacientes" },
   { to: "/billing", label: "Facturación" },
@@ -12,6 +13,7 @@ const links = [
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useSession();
   if (!me) return null;
+  const links = can(me, "users:manage") ? [...baseLinks, { to: "/users", label: "Usuarios" }] : baseLinks;
 
   return (
     <div className="min-h-screen bg-slate-50">

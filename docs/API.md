@@ -67,6 +67,9 @@ Respuesta:
 | POST | `/v1/billing/portal` | `billing:manage` | Abre Stripe Billing Portal |
 | GET | `/v1/patients` | feature `patients` + `patients:read` | Lista/busca pacientes (`q`, `limit`, `offset`) |
 | POST | `/v1/patients` | feature `patients` + `patients:write` | Crea paciente |
+| GET | `/v1/users` | `users:manage` | Miembros del tenant |
+| POST | `/v1/users` | `users:manage` | Crea usuario y/o membership con rol |
+| PATCH | `/v1/users/{membershipId}` | `users:manage` | Cambia rol o estado del miembro |
 
 ### Paciente
 

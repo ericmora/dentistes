@@ -68,6 +68,8 @@ Si el volumen de PostgreSQL ya existía antes de configurar `deploy/postgres/10-
 - El runtime conecta como `dentistes_app` (sin superuser, sin ownership). Las migraciones corren como el rol owner (`MIGRATION_DATABASE_URL`).
 - Contraseñas con Argon2id, access token JWT de 15 min y refresh token opaco rotado con hash en `sessions`.
 - El refresh token viaja en cookie `HttpOnly` para navegador y en JSON para clientes nativos (CLI/móvil).
+- Gestión de miembros por tenant (`/v1/users`): crear/añadir por email, cambiar rol y activar/desactivar. Los cambios de rol y las bajas se aplican al instante (cada request valida la membership).
+- Salvaguardas: no puedes desactivarte a ti mismo y el tenant siempre conserva al menos un `OWNER` activo.
 
 ## Permisos y funcionalidades
 
