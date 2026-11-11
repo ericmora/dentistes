@@ -60,6 +60,9 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, s.securityHeaders, s.cors)
 
 	r.Get("/health", s.handleHealth)
+	r.Get("/live", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
+	})
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/public/plans", s.handlePublicPlans)

@@ -141,6 +141,24 @@ func main() {
 }
 
 func runMigrations(ctx context.Context, url string) error {
+	var lastErr error
+	for attempt := 1; attempt <= 30; attempt++ {
+		if err := migrateOnce(ctx, url); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			slog.Warn("database not ready, retrying migrations", "attempt", attempt, "error", err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return lastErr
+}
+
+func migrateOnce(ctx context.Context, url string) error {
 	mdb, err := db.Open(ctx, url)
 	if err != nil {
 		return err
