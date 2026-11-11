@@ -56,6 +56,20 @@ Con un wildcard `*.dentistes.2mes4.com` apuntando al Ingress:
 
 El Ingress usa certificados por host con `letsencrypt-prod` (HTTP-01). No se ha configurado un solver DNS-01; si se quiere un certificado wildcard `*.dentistes.2mes4.com` hay que añadir el solver DNS del proveedor en cert-manager.
 
+## Generar secretos iniciales
+
+```bash
+./scripts/gen-secrets.sh            # genera ~/.mcp/credentials/dentistes-k8s-secret.yaml
+./scripts/gen-secrets.sh --apply    # crea namespace + aplica el secret (requiere kubectl)
+```
+
+No lo re-ejecutes tras el despliegue: rotarías las contraseñas de PostgreSQL. Para añadir Stripe después, parchea solo esas claves:
+
+```bash
+kubectl -n dentistes patch secret dentistes-secrets --type merge -p '{"stringData":{"STRIPE_SECRET_KEY":"sk_...","STRIPE_WEBHOOK_SECRET":"whsec_..."}}'
+kubectl -n dentistes rollout restart deployment/api
+```
+
 ## Despliegue
 
 ```bash
