@@ -63,6 +63,7 @@ func (s *Server) Router() http.Handler {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/public/plans", s.handlePublicPlans)
+		r.Get("/public/tenant", s.handlePublicTenant)
 		r.With(s.rateLimit).Post("/public/signup", s.handleSignup)
 		r.With(s.rateLimit).Post("/auth/login", s.handleLogin)
 		r.Post("/auth/refresh", s.handleRefresh)
@@ -100,6 +101,8 @@ func (s *Server) Router() http.Handler {
 				r.Post("/tenants/{id}/status", s.handleAdminSetTenantStatus)
 				r.Get("/features", s.handleAdminListFeatures)
 				r.Get("/tenants/{id}/features", s.handleAdminGetTenantFeatures)
+				r.Get("/tenants/{id}/domains", s.handleAdminListDomains)
+				r.Post("/tenants/{id}/provision", s.handleAdminProvisionTenant)
 				r.Put("/tenants/{id}/features", s.handleAdminSetFeature)
 				r.Get("/plans", s.handleAdminListPlans)
 				r.Put("/plans/{key}", s.handleAdminUpdatePlan)

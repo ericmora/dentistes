@@ -70,6 +70,19 @@ La API devuelve `402` cuando el módulo no está contratado y `403` cuando el ro
 - La suscripción se sincroniza con plan (por `stripe_price_id`), estado, periodo y cancelación.
 - La elegibilidad se calcula en cada request; no hay job de bloqueo: si el estado deja de ser `ACTIVE`/`TRIALING` vigente, las features se bloquean inmediatamente.
 
+## Provisioning de tenants
+
+1. `POST /v1/public/signup` crea tenant, owner, membership, trial, configuración, gabinete y `tenant_domains` (hostname + TLS secret) en una transacción.
+2. El worker de la API (`K8S_PROVISIONING=true`) reclama dominios `PENDING/FAILED` con `FOR UPDATE SKIP LOCKED`, marca `PROVISIONING` y llama al API de Kubernetes.
+3. El provisioner crea/actualiza un Ingress determinista `tenant-<subdominio>` con:
+   - regla host → servicio `web:8080`;
+   - anotación `cert-manager.io/cluster-issuer=letsencrypt-prod`;
+   - TLS secret `tenant-<subdominio>-tls`.
+4. cert-manager emite el certificado mediante HTTP-01 (el DNS wildcard resuelve el reto).
+5. El worker marca `READY` o `FAILED` con backoff; el panel global permite reprovisionar.
+
+El API corre con un ServiceAccount con Role limitado a `networking.k8s.io/ingresses` en el namespace. El wildcard DNS cubre todos los subdominios de tenant; el apex se publica aparte para la web comercial.
+
 ## Datos
 
 - Esquema completo de identidad, billing y negocio (pacientes, historial, odontograma, agenda, lista de espera, WhatsApp, catálogo, facturas, pagos) en `apps/api/migrations`.

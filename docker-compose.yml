@@ -46,6 +46,7 @@ services:
       args:
         VITE_API_URL: http://localhost:8080
         VITE_APP_URL: http://localhost:5173
+        VITE_TENANT_BASE_DOMAIN: dentistes.2mes4.com
     depends_on:
       - api
     ports:
@@ -70,6 +71,7 @@ services:
       args:
         VITE_API_URL: http://localhost:8080
         VITE_APP_URL: http://localhost:5173
+        VITE_TENANT_BASE_DOMAIN: dentistes.2mes4.com
     depends_on:
       - api
     ports:

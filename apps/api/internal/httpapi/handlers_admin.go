@@ -227,3 +227,54 @@ func (s *Server) handleAdminGetTenantFeatures(w http.ResponseWriter, r *http.Req
 		"overrides": overrides,
 	})
 }
+
+func (s *Server) handleAdminListDomains(w http.ResponseWriter, r *http.Request) {
+	tenantID := chi.URLParam(r, "id")
+	var domains []store.TenantDomain
+	err := s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
+		if _, err := s.store.GetTenantByID(r.Context(), tx, tenantID); err != nil {
+			return err
+		}
+		var err error
+		domains, err = s.store.ListTenantDomains(r.Context(), tx, tenantID)
+		return err
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "tenant not found", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"domains": domains})
+}
+
+func (s *Server) handleAdminProvisionTenant(w http.ResponseWriter, r *http.Request) {
+	tenantID := chi.URLParam(r, "id")
+	err := s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
+		tenant, err := s.store.GetTenantByID(r.Context(), tx, tenantID)
+		if err != nil {
+			return err
+		}
+		domains, err := s.store.ListTenantDomains(r.Context(), tx, tenantID)
+		if err != nil {
+			return err
+		}
+		if len(domains) == 0 {
+			if _, err := s.store.CreateTenantDomain(r.Context(), tx, tenantID, tenant.Subdomain+"."+s.cfg.TenantBaseDomain, "tenant-"+tenant.Subdomain+"-tls"); err != nil {
+				return err
+			}
+		}
+		return s.store.ResetTenantDomainProvisioning(r.Context(), tx, tenantID)
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "tenant not found", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "PENDING"})
+}

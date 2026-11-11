@@ -93,6 +93,29 @@ export interface Patient {
   created_at: string;
 }
 
+export interface PublicTenant {
+  tenant_id: string;
+  name: string;
+  subdomain: string;
+  tenant_status: string;
+  hostname: string;
+  domain_status: string;
+}
+
+export interface TenantDomain {
+  id: string;
+  tenant_id: string;
+  hostname: string;
+  is_primary: boolean;
+  tls_secret_name: string;
+  status: string;
+  last_error?: string;
+  attempts: number;
+  next_attempt_at?: string;
+  provisioned_at?: string;
+  created_at: string;
+}
+
 export interface TenantUser {
   membership_id: string;
   user_id: string;
@@ -300,6 +323,10 @@ export class DentistesClient {
     return this.request("/v1/public/plans", { auth: false });
   }
 
+  tenant(subdomain: string): Promise<{ tenant: PublicTenant }> {
+    return this.request(`/v1/public/tenant?subdomain=${encodeURIComponent(subdomain)}`, { auth: false });
+  }
+
   listPatients(params: { q?: string; limit?: number; offset?: number } = {}): Promise<{
     patients: Patient[];
     limit: number;
@@ -374,6 +401,10 @@ export class DentistesClient {
         method: "PUT",
         body: { feature_key: featureKey, enabled, expires_at: expiresAt },
       }),
+    getTenantDomains: (tenantId: string): Promise<{ domains: TenantDomain[] }> =>
+      this.request(`/v1/admin/tenants/${tenantId}/domains`),
+    provisionTenant: (tenantId: string): Promise<{ status: string }> =>
+      this.request(`/v1/admin/tenants/${tenantId}/provision`, { method: "POST", body: {} }),
     listPlans: (): Promise<{ plans: Plan[] }> => this.request("/v1/admin/plans"),
     updatePlan: (
       key: string,

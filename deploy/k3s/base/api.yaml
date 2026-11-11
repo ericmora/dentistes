@@ -28,6 +28,7 @@ spec:
       labels:
         app.kubernetes.io/name: api
     spec:
+      serviceAccountName: dentistes-api
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -44,6 +45,10 @@ spec:
             - configMapRef:
                 name: dentistes-config
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -17,6 +17,8 @@ import (
 	"github.com/ericmora/dentistes/apps/api/internal/config"
 	"github.com/ericmora/dentistes/apps/api/internal/db"
 	"github.com/ericmora/dentistes/apps/api/internal/httpapi"
+	"github.com/ericmora/dentistes/apps/api/internal/k8s"
+	"github.com/ericmora/dentistes/apps/api/internal/provisioner"
 	"github.com/ericmora/dentistes/apps/api/internal/store"
 	"github.com/ericmora/dentistes/apps/api/internal/stripeapi"
 	"github.com/ericmora/dentistes/apps/api/internal/stripejobs"
@@ -48,7 +50,7 @@ func main() {
 		}
 		slog.Info("migrations applied")
 		return
-	case "serve", "stripe-sync":
+	case "serve", "stripe-sync", "provision":
 		if err := runMigrations(ctx, cfg.MigrationDatabaseURL); err != nil {
 			slog.Error("migration failed", "error", err)
 			os.Exit(1)
@@ -64,6 +66,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer database.Close()
+
+	if command == "provision" {
+		client, err := k8s.NewInCluster()
+		if err != nil {
+			slog.Error("kubernetes client failed", "error", err)
+			os.Exit(1)
+		}
+		if err := provisioner.New(database, client, cfg).RunOnce(ctx); err != nil {
+			slog.Error("tenant provisioning failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if command == "stripe-sync" {
 		dryRun := false
@@ -87,6 +102,14 @@ func main() {
 	if err := bootstrapAdmin(ctx, cfg, database); err != nil {
 		slog.Error("bootstrap admin failed", "error", err)
 		os.Exit(1)
+	}
+
+	if cfg.K8SProvisioning {
+		if client, err := k8s.NewInCluster(); err != nil {
+			slog.Error("tenant provisioning disabled: kubernetes client failed", "error", err)
+		} else {
+			go provisioner.New(database, client, cfg).Run(ctx)
+		}
 	}
 
 	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.AccessTTL)

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { DentistesClient, type MeResponse } from "@dentistes/sdk";
+import { currentTenantSubdomain } from "./tenant";
 
 interface SessionValue {
   sdk: DentistesClient;
@@ -13,7 +14,7 @@ interface SessionValue {
 
 const SessionContext = createContext<SessionValue | null>(null);
 
-const sdk = new DentistesClient({
+export const sdk = new DentistesClient({
   baseUrl: import.meta.env.VITE_API_URL ?? "http://localhost:8080",
   mode: "browser",
 });
@@ -36,7 +37,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    await sdk.login(email, password);
+    const subdomain = currentTenantSubdomain();
+    await sdk.login(email, password, subdomain ? { subdomain } : {});
     setMe(await sdk.me());
   }, []);
 

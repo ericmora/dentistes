@@ -91,6 +91,34 @@ DNS necesario: `dentistes.2mes4.com`, `app.dentistes.2mes4.com`, `admin.dentiste
 - Migraciones embebidas en el binario (`apps/api/migrations`).
 - El rol de app se crea en el init de PostgreSQL (primer arranque del PVC). Si el PVC ya existía, crea el rol manualmente o recrea el volumen.
 
+## Provisioning de tenants
+
+Flujo automático al hacer signup:
+
+1. Se crea el dominio en `tenant_domains` como `PENDING`.
+2. El worker de la API (`K8S_PROVISIONING=true`) lo reclama y crea el Ingress.
+3. cert-manager emite el certificado Let's Encrypt por host (HTTP-01).
+4. El dominio pasa a `READY`; si falla, `FAILED` con reintento exponencial (30s × intento, máx. 10 min).
+
+Comandos útiles:
+
+```bash
+kubectl -n dentistes logs deploy/api | grep -i tenant
+kubectl -n dentistes get ingress | grep tenant-
+kubectl -n dentistes get certificate
+kubectl -n dentistes get secret | grep tenant-
+```
+
+Reprovisionar un tenant desde el panel global (Dominio → Reprovisionar) o:
+
+```bash
+kubectl -n dentistes exec deploy/api -- /app/api provision
+```
+
+`POST /v1/admin/tenants/{id}/provision` reencola; el worker lo procesa en `PROVISION_INTERVAL` (30s).
+
+Requisitos: DNS wildcard `*.dentistes.2mes4.com` apuntando al Ingress y cert-manager con HTTP-01. El RBAC `dentistes-api` solo puede gestionar Ingresses en el namespace `dentistes`.
+
 ## Stripe y planes
 
 Los productos y precios mensuales se generan desde la tabla `plans`. El script es idempotente:

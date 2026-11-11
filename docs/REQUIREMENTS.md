@@ -17,12 +17,13 @@ Estado de la base respecto a la documentación de Google Drive (carpeta `17YBDTd
 | RQ-011 | Cobros integrados y bloqueo automático por impago | Requisito de producto | Implementado: Stripe Checkout/Portal/webhooks y bloqueo por estado de suscripción |
 | RQ-012 | Despliegue en k3s (`../host`) | Requisito de producto | Implementado: Kustomize, Traefik/cert-manager, NetworkPolicies, registry privado |
 | RQ-013 | Backups de base de datos con copia | Requisito de producto | Implementado: CronJob pg_dump + retención + rclone opcional; destino offsite pendiente de decidir |
-| RQ-014 | WhatsApp/Mastra como servicio separado | `ADRs/ADR-002 Automatització WhatsApp Mastra.md` (2026-11-11) | Esquema y feature listos; servicio y agente pendientes (F4) |
-| RQ-015 | F1 Odontograma interactivo | `Producte/F1 - Odontograma Interactiu - Especificació Tècnica.md` (2026-11-11) | Esquema `odontograms` listo; UI y endpoints pendientes |
-| RQ-016 | F2 Agenda multigabinet en tiempo real | `Producte/F2 - Agenda Multigabinet en Temps Real - Especificació Tècnica.md` (2026-11-11) | Esquema `cabinets`/`appointments` listo; SSE/UI pendientes |
-| RQ-017 | F3 Historial médico con alertas JSONB | `Producte/F3 - Historial Mèdic amb Alertes JSONB - Especificació Tècnica.md` (2026-11-11) | Esquema `clinical_records` + alertas JSONB/GIN listos; endpoints pendientes |
-| RQ-018 | F5 Lista de espera dinámica | `Producte/F5 - Llista d'Espera Dinàmica - Especificació Tècnica.md` (2026-11-11) | Esquema listo; scoring y holds pendientes |
-| RQ-019 | F6 Facturación PDF con QR | `Producte/F6 - Facturació PDF amb QR - Especificació Tècnica.md` (2026-11-11) | Esquema `invoices`/`payments` listo; PDF/QR pendientes |
+| RQ-014 | Provisioning automático de tenant: registro, dominio, Ingress y TLS | Requisito de producto | Implementado: `tenant_domains`, worker K8s, RBAC y cert-manager |
+| RQ-015 | WhatsApp/Mastra como servicio separado | `ADRs/ADR-002 Automatització WhatsApp Mastra.md` (2026-11-11) | Esquema y feature listos; servicio y agente pendientes (F4) |
+| RQ-016 | F1 Odontograma interactivo | `Producte/F1 - Odontograma Interactiu - Especificació Tècnica.md` (2026-11-11) | Esquema `odontograms` listo; UI y endpoints pendientes |
+| RQ-017 | F2 Agenda multigabinet en tiempo real | `Producte/F2 - Agenda Multigabinet en Temps Real - Especificació Tècnica.md` (2026-11-11) | Esquema `cabinets`/`appointments` listo; SSE/UI pendientes |
+| RQ-018 | F3 Historial médico con alertas JSONB | `Producte/F3 - Historial Mèdic amb Alertes JSONB - Especificació Tècnica.md` (2026-11-11) | Esquema `clinical_records` + alertas JSONB/GIN listos; endpoints pendientes |
+| RQ-019 | F5 Lista de espera dinámica | `Producte/F5 - Llista d'Espera Dinàmica - Especificació Tècnica.md` (2026-11-11) | Esquema listo; scoring y holds pendientes |
+| RQ-020 | F6 Facturación PDF con QR | `Producte/F6 - Facturació PDF amb QR - Especificació Tècnica.md` (2026-11-11) | Esquema `invoices`/`payments` listo; PDF/QR pendientes |
 
 ## Notas de implementación
 

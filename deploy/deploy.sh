@@ -11,6 +11,7 @@ APP_URL="${APP_URL:-https://app.dentistes.2mes4.com}"
 ADMIN_URL="${ADMIN_URL:-https://admin.dentistes.2mes4.com}"
 MARKETING_URL="${MARKETING_URL:-https://dentistes.2mes4.com}"
 API_URL="${API_URL:-https://api.dentistes.2mes4.com}"
+TENANT_BASE_DOMAIN="${TENANT_BASE_DOMAIN:-dentistes.2mes4.com}"
 
 echo "==> Build API binary (native cross-compile linux/amd64)"
 (cd apps/api && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o api-linux-amd64 ./cmd/api)
@@ -35,6 +36,7 @@ for app in web admin marketing; do
     -f "apps/$app/Dockerfile" \
     --build-arg "VITE_API_URL=$API_URL" \
     --build-arg "VITE_APP_URL=$VITE_APP" \
+    --build-arg "VITE_TENANT_BASE_DOMAIN=$TENANT_BASE_DOMAIN" \
     --output "type=registry,name=$REGISTRY/dentistes/$app:$TAG,registry.insecure=true" .
 done
 

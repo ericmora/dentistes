@@ -15,6 +15,7 @@ Base: `https://api.dentistes.2mes4.com` (local: `http://localhost:8080`). JSON e
 | --- | --- | --- |
 | GET | `/health` | Healthcheck con ping a PostgreSQL |
 | GET | `/v1/public/plans` | Planes activos + catálogo de features |
+| GET | `/v1/public/tenant?subdomain=...` | Branding y estado del dominio del tenant |
 | POST | `/v1/public/signup` | Alta de tenant + owner + trial 14 días |
 | POST | `/v1/auth/login` | Login; devuelve access token y memberships |
 | POST | `/v1/auth/refresh` | Rota refresh token y emite access token |
@@ -100,6 +101,8 @@ Requieren `is_platform_admin=true`.
 | GET | `/v1/admin/features` | Catálogo de features |
 | GET | `/v1/admin/tenants/{id}/features` | Efectivo + overrides del tenant |
 | PUT | `/v1/admin/tenants/{id}/features` | `{"feature_key":"...","enabled":true,"expires_at":"opcional RFC3339"}` |
+| GET | `/v1/admin/tenants/{id}/domains` | Dominios y estado de provisioning |
+| POST | `/v1/admin/tenants/{id}/provision` | Reencola el provisioning del dominio |
 | GET | `/v1/admin/plans` | Planes (incluye inactivos y `stripe_price_id`) |
 | PUT | `/v1/admin/plans/{key}` | `{"price_monthly_cents":19900,"stripe_price_id":"price_...","is_active":true}` |
 

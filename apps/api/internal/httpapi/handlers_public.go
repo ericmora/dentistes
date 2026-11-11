@@ -115,6 +115,15 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		if _, err := s.store.CreateMembership(r.Context(), tx, tenant.ID, user.ID, "OWNER"); err != nil {
 			return err
 		}
+		if err := s.store.CreateDefaultCabinet(r.Context(), tx, tenant.ID, "Gabinete 1"); err != nil {
+			return err
+		}
+		if err := s.store.UpdateTenantConfig(r.Context(), tx, tenant.ID, `{"locale":"ca-ES","currency":"EUR","timezone":"Europe/Madrid"}`); err != nil {
+			return err
+		}
+		if _, err := s.store.CreateTenantDomain(r.Context(), tx, tenant.ID, req.Subdomain+"."+s.cfg.TenantBaseDomain, "tenant-"+req.Subdomain+"-tls"); err != nil {
+			return err
+		}
 		if err := s.store.CreateTrialSubscription(r.Context(), tx, tenant.ID, "starter", trialEnds); err != nil {
 			return err
 		}
@@ -134,6 +143,33 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+func (s *Server) handlePublicTenant(w http.ResponseWriter, r *http.Request) {
+	subdomain := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("subdomain")))
+	host := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("host")))
+	if host == "" && subdomain != "" {
+		host = subdomain + "." + s.cfg.TenantBaseDomain
+	}
+	if host == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "subdomain or host is required", nil)
+		return
+	}
+	var tenant *store.PublicTenant
+	err := s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
+		var err error
+		tenant, err = s.store.GetPublicTenantByHostname(r.Context(), tx, host)
+		return err
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "tenant not found", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tenant": tenant})
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {

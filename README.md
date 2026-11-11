@@ -71,6 +71,19 @@ Si el volumen de PostgreSQL ya existía antes de configurar `deploy/postgres/10-
 - Gestión de miembros por tenant (`/v1/users`): crear/añadir por email, cambiar rol y activar/desactivar. Los cambios de rol y las bajas se aplican al instante (cada request valida la membership).
 - Salvaguardas: no puedes desactivarte a ti mismo y el tenant siempre conserva al menos un `OWNER` activo.
 
+## Provisioning de tenants
+
+Cada alta crea en una sola transacción: tenant, usuario owner, membership, suscripción de trial, configuración por defecto, gabinete inicial y dominio primario `tenant_domains`.
+
+Un worker dentro de la API (`K8S_PROVISIONING=true`) reclama dominios pendientes y crea/actualiza el Ingress del tenant:
+
+- host `<subdominio>.<TENANT_BASE_DOMAIN>` → servicio `web`;
+- anotación `cert-manager.io/cluster-issuer` → certificado Let's Encrypt por tenant;
+- TLS secret `tenant-<subdominio>-tls`;
+- estados `PENDING → PROVISIONING → READY` (o `FAILED` con reintento exponencial).
+
+Requiere DNS wildcard `*.dentistes.2mes4.com` y cert-manager con HTTP-01. El panel global muestra el dominio y permite reprovisionar; el RBAC del ServiceAccount solo permite gestionar Ingresses en el namespace.
+
 ## Permisos y funcionalidades
 
 Dos capas independientes:

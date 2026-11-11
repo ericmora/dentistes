@@ -13,7 +13,8 @@ RUN pnpm install --frozen-lockfile --filter "@dentistes/web..."
 COPY . .
 ARG VITE_API_URL=http://localhost:8080
 ARG VITE_APP_URL=http://localhost:5173
-ENV VITE_API_URL=$VITE_API_URL VITE_APP_URL=$VITE_APP_URL
+ARG VITE_TENANT_BASE_DOMAIN=dentistes.2mes4.com
+ENV VITE_API_URL=$VITE_API_URL VITE_APP_URL=$VITE_APP_URL VITE_TENANT_BASE_DOMAIN=$VITE_TENANT_BASE_DOMAIN
 RUN pnpm --filter @dentistes/sdk build && pnpm --filter @dentistes/web build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine

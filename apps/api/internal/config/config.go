@@ -9,10 +9,10 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DatabaseURL    string
-	MigrationDatabaseURL string
-	JWTSecret      string
+	Port                   string
+	DatabaseURL            string
+	MigrationDatabaseURL   string
+	JWTSecret              string
 	AccessTTL              time.Duration
 	RefreshTTL             time.Duration
 	CookieSecure           bool
@@ -27,14 +27,22 @@ type Config struct {
 	TrialDays              int
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
+
+	TenantBaseDomain  string
+	K8SProvisioning   bool
+	PodNamespace      string
+	WebServiceName    string
+	WebServicePort    int
+	TLSIssuer         string
+	ProvisionInterval time.Duration
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		Port:          env("PORT", "8080"),
-		DatabaseURL:   env("DATABASE_URL", ""),
-		MigrationDatabaseURL: env("MIGRATION_DATABASE_URL", env("DATABASE_URL", "")),
-		JWTSecret:     env("JWT_SECRET", ""),
+		Port:                   env("PORT", "8080"),
+		DatabaseURL:            env("DATABASE_URL", ""),
+		MigrationDatabaseURL:   env("MIGRATION_DATABASE_URL", env("DATABASE_URL", "")),
+		JWTSecret:              env("JWT_SECRET", ""),
 		AccessTTL:              duration("ACCESS_TOKEN_TTL", 15*time.Minute),
 		RefreshTTL:             duration("REFRESH_TOKEN_TTL", 720*time.Hour),
 		CookieSecure:           boolEnv("COOKIE_SECURE", false),
@@ -49,6 +57,13 @@ func Load() (*Config, error) {
 		TrialDays:              intEnv("TRIAL_DAYS", 14),
 		BootstrapAdminEmail:    env("BOOTSTRAP_ADMIN_EMAIL", ""),
 		BootstrapAdminPassword: env("BOOTSTRAP_ADMIN_PASSWORD", ""),
+		TenantBaseDomain:       strings.Trim(strings.ToLower(env("TENANT_BASE_DOMAIN", "dentistes.2mes4.com")), "."),
+		K8SProvisioning:        boolEnv("K8S_PROVISIONING", false),
+		PodNamespace:           env("POD_NAMESPACE", ""),
+		WebServiceName:         env("WEB_SERVICE_NAME", "web"),
+		WebServicePort:         intEnv("WEB_SERVICE_PORT", 8080),
+		TLSIssuer:              env("TLS_ISSUER", "letsencrypt-prod"),
+		ProvisionInterval:      duration("PROVISION_INTERVAL", 30*time.Second),
 	}
 
 	if c.DatabaseURL == "" {
@@ -65,6 +80,15 @@ func Load() (*Config, error) {
 	}
 	if c.TrialDays <= 0 {
 		c.TrialDays = 14
+	}
+	if c.TenantBaseDomain == "" {
+		return nil, fmt.Errorf("TENANT_BASE_DOMAIN is required")
+	}
+	if c.WebServicePort <= 0 || c.WebServicePort > 65535 {
+		c.WebServicePort = 8080
+	}
+	if c.ProvisionInterval <= 0 {
+		c.ProvisionInterval = 30 * time.Second
 	}
 	return c, nil
 }

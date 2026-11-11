@@ -36,5 +36,8 @@ db-migrate:
 run-api:
 	set -a; [ -f .env ] && . ./.env || true; set +a; cd apps/api && go run ./cmd/api
 
+provision:
+	set -a; [ -f .env ] && . ./.env || true; set +a; cd apps/api && go run ./cmd/api provision
+
 deploy:
 	REGISTRY=$(REGISTRY) TAG=$(TAG) NAMESPACE=$(NAMESPACE) ./deploy/deploy.sh

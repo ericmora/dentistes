@@ -6,6 +6,7 @@ resources:
   - configmap.yaml
   - postgres-init-configmap.yaml
   - postgres.yaml
+  - rbac.yaml
   - api.yaml
   - web.yaml
   - admin.yaml

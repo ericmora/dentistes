@@ -14,6 +14,7 @@ import {
   DentistesClient,
   type Feature,
   type Plan,
+  type TenantDomain,
   type TenantSummary,
   type User,
 } from "@dentistes/sdk";
@@ -153,9 +154,11 @@ function TenantsPanel() {
   const [tenants, setTenants] = useState<TenantSummary[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
   const [effective, setEffective] = useState<Record<string, boolean>>({});
+  const [domains, setDomains] = useState<TenantDomain[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [provisionMessage, setProvisionMessage] = useState<string | null>(null);
 
   const loadTenantFeatures = useCallback(async (tenantId: string) => {
     const res = await sdk.admin.getTenantFeatures(tenantId);
@@ -187,7 +190,23 @@ function TenantsPanel() {
     loadTenantFeatures(selected).catch((err) => {
       setError(err instanceof Error ? err.message : "No se pudieron cargar las funcionalidades");
     });
+    sdk.admin
+      .getTenantDomains(selected)
+      .then((res) => setDomains(res.domains))
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los dominios"));
   }, [selected, loadTenantFeatures]);
+
+  async function reprovision(tenantId: string) {
+    setProvisionMessage(null);
+    try {
+      await sdk.admin.provisionTenant(tenantId);
+      setProvisionMessage("Provisionamiento solicitado. El worker lo procesará en breve.");
+      const res = await sdk.admin.getTenantDomains(tenantId);
+      setDomains(res.domains);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo solicitar el provisionamiento");
+    }
+  }
 
   async function setStatus(tenantId: string, status: string) {
     try {
@@ -307,6 +326,33 @@ function TenantsPanel() {
           <p className="mt-3 text-xs text-slate-500">
             Estado efectivo del tenant. Al cambiar un checkbox se crea o actualiza un override sobre el plan.
           </p>
+          {selectedTenant ? (
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <p className="text-sm font-semibold text-slate-900">Dominio y TLS</p>
+              {domains.length === 0 ? (
+                <p className="mt-1 text-xs text-slate-500">Sin dominio registrado.</p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {domains.map((domain) => (
+                    <li key={domain.id} className="rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-800">{domain.hostname}</span>
+                        <Badge tone={domain.status === "READY" ? "success" : domain.status === "FAILED" ? "danger" : "warning"}>
+                          {domain.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-slate-500">TLS: {domain.tls_secret_name}</p>
+                      {domain.last_error ? <p className="mt-1 text-red-700">{domain.last_error}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button size="sm" variant="outline" className="mt-3" onClick={() => void reprovision(selected)}>
+                Reprovisionar
+              </Button>
+              {provisionMessage ? <p className="mt-2 text-xs text-slate-500">{provisionMessage}</p> : null}
+            </div>
+          ) : null}
         </Card>
       </div>
     </div>
