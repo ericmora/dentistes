@@ -91,6 +91,20 @@ func (s *Server) Router() http.Handler {
 					r.Use(s.requireFeature("patients"))
 					r.With(s.requirePermission("patients:read")).Get("/", s.handleListPatients)
 					r.With(s.requirePermission("patients:write")).Post("/", s.handleCreatePatient)
+					r.With(s.requirePermission("patients:read")).Get("/{id}", s.handleGetPatient)
+					r.With(s.requirePermission("patients:write")).Patch("/{id}", s.handleUpdatePatient)
+
+					r.Group(func(r chi.Router) {
+						r.Use(s.requireFeature("clinical_history"))
+						r.With(s.requirePermission("clinical:read")).Get("/{id}/clinical-records", s.handleListClinicalRecords)
+						r.With(s.requirePermission("clinical:write")).Post("/{id}/clinical-records", s.handleCreateClinicalRecord)
+					})
+
+					r.Group(func(r chi.Router) {
+						r.Use(s.requireFeature("odontogram"))
+						r.With(s.requirePermission("clinical:read")).Get("/{id}/odontograms", s.handleListOdontograms)
+						r.With(s.requirePermission("clinical:write")).Put("/{id}/odontograms/{type}", s.handleUpsertOdontogram)
+					})
 				})
 
 				r.Route("/users", func(r chi.Router) {

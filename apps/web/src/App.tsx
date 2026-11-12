@@ -7,8 +7,10 @@ import { OnboardingPage } from "./pages/Onboarding";
 import { OnboardingCompletePage } from "./pages/OnboardingComplete";
 import { DashboardPage } from "./pages/Dashboard";
 import { PatientsPage } from "./pages/Patients";
+import { PatientDetailPage } from "./pages/PatientDetail";
 import { BillingPage } from "./pages/Billing";
 import { UsersPage } from "./pages/Users";
+import { DesignSystemPage } from "./pages/DesignSystem";
 
 export function App() {
   const { me, loading } = useSession();
@@ -47,8 +49,10 @@ export function App() {
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/patients" element={<PatientsPage />} />
+                  <Route path="/patients/:id" element={<PatientDetailPage />} />
                   <Route path="/billing" element={<BillingPage />} />
                   <Route path="/users" element={<UsersPage />} />
+                  <Route path="/design-system" element={<DesignSystemPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Layout>

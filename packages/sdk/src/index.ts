@@ -111,6 +111,44 @@ export interface Patient {
   created_at: string;
 }
 
+export interface MedicalAlerts {
+  allergies?: Array<{ name: string; severity?: "HIGH" | "MEDIUM" | "LOW"; reaction?: string } | string>;
+  conditions?: Array<{ code?: string; name: string; active?: boolean } | string>;
+  medications?: Array<{ name: string; dosage?: string } | string>;
+  high_risk?: boolean;
+  requires_antibiotic_prophylaxis?: boolean;
+  notes?: string;
+  summary?: string;
+}
+
+export interface PatientDetail extends Patient {
+  address: Record<string, unknown>;
+  medical_alerts: MedicalAlerts;
+}
+
+export interface ClinicalRecord {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  doctor_name: string;
+  appointment_id?: string;
+  entry_type: "NOTE" | "DIAGNOSIS" | "PROCEDURE" | "PRESCRIPTION";
+  content: string;
+  amends_entry_id?: string;
+  created_at: string;
+}
+
+export interface Odontogram {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  type: "INITIAL" | "CURRENT" | "HISTORICAL";
+  teeth_data: Record<string, unknown>;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PublicTenant {
   tenant_id: string;
   name: string;
@@ -421,6 +459,56 @@ export class DentistesClient {
     address?: Record<string, unknown>;
   }): Promise<Patient> {
     return this.request("/v1/patients", { method: "POST", body: input });
+  }
+
+  getPatient(patientId: string): Promise<{ patient: PatientDetail }> {
+    return this.request(`/v1/patients/${patientId}`);
+  }
+
+  updatePatient(
+    patientId: string,
+    input: {
+      first_name: string;
+      last_name: string;
+      birth_date: string;
+      phone: string;
+      email?: string;
+      dni_nie?: string;
+      gender?: string;
+      whatsapp_opt_in?: boolean;
+      address?: Record<string, unknown>;
+      medical_alerts?: MedicalAlerts;
+    },
+  ): Promise<{ patient: PatientDetail }> {
+    return this.request(`/v1/patients/${patientId}`, { method: "PATCH", body: input });
+  }
+
+  listClinicalRecords(patientId: string): Promise<{ records: ClinicalRecord[] }> {
+    return this.request(`/v1/patients/${patientId}/clinical-records`);
+  }
+
+  createClinicalRecord(
+    patientId: string,
+    input: {
+      entry_type: ClinicalRecord["entry_type"];
+      content: string;
+      appointment_id?: string;
+      amends_entry_id?: string;
+    },
+  ): Promise<{ record: ClinicalRecord }> {
+    return this.request(`/v1/patients/${patientId}/clinical-records`, { method: "POST", body: input });
+  }
+
+  listOdontograms(patientId: string): Promise<{ odontograms: Odontogram[] }> {
+    return this.request(`/v1/patients/${patientId}/odontograms`);
+  }
+
+  saveOdontogram(
+    patientId: string,
+    type: Odontogram["type"],
+    input: { teeth_data: Record<string, unknown>; version?: number },
+  ): Promise<{ odontogram: Odontogram }> {
+    return this.request(`/v1/patients/${patientId}/odontograms/${type}`, { method: "PUT", body: input });
   }
 
   users = {

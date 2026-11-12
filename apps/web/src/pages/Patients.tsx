@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -143,7 +144,9 @@ export function PatientsPage() {
                       className="cursor-pointer hover:bg-slate-50"
                     >
                       <td className="py-3 font-medium text-slate-900">
-                        {patient.last_name}, {patient.first_name}
+                        <Link to={`/patients/${patient.id}`} className="text-brand-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+                          {patient.last_name}, {patient.first_name}
+                        </Link>
                       </td>
                       <td className="py-3 tabular-nums text-slate-600">{patient.phone}</td>
                       <td className="py-3 tabular-nums text-slate-600">{patient.birth_date}</td>
@@ -208,6 +211,9 @@ export function PatientsPage() {
                 </dd>
               </div>
             </dl>
+            <Link to={`/patients/${selected.id}`} className="block pt-2">
+              <Button className="w-full">Abrir ficha clínica completa</Button>
+            </Link>
           </div>
         ) : null}
       </Sheet>

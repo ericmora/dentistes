@@ -2,6 +2,17 @@
 
 Registro de cambios ingeridos desde la carpeta de Drive `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` y su estabilización en el repositorio.
 
+## 2026-11-12 (Muntatge del Design System + F3 Historial/Alertes + F1 Odontograma)
+
+- **Design System muntat (`apps/web`):** ruta `/design-system` amb el catàleg viu de primitives, overlays i components clínics de `@dentistes/ui`.
+- **F3 — Fitxa completa de pacient, Historial Clínic immutable i Alertes JSONB:**
+  - Migració [`0007_clinical_immutability_and_audit.sql`](../apps/api/migrations/0007_clinical_immutability_and_audit.sql) amb triggers SQL que impedeixen `UPDATE`/`DELETE` sobre `clinical_records` i taula `clinical_access_logs` amb `FORCE ROW LEVEL SECURITY`.
+  - Endpoints `GET/PATCH /v1/patients/{id}` (amb redacció RBAC per a `RECEPTIONIST` / `HYGIENIST` sense `clinical:read`), `GET/POST /v1/patients/{id}/clinical-records` i auditoria d'accessos.
+  - UI completa a `PatientDetailPage` (`/patients/:id`) amb `CriticalAlertBanner`, editor d'alertes JSONB i `ClinicalHistoryTimeline` amb addendes.
+- **F1 — Odontograma Interactiu FDI:**
+  - Endpoints `GET /v1/patients/{id}/odontograms` i `PUT /v1/patients/{id}/odontograms/{type}` amb control optimista de `version` (`409 VERSION_CONFLICT`).
+  - Integració d'`OdontogramGrid` (adult 32 / infantil 20, 5 cares SVG, estats generals) a la pestanya d'Odontograma de `PatientDetailPage`.
+
 ## 2026-11-12 (Onboarding mínimo con activación Stripe)
 
 - **Backend Go (`apps/api`):**
