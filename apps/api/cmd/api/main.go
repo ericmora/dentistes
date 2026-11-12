@@ -87,7 +87,7 @@ func main() {
 				dryRun = true
 			}
 		}
-		client := stripeapi.New(cfg.StripeSecretKey)
+		client := stripeapi.NewWithBaseURL(cfg.StripeSecretKey, cfg.StripeAPIBase)
 		if !dryRun && !client.Enabled() {
 			slog.Error("STRIPE_SECRET_KEY is required (or use --dry-run)")
 			os.Exit(1)

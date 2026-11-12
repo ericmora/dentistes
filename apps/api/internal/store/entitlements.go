@@ -108,6 +108,17 @@ func (s *Store) CreateTrialSubscription(ctx context.Context, tx pgx.Tx, tenantID
 	return err
 }
 
+func (s *Store) CreatePendingSubscription(ctx context.Context, tx pgx.Tx, tenantID, planKey, customerID string) error {
+	_, err := tx.Exec(ctx, `insert into subscriptions (tenant_id, plan_key, status, stripe_customer_id)
+		values ($1, $2, 'INCOMPLETE', nullif($3, ''))
+		on conflict (tenant_id) do update set
+			plan_key = excluded.plan_key,
+			status = 'INCOMPLETE',
+			stripe_customer_id = coalesce(nullif(excluded.stripe_customer_id, ''), subscriptions.stripe_customer_id)`,
+		tenantID, planKey, customerID)
+	return err
+}
+
 func (s *Store) UpsertSubscription(ctx context.Context, tx pgx.Tx, tenantID, planKey, status, customerID, subscriptionID string, periodEnd *time.Time, cancelAtPeriodEnd bool, trialEndsAt *time.Time) error {
 	_, err := tx.Exec(ctx, `insert into subscriptions (tenant_id, plan_key, status, stripe_customer_id, stripe_subscription_id, current_period_end, cancel_at_period_end, trial_ends_at)
 		values ($1, nullif($2, ''), $3, nullif($4, ''), nullif($5, ''), $6, $7, $8)

@@ -70,17 +70,33 @@ kubectl -n dentistes patch secret dentistes-secrets --type merge -p '{"stringDat
 kubectl -n dentistes rollout restart deployment/api
 ```
 
+## Acceso al host
+
+Los puertos `22`, `6443` y `5000` están cerrados por defecto. Abre una sesión temporal con la skill `host-ops`:
+
+```bash
+/Users/eric/Workspace/host/hostctl session start   # 8 horas
+/Users/eric/Workspace/host/hostctl status
+```
+
+El kubeconfig de producción es `~/.kube/config-161` (`161.97.75.144`). **No uses** `~/.kube/config-percepta-agents`: apunta a una IP obsoleta.
+
+Para una operación puntual, usa `hostctl exec -- <comando>` y deja que cierre los puertos al terminar. No reinicies el host ni desactives `PasswordAuthentication`.
+
 ## Despliegue
 
 ```bash
-REGISTRY=155.133.27.1:5000 TAG=latest ./deploy/deploy.sh
+KUBECONFIG="$HOME/.kube/config-161" REGISTRY=155.133.27.1:5000 TAG=latest ./deploy/deploy.sh
 ```
 
 El script:
 
 1. compila y sube imágenes `linux/amd64` (API, backup, web, admin, marketing);
 2. aplica `deploy/k3s/overlays/prod`;
-3. espera los rollouts.
+3. fuerza `rollout restart` para que los pods recojan el nuevo `:latest`;
+4. espera los rollouts.
+
+Marketing usa `deploy/nginx/static.conf` (404 real); web y admin usan `deploy/nginx/spa.conf` (fallback SPA para `/signup`, `/login`, etc.). Marketing recibe `VITE_APP_URL=https://app.dentistes.2mes4.com` para que los CTA apunten al signup correcto.
 
 DNS necesario: `dentistes.2mes4.com`, `app.dentistes.2mes4.com`, `admin.dentistes.2mes4.com`, `api.dentistes.2mes4.com`. cert-manager emite `dentistes-tls` con `letsencrypt-prod`.
 

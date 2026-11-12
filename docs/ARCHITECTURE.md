@@ -50,9 +50,9 @@ Este documento resume cómo la base implementa la arquitectura descrita en Googl
 ## Autorización en dos capas
 
 1. **Funcionalidades del tenant** (`features` + `plans` + `plan_features` + `tenant_features` + `subscriptions`):
-   - `starter`: pacientes, agenda.
-   - `clinic`: + odontograma, historial, facturación PDF.
-   - `enterprise`: + WhatsApp, lista de espera, informes.
+   - `base` (18,50 USD/mes, trial 30 días): `patients`, `agenda`, `odontogram`, `clinical_history`, `waiting_list`, `billing_pdf`, `reports`.
+   - Add-ons activables vía `tenant_features`: `whatsapp`, `digital_signature`.
+   - Planes heredados (`starter`, `clinic`, `enterprise`) marcados como inactivos (`is_active = false`).
    - Overrides por tenant con expiración opcional.
    - Estado de suscripción (`ACTIVE`/`TRIALING`) obligatorio para habilitar.
 2. **Permisos del rol** (`OWNER`, `ADMIN`, `DENTIST`, `HYGIENIST`, `RECEPTIONIST`):
@@ -72,8 +72,9 @@ La API devuelve `402` cuando el módulo no está contratado y `403` cuando el ro
 
 ## Provisioning de tenants
 
-1. `POST /v1/public/signup` crea tenant, owner, membership, trial, configuración, gabinete y `tenant_domains` (hostname + TLS secret) en una transacción.
-2. El worker de la API (`K8S_PROVISIONING=true`) reclama dominios `PENDING/FAILED` con `FOR UPDATE SKIP LOCKED`, marca `PROVISIONING` y llama al API de Kubernetes.
+1. `POST /v1/public/onboarding` (y `/v1/public/signup`) crea tenant, owner, membership, gabinetes (`1..N`), configuración regional, `tenant_domains` (hostname + TLS secret), cliente Stripe, Checkout Session con 30 días de trial (`payment_method_collection=always`) y suscripción `INCOMPLETE` en una sola transacción (con rollback si Stripe falla).
+2. Al completar Stripe Checkout (vía `POST /v1/billing/confirm-checkout` o webhook), la suscripción pasa a `TRIALING` con los 30 días activos.
+3. El worker de la API (`K8S_PROVISIONING=true`) reclama dominios `PENDING/FAILED` con `FOR UPDATE SKIP LOCKED`, marca `PROVISIONING` y llama al API de Kubernetes.
 3. El provisioner crea/actualiza un Ingress determinista `tenant-<subdominio>` con:
    - regla host → servicio `web:8080`;
    - anotación `cert-manager.io/cluster-issuer=letsencrypt-prod`;
@@ -92,8 +93,8 @@ El API corre con un ServiceAccount con Role limitado a `networking.k8s.io/ingres
 
 ## Frontends
 
-- React 18 + Vite + TypeScript estricto + Tailwind, siguiendo el design system documentado.
-- `packages/ui` contiene tokens semánticos y componentes base, además de `FeatureGate`/`PermissionGate`.
+- React 18 + Vite + TypeScript estricto + Tailwind, siguiendo el design system documentado (`@tanstack/react-query`, `zustand`, `react-hook-form`, `zod`, `lucide-react`).
+- `packages/ui` contiene tokens semánticos (`tokens.css` + `tailwind-preset.cjs`), primitivas (incluidos `Modal`, `Sheet`, `Tabs`, `Combobox`, `ToastProvider`, etc.), `FeatureGate`/`PermissionGate`/`RoleGuard` y componentes clínicos (`CriticalAlertBanner`, `ToothSurfaceRenderer`, `OdontogramGrid`, `AppointmentCard`, `MultiCabinetTimeline`, `WaitingListCandidateCard`, `ClinicalHistoryTimeline`, `InvoiceLineEditor`, `QRVerifierBlock`).
 - Cuatro apps: webapp clínica, admin global, marketing comercial y móvil Expo.
 - El SDK centraliza auth, refresh, errores tipados y recursos; las apps no construyen URLs a mano.
 

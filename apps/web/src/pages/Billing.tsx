@@ -107,11 +107,15 @@ export function BillingPage() {
                   <Button
                     className="w-full"
                     variant={current ? "outline" : "primary"}
-                    disabled={current || !plan.is_active}
+                    disabled={(current && subscription?.status !== "INCOMPLETE") || !plan.is_active}
                     loading={busy === plan.key}
                     onClick={() => checkout(plan.key)}
                   >
-                    {current ? "Plan actual" : "Elegir plan"}
+                    {current && subscription?.status !== "INCOMPLETE"
+                      ? "Plan actual"
+                      : subscription?.status === "INCOMPLETE"
+                        ? "Activar 30 días con Stripe"
+                        : "Elegir plan"}
                   </Button>
                 </PermissionGate>
               }

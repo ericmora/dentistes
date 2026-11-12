@@ -22,9 +22,13 @@ type Client struct {
 }
 
 func New(secretKey string) *Client {
+	return NewWithBaseURL(secretKey, "https://api.stripe.com/v1")
+}
+
+func NewWithBaseURL(secretKey, baseURL string) *Client {
 	return &Client{
 		secretKey: secretKey,
-		baseURL:   "https://api.stripe.com/v1",
+		baseURL:   strings.TrimRight(baseURL, "/"),
 		http:      &http.Client{Timeout: 20 * time.Second},
 	}
 }
@@ -91,11 +95,13 @@ func (c *Client) CreateCustomer(ctx context.Context, email, name, tenantID strin
 }
 
 type CheckoutParams struct {
-	CustomerID string
-	PriceID    string
-	TenantID   string
-	SuccessURL string
-	CancelURL  string
+	CustomerID              string
+	PriceID                 string
+	TenantID                string
+	SuccessURL              string
+	CancelURL               string
+	TrialPeriodDays         int
+	PaymentMethodCollection string
 }
 
 func (c *Client) CreateCheckout(ctx context.Context, p CheckoutParams) (string, error) {
@@ -109,6 +115,12 @@ func (c *Client) CreateCheckout(ctx context.Context, p CheckoutParams) (string, 
 	form.Set("client_reference_id", p.TenantID)
 	form.Set("metadata[tenant_id]", p.TenantID)
 	form.Set("subscription_data[metadata][tenant_id]", p.TenantID)
+	if p.TrialPeriodDays > 0 {
+		form.Set("subscription_data[trial_period_days]", strconv.Itoa(p.TrialPeriodDays))
+	}
+	if p.PaymentMethodCollection != "" {
+		form.Set("payment_method_collection", p.PaymentMethodCollection)
+	}
 	var out struct {
 		URL string `json:"url"`
 	}
@@ -116,6 +128,14 @@ func (c *Client) CreateCheckout(ctx context.Context, p CheckoutParams) (string, 
 		return "", err
 	}
 	return out.URL, nil
+}
+
+func (c *Client) GetCheckoutSession(ctx context.Context, id string) (*CheckoutSession, error) {
+	var out CheckoutSession
+	if err := c.get(ctx, "/checkout/sessions/"+url.PathEscape(id), &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 func (c *Client) CreatePortal(ctx context.Context, customerID, returnURL string) (string, error) {

@@ -24,6 +24,7 @@ type Config struct {
 	StripeSecretKey        string
 	StripeWebhookSecret    string
 	StripePortalReturn     string
+	StripeAPIBase          string
 	TrialDays              int
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
@@ -54,7 +55,8 @@ func Load() (*Config, error) {
 		StripeSecretKey:        env("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret:    env("STRIPE_WEBHOOK_SECRET", ""),
 		StripePortalReturn:     strings.TrimRight(env("STRIPE_PORTAL_RETURN_URL", env("APP_URL", "http://localhost:5173")+"/settings/billing"), "/"),
-		TrialDays:              intEnv("TRIAL_DAYS", 14),
+		StripeAPIBase:          strings.TrimRight(env("STRIPE_API_BASE", "https://api.stripe.com/v1"), "/"),
+		TrialDays:              intEnv("TRIAL_DAYS", 30),
 		BootstrapAdminEmail:    env("BOOTSTRAP_ADMIN_EMAIL", ""),
 		BootstrapAdminPassword: env("BOOTSTRAP_ADMIN_PASSWORD", ""),
 		TenantBaseDomain:       strings.Trim(strings.ToLower(env("TENANT_BASE_DOMAIN", "dentistes.2mes4.com")), "."),
@@ -79,7 +81,7 @@ func Load() (*Config, error) {
 		c.RefreshTTL = 720 * time.Hour
 	}
 	if c.TrialDays <= 0 {
-		c.TrialDays = 14
+		c.TrialDays = 30
 	}
 	if c.TenantBaseDomain == "" {
 		return nil, fmt.Errorf("TENANT_BASE_DOMAIN is required")

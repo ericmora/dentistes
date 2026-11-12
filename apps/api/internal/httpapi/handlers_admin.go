@@ -278,3 +278,63 @@ func (s *Server) handleAdminProvisionTenant(w http.ResponseWriter, r *http.Reque
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "PENDING"})
 }
+
+func (s *Server) handleAdminListLeads(w http.ResponseWriter, r *http.Request) {
+	status := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "" {
+		switch status {
+		case "NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "ARCHIVED":
+		default:
+			writeError(w, http.StatusBadRequest, "VALIDATION", "invalid status filter", nil)
+			return
+		}
+	}
+	limit := intQuery(r, "limit", 100)
+	if limit < 1 || limit > 200 {
+		limit = 100
+	}
+	var leads []store.Lead
+	err := s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
+		var err error
+		leads, err = s.store.ListLeads(r.Context(), tx, status, limit)
+		return err
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"leads": leads})
+}
+
+func (s *Server) handleAdminUpdateLeadStatus(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	status := strings.ToUpper(strings.TrimSpace(req.Status))
+	switch status {
+	case "NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "ARCHIVED":
+	default:
+		writeError(w, http.StatusBadRequest, "VALIDATION", "invalid status", nil)
+		return
+	}
+	var lead *store.Lead
+	err := s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
+		var err error
+		lead, err = s.store.UpdateLeadStatus(r.Context(), tx, id, status)
+		return err
+	})
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "lead not found", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"lead": lead})
+}

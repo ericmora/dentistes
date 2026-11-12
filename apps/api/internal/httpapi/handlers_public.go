@@ -6,7 +6,6 @@ import (
 	"net/mail"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -42,107 +41,12 @@ func (s *Server) handlePublicPlans(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TenantName string `json:"tenant_name"`
-		Subdomain  string `json:"subdomain"`
-		Email      string `json:"email"`
-		Password   string `json:"password"`
-		FullName   string `json:"full_name"`
-	}
+	var req onboardingRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
 		return
 	}
-	req.TenantName = strings.TrimSpace(req.TenantName)
-	req.Subdomain = strings.ToLower(strings.TrimSpace(req.Subdomain))
-	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
-	req.FullName = strings.TrimSpace(req.FullName)
-
-	if len(req.TenantName) < 2 {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "tenant_name is required", nil)
-		return
-	}
-	if !subdomainRe.MatchString(req.Subdomain) || reservedSubdomains[req.Subdomain] {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "invalid or reserved subdomain", nil)
-		return
-	}
-	if _, err := mail.ParseAddress(req.Email); err != nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "invalid email", nil)
-		return
-	}
-	if len(req.Password) < 10 {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "password must be at least 10 characters", nil)
-		return
-	}
-	if len(req.FullName) < 2 {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "full_name is required", nil)
-		return
-	}
-
-	hash, err := auth.HashPassword(req.Password)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
-		return
-	}
-
-	trialEnds := time.Now().AddDate(0, 0, s.cfg.TrialDays)
-	var resp *authResponse
-	err = s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
-		if _, err := s.store.GetUserByEmail(r.Context(), tx, req.Email); err == nil {
-			return errConflict
-		} else if !errors.Is(err, store.ErrNotFound) {
-			return err
-		}
-		if _, err := s.store.GetTenantBySubdomain(r.Context(), tx, req.Subdomain); err == nil {
-			return errConflict
-		} else if !errors.Is(err, store.ErrNotFound) {
-			return err
-		}
-		user, err := s.store.CreateUser(r.Context(), tx, req.Email, hash, req.FullName, false)
-		if err != nil {
-			return err
-		}
-		tenant, err := s.store.CreateTenant(r.Context(), tx, req.TenantName, req.Subdomain, trialEnds)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.Exec(r.Context(), "select set_config('app.current_tenant_id', $1, true)", tenant.ID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(r.Context(), "select set_config('app.current_user_id', $1, true)", user.ID); err != nil {
-			return err
-		}
-		if _, err := s.store.CreateMembership(r.Context(), tx, tenant.ID, user.ID, "OWNER"); err != nil {
-			return err
-		}
-		if err := s.store.CreateDefaultCabinet(r.Context(), tx, tenant.ID, "Gabinete 1"); err != nil {
-			return err
-		}
-		if err := s.store.UpdateTenantConfig(r.Context(), tx, tenant.ID, `{"locale":"ca-ES","currency":"EUR","timezone":"Europe/Madrid"}`); err != nil {
-			return err
-		}
-		if _, err := s.store.CreateTenantDomain(r.Context(), tx, tenant.ID, req.Subdomain+"."+s.cfg.TenantBaseDomain, "tenant-"+req.Subdomain+"-tls"); err != nil {
-			return err
-		}
-		if err := s.store.CreateTrialSubscription(r.Context(), tx, tenant.ID, "starter", trialEnds); err != nil {
-			return err
-		}
-		memberships := []store.Membership{{
-			TenantID: tenant.ID, UserID: user.ID, Role: "OWNER",
-			TenantName: tenant.Name, Subdomain: tenant.Subdomain, TenantStatus: tenant.Status,
-		}}
-		resp, err = s.buildAuth(r.Context(), tx, w, user, memberships, tenant.ID, "OWNER", isNative(r))
-		return err
-	})
-	if errors.Is(err, errConflict) {
-		writeError(w, http.StatusConflict, "CONFLICT", "email or subdomain already exists", nil)
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
-		return
-	}
-	writeJSON(w, http.StatusCreated, resp)
+	s.executeOnboarding(w, r, req)
 }
 
 func (s *Server) handlePublicTenant(w http.ResponseWriter, r *http.Request) {
@@ -200,5 +104,114 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		"feature_catalog": ent.Catalog,
 		"entitlements":    ent.Result,
 		"billing":         ent.Subscription,
+	})
+}
+
+type leadRequest struct {
+	ContactName string `json:"contact_name"`
+	ClinicName  string `json:"clinic_name"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+	Interest    string `json:"interest"`
+	Lang        string `json:"lang"`
+	Notes       string `json:"notes"`
+	Source      string `json:"source"`
+	UTMSource   string `json:"utm_source"`
+	UTMMedium   string `json:"utm_medium"`
+	UTMCampaign string `json:"utm_campaign"`
+}
+
+func validateLeadRequest(req leadRequest, ip string) (store.NewLead, string) {
+	contact := strings.TrimSpace(req.ContactName)
+	clinic := strings.TrimSpace(req.ClinicName)
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	phone := strings.TrimSpace(req.Phone)
+	notes := strings.TrimSpace(req.Notes)
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = "landing"
+	}
+
+	if len(contact) < 2 {
+		return store.NewLead{}, "contact_name is required"
+	}
+	if len(clinic) < 2 {
+		return store.NewLead{}, "clinic_name is required"
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return store.NewLead{}, "invalid email"
+	}
+	if len(phone) > 30 {
+		return store.NewLead{}, "phone is too long"
+	}
+	if len(notes) > 2000 {
+		return store.NewLead{}, "notes must be at most 2000 characters"
+	}
+
+	interest := strings.ToUpper(strings.TrimSpace(req.Interest))
+	switch interest {
+	case "":
+		interest = "DEMO"
+	case "DEMO", "TRIAL", "MIGRATION", "OTHER":
+	default:
+		return store.NewLead{}, "invalid interest"
+	}
+
+	lang := strings.ToLower(strings.TrimSpace(req.Lang))
+	switch lang {
+	case "":
+		lang = "ca"
+	case "es", "en", "ca":
+	default:
+		lang = "ca"
+	}
+
+	return store.NewLead{
+		ContactName: contact,
+		ClinicName:  clinic,
+		Email:       email,
+		Phone:       phone,
+		Interest:    interest,
+		Lang:        lang,
+		Notes:       notes,
+		Source:      trimMax(source, 80),
+		UTMSource:   trimMax(strings.TrimSpace(req.UTMSource), 100),
+		UTMMedium:   trimMax(strings.TrimSpace(req.UTMMedium), 100),
+		UTMCampaign: trimMax(strings.TrimSpace(req.UTMCampaign), 100),
+		IP:          ip,
+	}, ""
+}
+
+func trimMax(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max]
+}
+
+func (s *Server) handleCreateLead(w http.ResponseWriter, r *http.Request) {
+	var req leadRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	input, errMsg := validateLeadRequest(req, clientIP(r))
+	if errMsg != "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", errMsg, nil)
+		return
+	}
+
+	var lead *store.Lead
+	err := s.db.WithTx(r.Context(), func(tx pgx.Tx) error {
+		var err error
+		lead, err = s.store.CreateLead(r.Context(), tx, input)
+		return err
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not save lead", nil)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"lead": lead,
 	})
 }

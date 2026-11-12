@@ -14,9 +14,9 @@ COPY . .
 ARG VITE_API_URL=http://localhost:8080
 ARG VITE_APP_URL=http://localhost:5175
 ENV VITE_API_URL=$VITE_API_URL VITE_APP_URL=$VITE_APP_URL
-RUN pnpm --filter @dentistes/sdk build && pnpm --filter @dentistes/marketing build
+RUN pnpm --filter @dentistes/marketing build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
-COPY deploy/nginx/spa.conf /etc/nginx/conf.d/default.conf
+COPY deploy/nginx/static.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/apps/marketing/dist /usr/share/nginx/html
 EXPOSE 8080

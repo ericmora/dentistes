@@ -11,7 +11,8 @@
     "./tokens.css": "./tokens.css"
   },
   "dependencies": {
-    "@dentistes/sdk": "workspace:*"
+    "@dentistes/sdk": "workspace:*",
+    "lucide-react": "^1.72.0"
   },
   "peerDependencies": {
     "react": ">=18"

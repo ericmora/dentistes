@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { DentistesClient, type MeResponse } from "@dentistes/sdk";
+import { DentistesClient, type MeResponse, type OnboardingInput, type OnboardingResponse } from "@dentistes/sdk";
 import { currentTenantSubdomain } from "./tenant";
 
 interface SessionValue {
@@ -8,6 +8,7 @@ interface SessionValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (input: { tenant_name: string; subdomain: string; email: string; password: string; full_name: string }) => Promise<void>;
+  onboarding: (input: OnboardingInput) => Promise<OnboardingResponse>;
   logout: () => Promise<void>;
   reload: () => Promise<void>;
 }
@@ -50,6 +51,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const onboarding = useCallback(async (input: OnboardingInput) => {
+    const res = await sdk.onboarding(input);
+    setMe(await sdk.me());
+    return res;
+  }, []);
+
   const logout = useCallback(async () => {
     await sdk.logout();
     setMe(null);
@@ -60,8 +67,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ sdk, me, loading, login, signup, logout, reload }),
-    [me, loading, login, signup, logout, reload],
+    () => ({ sdk, me, loading, login, signup, onboarding, logout, reload }),
+    [me, loading, login, signup, onboarding, logout, reload],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

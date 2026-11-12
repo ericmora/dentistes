@@ -1,18 +1,20 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Alert, Button, Card, Input } from "@dentistes/ui";
 import { useSession } from "../lib/session";
 
 export function SignupPage() {
   const { signup } = useSession();
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    tenant_name: "",
-    subdomain: "",
-    full_name: "",
-    email: "",
+  const [params] = useSearchParams();
+  const demo = params.get("demo") === "1";
+  const [form, setForm] = useState(() => ({
+    tenant_name: params.get("tenant_name") ?? "",
+    subdomain: params.get("subdomain") ?? "",
+    full_name: params.get("contact_name") ?? "",
+    email: params.get("email") ?? "",
     password: "",
-  });
+  }));
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -40,10 +42,15 @@ export function SignupPage() {
         <div className="mb-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Dentistes</p>
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">Crea tu clínica</h1>
-          <p className="mt-1 text-sm text-slate-500">14 días de prueba. Sin tarjeta.</p>
+          <p className="mt-1 text-sm text-slate-500">30 días de prueba. Sin tarjeta.</p>
         </div>
         <Card>
           <form className="space-y-4" onSubmit={onSubmit}>
+            {demo ? (
+              <Alert tone="info">
+                Has solicitado una demo. Puedes crear la cuenta ahora o esperar a que te contactemos.
+              </Alert>
+            ) : null}
             {error ? <Alert tone="danger">{error}</Alert> : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label="Nombre de la clínica" value={form.tenant_name} onChange={(e) => update("tenant_name", e.target.value)} required />

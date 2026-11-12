@@ -16,26 +16,48 @@ Base: `https://api.dentistes.2mes4.com` (local: `http://localhost:8080`). JSON e
 | GET | `/health` | Healthcheck con ping a PostgreSQL |
 | GET | `/v1/public/plans` | Planes activos + catálogo de features |
 | GET | `/v1/public/tenant?subdomain=...` | Branding y estado del dominio del tenant |
-| POST | `/v1/public/signup` | Alta de tenant + owner + trial 14 días |
+| POST | `/v1/public/onboarding` | Alta guiada mínima de clínica + Stripe Checkout (`trial_period_days=30`) |
+| POST | `/v1/public/signup` | Alias de `/v1/public/onboarding` (requiere Stripe) |
+| POST | `/v1/public/leads` | Captación de leads / solicitud de demo (rate-limited) |
 | POST | `/v1/auth/login` | Login; devuelve access token y memberships |
 | POST | `/v1/auth/refresh` | Rota refresh token y emite access token |
 | POST | `/v1/auth/logout` | Revoca la sesión |
 | POST | `/v1/webhooks/stripe` | Webhook de Stripe (firma obligatoria) |
 
-### Signup
+### Onboarding y Signup
 
 ```json
-POST /v1/public/signup
+POST /v1/public/onboarding
 {
-  "tenant_name": "Clínica Dental Example",
+  "clinic_name": "Clínica Dental Example",
   "subdomain": "example",
+  "cabinets_count": 2,
+  "locale": "ca-ES",
   "full_name": "Ana Owner",
   "email": "ana@example.test",
   "password": "minimo-10-caracteres"
 }
 ```
 
-Crea tenant `TRIAL`, usuario, membership `OWNER` y suscripción `TRIALING` con plan `starter`.
+`subdomain` (auto-generado desde `clinic_name` si se omite), `cabinets_count` (por defecto `1`, de `1` a `20`) y `locale` (`ca-ES`, `es-ES`, `es-MX`, `en-GB`) son opcionales. Crea tenant `TRIAL`, usuario, membership `OWNER`, gabinetes, `tenant_domains`, cliente Stripe y sesión de Stripe Checkout con **30 días de prueba** (`payment_method_collection=always`) y suscripción `INCOMPLETE` hasta completar Stripe (`checkout_url`). Al finalizar el Checkout o confirmar con `POST /v1/billing/confirm-checkout`, la suscripción pasa a `TRIALING` y se activan los 30 días.
+
+### Leads
+
+```json
+POST /v1/public/leads
+{
+  "contact_name": "Laia Serra",
+  "clinic_name": "Clínica Garraf",
+  "email": "laia@clinicagarraf.cat",
+  "phone": "+34 600 111 222",
+  "interest": "DEMO",
+  "lang": "ca",
+  "source": "landing",
+  "utm_source": "google"
+}
+```
+
+`interest` admite `DEMO`, `TRIAL`, `MIGRATION` u `OTHER` (por defecto `DEMO`). Devuelve `201 Created` con el lead creado.
 
 ### Login
 
@@ -64,7 +86,8 @@ Respuesta:
 | GET | `/v1/me` | sesión + tenant | Usuario, memberships, rol, permisos, features, plan y billing |
 | POST | `/v1/auth/switch-tenant` | sesión | Cambia tenant activo y emite nuevos tokens |
 | GET | `/v1/billing/subscription` | sesión | Suscripción y entitlements |
-| POST | `/v1/billing/checkout` | `billing:manage` | Crea Stripe Checkout para `plan_key` |
+| POST | `/v1/billing/checkout` | `billing:manage` | Crea Stripe Checkout para `plan_key` (incluye 30 días de trial si aún es `INCOMPLETE`) |
+| POST | `/v1/billing/confirm-checkout` | `billing:manage` | Verifica `session_id` en Stripe y activa inmediatamente `TRIALING`/`ACTIVE` |
 | POST | `/v1/billing/portal` | `billing:manage` | Abre Stripe Billing Portal |
 | GET | `/v1/patients` | feature `patients` + `patients:read` | Lista/busca pacientes (`q`, `limit`, `offset`) |
 | POST | `/v1/patients` | feature `patients` + `patients:write` | Crea paciente |
@@ -104,7 +127,9 @@ Requieren `is_platform_admin=true`.
 | GET | `/v1/admin/tenants/{id}/domains` | Dominios y estado de provisioning |
 | POST | `/v1/admin/tenants/{id}/provision` | Reencola el provisioning del dominio |
 | GET | `/v1/admin/plans` | Planes (incluye inactivos y `stripe_price_id`) |
-| PUT | `/v1/admin/plans/{key}` | `{"price_monthly_cents":19900,"stripe_price_id":"price_...","is_active":true}` |
+| PUT | `/v1/admin/plans/{key}` | `{"price_monthly_cents":1850,"stripe_price_id":"price_...","is_active":true}` |
+| GET | `/v1/admin/leads` | Listado de leads captados (`?status=NEW\|CONTACTED\|...&limit=100`) |
+| PATCH | `/v1/admin/leads/{id}` | Actualiza estado del lead (`{"status":"CONTACTED"}`) |
 
 ## Códigos de error relevantes
 

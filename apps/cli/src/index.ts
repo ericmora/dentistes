@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createInterface } from "node:readline/promises";
 import { Command } from "commander";
 import { DentistesClient, type MeResponse, type Patient } from "@dentistes/sdk";
 
@@ -110,6 +111,81 @@ program
       fail(error);
     }
   });
+
+program
+  .command("onboarding")
+  .description("Crea una nova clínica amb poques preguntes i genera l'enllaç de Stripe per activar els 30 dies")
+  .option("--api <url>", "URL base de la API")
+  .option("--clinic <nom>", "Nom de la clínica")
+  .option("--subdomain <slug>", "Subdomini (opcional)")
+  .option("--name <nom>", "Nom del responsable")
+  .option("--email <email>", "Email")
+  .option("--password <password>", "Contrasenya (mínim 10 caràcters)")
+  .option("--cabinets <n>", "Nombre de gabinets", "1")
+  .option("--locale <locale>", "Idioma (ca-ES, es-ES, es-MX, en-GB)", "ca-ES")
+  .action(
+    async (opts: {
+      api?: string;
+      clinic?: string;
+      subdomain?: string;
+      name?: string;
+      email?: string;
+      password?: string;
+      cabinets?: string;
+      locale?: string;
+    }) => {
+      try {
+        const config = loadConfig();
+        if (opts.api) config.baseUrl = opts.api.replace(/\/$/, "");
+
+        let clinicName = opts.clinic;
+        let fullName = opts.name;
+        let email = opts.email;
+        let password = opts.password;
+        let cabinetsCount = Number(opts.cabinets) || 1;
+        let locale = opts.locale ?? "ca-ES";
+
+        if (!clinicName || !fullName || !email || !password) {
+          const rl = createInterface({ input: process.stdin, output: process.stdout });
+          try {
+            if (!clinicName) clinicName = (await rl.question("Nom de la clínica: ")).trim();
+            if (!opts.cabinets) {
+              const cabRaw = (await rl.question("Nombre de gabinets [1]: ")).trim();
+              if (cabRaw) cabinetsCount = Number(cabRaw) || 1;
+            }
+            if (!opts.locale) {
+              const locRaw = (await rl.question("Idioma (ca-ES / es-ES / es-MX / en-GB) [ca-ES]: ")).trim();
+              if (locRaw) locale = locRaw;
+            }
+            if (!fullName) fullName = (await rl.question("Nom del responsable: ")).trim();
+            if (!email) email = (await rl.question("Email: ")).trim();
+            if (!password) password = (await rl.question("Contrasenya (min 10 caràcters): ")).trim();
+          } finally {
+            rl.close();
+          }
+        }
+
+        const client = makeClient(config);
+        const res = await client.onboarding({
+          clinic_name: clinicName ?? "",
+          subdomain: opts.subdomain,
+          full_name: fullName ?? "",
+          email: email ?? "",
+          password: password ?? "",
+          cabinets_count: cabinetsCount,
+          locale,
+          plan_key: "base",
+        });
+        config.tenantId = res.active_tenant?.id ?? null;
+        saveConfig(config);
+
+        console.log(`Clínica creada: ${res.active_tenant?.name} (${res.hostname ?? res.active_tenant?.subdomain})`);
+        console.log(`Activa els 30 dies completant Stripe Checkout aquí:\n${res.checkout_url}`);
+      } catch (error) {
+        fail(error);
+      }
+    },
+  );
 
 program
   .command("logout")

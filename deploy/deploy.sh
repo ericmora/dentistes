@@ -29,7 +29,7 @@ for app in web admin marketing; do
   case "$app" in
     web) VITE_APP="$APP_URL" ;;
     admin) VITE_APP="$ADMIN_URL" ;;
-    marketing) VITE_APP="$MARKETING_URL" ;;
+    marketing) VITE_APP="$APP_URL" ;;
   esac
   echo "==> Build & push $app"
   docker buildx build --platform linux/amd64 \
@@ -47,6 +47,9 @@ fi
 
 echo "==> Apply kustomize"
 kubectl apply -k deploy/k3s/overlays/prod
+
+echo "==> Restart deployments to pick up the new :latest images"
+kubectl -n "$NAMESPACE" rollout restart deployment/api deployment/web deployment/admin deployment/marketing
 
 echo "==> Wait for rollouts"
 kubectl -n "$NAMESPACE" rollout status deployment/api --timeout=180s

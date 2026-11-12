@@ -77,6 +77,24 @@ export interface AuthResponse {
   user: User;
   memberships: Membership[];
   active_tenant?: Tenant;
+  checkout_url?: string;
+  hostname?: string;
+}
+
+export interface OnboardingInput {
+  clinic_name: string;
+  subdomain?: string;
+  full_name: string;
+  email: string;
+  password: string;
+  cabinets_count?: number;
+  locale?: string;
+  plan_key?: string;
+}
+
+export interface OnboardingResponse extends AuthResponse {
+  checkout_url: string;
+  hostname?: string;
 }
 
 export interface Patient {
@@ -136,6 +154,41 @@ export interface TenantSummary {
   subscription_status: string;
   plan_key: string;
   current_period_end?: string;
+}
+
+export type LeadInterest = "DEMO" | "TRIAL" | "MIGRATION" | "OTHER";
+export type LeadStatus = "NEW" | "CONTACTED" | "QUALIFIED" | "CONVERTED" | "ARCHIVED";
+
+export interface Lead {
+  id: string;
+  contact_name: string;
+  clinic_name: string;
+  email: string;
+  phone: string;
+  interest: LeadInterest;
+  lang: string;
+  notes: string;
+  source: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  status: LeadStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateLeadInput {
+  contact_name: string;
+  clinic_name: string;
+  email: string;
+  phone?: string;
+  interest?: LeadInterest;
+  lang?: string;
+  notes?: string;
+  source?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
 }
 
 export interface ApiErrorBody {
@@ -266,6 +319,17 @@ export class DentistesClient {
     return res;
   }
 
+  async onboarding(input: OnboardingInput): Promise<OnboardingResponse> {
+    const res = await this.request<OnboardingResponse>("/v1/public/onboarding", {
+      method: "POST",
+      auth: false,
+      body: input,
+    });
+    this.setToken(res.access_token);
+    if (res.refresh_token) this.onRefreshToken?.(res.refresh_token);
+    return res;
+  }
+
   async refreshSession(): Promise<AuthResponse | null> {
     const refreshToken = this.getRefreshToken?.() ?? null;
     if (this.mode === "native" && !refreshToken) return null;
@@ -327,6 +391,10 @@ export class DentistesClient {
     return this.request(`/v1/public/tenant?subdomain=${encodeURIComponent(subdomain)}`, { auth: false });
   }
 
+  createLead(input: CreateLeadInput): Promise<{ lead: Lead }> {
+    return this.request("/v1/public/leads", { method: "POST", auth: false, body: input });
+  }
+
   listPatients(params: { q?: string; limit?: number; offset?: number } = {}): Promise<{
     patients: Patient[];
     limit: number;
@@ -376,6 +444,8 @@ export class DentistesClient {
       this.request("/v1/billing/subscription"),
     checkout: (planKey: string): Promise<{ url: string }> =>
       this.request("/v1/billing/checkout", { method: "POST", body: { plan_key: planKey } }),
+    confirmCheckout: (sessionId: string): Promise<{ subscription: Subscription | null; entitlements: Entitlements }> =>
+      this.request("/v1/billing/confirm-checkout", { method: "POST", body: { session_id: sessionId } }),
     portal: (): Promise<{ url: string }> =>
       this.request("/v1/billing/portal", { method: "POST", body: {} }),
   };
@@ -411,6 +481,15 @@ export class DentistesClient {
       input: { price_monthly_cents: number; stripe_price_id: string; is_active: boolean },
     ): Promise<unknown> =>
       this.request(`/v1/admin/plans/${key}`, { method: "PUT", body: input }),
+    listLeads: (params: { status?: LeadStatus; limit?: number } = {}): Promise<{ leads: Lead[] }> => {
+      const query = new URLSearchParams();
+      if (params.status) query.set("status", params.status);
+      if (params.limit) query.set("limit", String(params.limit));
+      const suffix = query.toString() ? `?${query}` : "";
+      return this.request(`/v1/admin/leads${suffix}`);
+    },
+    updateLeadStatus: (id: string, status: LeadStatus): Promise<{ lead: Lead }> =>
+      this.request(`/v1/admin/leads/${id}`, { method: "PATCH", body: { status } }),
   };
 }
 

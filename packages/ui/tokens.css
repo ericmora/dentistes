@@ -1,12 +1,32 @@
 :root {
+  --color-brand-50: #f0fdfa;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+
+  /* Clinical appointment & alert tokens */
   --color-critical: #dc2626;
   --color-pending: #f59e0b;
   --color-confirmed: #059669;
   --color-inchair: #1d4ed8;
+
+  /* Odontogram clinical state tokens */
   --color-dental-caries: #e11d48;
   --color-dental-restored: #2563eb;
   --color-dental-planned: #16a34a;
   --color-dental-missing: #4b5563;
+
+  /* Surface & typography */
   --surface: #f8fafc;
+  --surface-elevated: #ffffff;
+  --border-subtle: #e2e8f0;
   --ink: #0f172a;
+  --ink-muted: #64748b;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

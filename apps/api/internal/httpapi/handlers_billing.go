@@ -81,12 +81,20 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	trialDays := 0
+	paymentCollection := ""
+	if sub == nil || (sub.Status == "INCOMPLETE" && sub.StripeSubscriptionID == "") {
+		trialDays = s.cfg.TrialDays
+		paymentCollection = "always"
+	}
 	url, err := s.stripe.CreateCheckout(r.Context(), stripeapi.CheckoutParams{
-		CustomerID: customerID,
-		PriceID:    plan.StripePriceID,
-		TenantID:   claims.TenantID,
-		SuccessURL: s.cfg.AppURL + "/settings/billing?checkout=success",
-		CancelURL:  s.cfg.AppURL + "/settings/billing?checkout=cancel",
+		CustomerID:              customerID,
+		PriceID:                 plan.StripePriceID,
+		TenantID:                claims.TenantID,
+		SuccessURL:              s.cfg.AppURL + "/onboarding/complete?session_id={CHECKOUT_SESSION_ID}",
+		CancelURL:               s.cfg.AppURL + "/billing?checkout=cancel",
+		TrialPeriodDays:         trialDays,
+		PaymentMethodCollection: paymentCollection,
 	})
 	if err != nil {
 		slog.Error("stripe checkout", "error", err)
@@ -94,6 +102,64 @@ func (s *Server) handleCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"url": url})
+}
+
+func (s *Server) handleConfirmCheckout(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := decodeJSON(r, &req); err != nil || strings.TrimSpace(req.SessionID) == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "session_id is required", nil)
+		return
+	}
+	if !s.stripe.Enabled() {
+		writeError(w, http.StatusServiceUnavailable, "STRIPE_DISABLED", "billing is not configured", nil)
+		return
+	}
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+
+	cs, err := s.stripe.GetCheckoutSession(r.Context(), strings.TrimSpace(req.SessionID))
+	if err != nil {
+		slog.Error("stripe get checkout session", "error", err)
+		writeError(w, http.StatusBadGateway, "STRIPE_ERROR", "could not verify checkout session", nil)
+		return
+	}
+	sessionTenant := cs.Metadata["tenant_id"]
+	if sessionTenant == "" {
+		sessionTenant = cs.ClientReferenceID
+	}
+	if sessionTenant != claims.TenantID {
+		writeError(w, http.StatusForbidden, "FORBIDDEN", "checkout session does not belong to this tenant", nil)
+		return
+	}
+	if cs.Customer != "" {
+		if err := s.store.SetStripeCustomer(r.Context(), tx, claims.TenantID, cs.Customer); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+			return
+		}
+	}
+	if cs.Subscription != "" {
+		sub, err := s.stripe.GetSubscription(r.Context(), cs.Subscription)
+		if err != nil {
+			slog.Error("stripe get subscription", "error", err)
+			writeError(w, http.StatusBadGateway, "STRIPE_ERROR", "could not load Stripe subscription", nil)
+			return
+		}
+		if err := s.syncSubscription(r.Context(), tx, claims.TenantID, sub); err != nil {
+			writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+			return
+		}
+	}
+	ent, err := s.loadEntitlementsForTenant(r.Context(), tx, claims.TenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscription": ent.Subscription,
+		"entitlements": ent.Result,
+	})
 }
 
 func (s *Server) handlePortal(w http.ResponseWriter, r *http.Request) {

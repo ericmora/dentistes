@@ -11,7 +11,7 @@ Estado: **base funcional para iniciar desarrollo**. Incluye identidad multi-tena
 | Backend | Go 1.24, chi, pgx, JWT, Argon2id |
 | Base de datos | PostgreSQL 16 con Row-Level Security, JSONB y GIN |
 | SDK | TypeScript, `fetch`, ESM |
-| Webapp / Admin / Marketing | React 18, Vite, Tailwind, TanStack-ready |
+| Webapp / Admin / Marketing | React 18, Vite, Tailwind, TanStack Query, Zustand, React Hook Form, Zod, Lucide |
 | Móvil | Expo / React Native + SDK |
 | CLI | Node.js + Commander + SDK |
 | Infra | K3s, Traefik, cert-manager, Kustomize, backups `pg_dump` + rclone opcional |
@@ -73,7 +73,7 @@ Si el volumen de PostgreSQL ya existía antes de configurar `deploy/postgres/10-
 
 ## Provisioning de tenants
 
-Cada alta crea en una sola transacción: tenant, usuario owner, membership, suscripción de trial, configuración por defecto, gabinete inicial y dominio primario `tenant_domains`.
+Cada alta (`POST /v1/public/onboarding` o `/v1/public/signup`) crea en una sola transacción: tenant, usuario owner, membership, configuración por defecto, `1..N` gabinetes, dominio primario `tenant_domains`, cliente Stripe y sesión de Stripe Checkout con `trial_period_days=30` (suscripción `INCOMPLETE` hasta completar la tarjeta en Stripe, momento en que pasa a `TRIALING`).
 
 Un worker dentro de la API (`K8S_PROVISIONING=true`) reclama dominios pendientes y crea/actualiza el Ingress del tenant:
 
@@ -102,7 +102,7 @@ Los checkboxes del panel global escriben overrides por tenant y reflejan el esta
 - Webhook `POST /v1/webhooks/stripe` con verificación de firma.
 - Estados de suscripción: `TRIALING`, `ACTIVE`, `PAST_DUE`, `CANCELED`, `INCOMPLETE`, `UNPAID`.
 - Solo `ACTIVE` y `TRIALING` vigentes desbloquean funcionalidades. `PAST_DUE`, `CANCELED`, `UNPAID` y trial caducado bloquean los módulos automáticamente.
-- El trial inicial es de 14 días (`TRIAL_DAYS`).
+- El trial inicial es de 30 días (`TRIAL_DAYS`).
 
 Configura en Stripe el webhook `https://api.dentistes.2mes4.com/v1/webhooks/stripe` y guarda el secret en `STRIPE_WEBHOOK_SECRET`. Los productos y precios se generan desde la tabla `plans` con `./scripts/stripe-sync.sh` (idempotente; `--dry-run` para revisar).
 
@@ -135,7 +135,7 @@ node apps/cli/dist/index.js billing status
 
 ## Despliegue k3s
 
-Requisitos: acceso al registry privado del host (`155.133.27.1:5000`), `kubectl` contra el clúster y DNS para `dentistes.2mes4.com`, `app.`, `admin.` y `api.`.
+Requisitos: sesión de host activa con `/Users/eric/Workspace/host/hostctl session start`, `KUBECONFIG=~/.kube/config-161`, acceso al registry privado (`155.133.27.1:5000`) y DNS para `dentistes.2mes4.com`, `app.`, `admin.` y `api.`.
 
 1. Crea los secretos (no commitees valores reales):
 

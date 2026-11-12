@@ -94,3 +94,21 @@ type TenantSummary struct {
 	CurrentPeriodEnd   *time.Time `json:"current_period_end,omitempty"`
 	StripeCustomerID   string     `json:"-"`
 }
+
+type Lead struct {
+	ID          string    `json:"id"`
+	ContactName string    `json:"contact_name"`
+	ClinicName  string    `json:"clinic_name"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	Interest    string    `json:"interest"`
+	Lang        string    `json:"lang"`
+	Notes       string    `json:"notes"`
+	Source      string    `json:"source"`
+	UTMSource   string    `json:"utm_source,omitempty"`
+	UTMMedium   string    `json:"utm_medium,omitempty"`
+	UTMCampaign string    `json:"utm_campaign,omitempty"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}

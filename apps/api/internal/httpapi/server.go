@@ -50,7 +50,7 @@ func New(cfg *config.Config, database *db.DB, tokens *auth.TokenManager) *Server
 		db:      database,
 		store:   store.New(),
 		tokens:  tokens,
-		stripe:  stripeapi.New(cfg.StripeSecretKey),
+		stripe:  stripeapi.NewWithBaseURL(cfg.StripeSecretKey, cfg.StripeAPIBase),
 		limiter: newRateLimiter(30, time.Minute),
 	}
 }
@@ -68,6 +68,8 @@ func (s *Server) Router() http.Handler {
 		r.Get("/public/plans", s.handlePublicPlans)
 		r.Get("/public/tenant", s.handlePublicTenant)
 		r.With(s.rateLimit).Post("/public/signup", s.handleSignup)
+		r.With(s.rateLimit).Post("/public/onboarding", s.handleOnboarding)
+		r.With(s.rateLimit).Post("/public/leads", s.handleCreateLead)
 		r.With(s.rateLimit).Post("/auth/login", s.handleLogin)
 		r.Post("/auth/refresh", s.handleRefresh)
 		r.Post("/auth/logout", s.handleLogout)
@@ -82,6 +84,7 @@ func (s *Server) Router() http.Handler {
 				r.Get("/me", s.handleMe)
 				r.Get("/billing/subscription", s.handleSubscription)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/checkout", s.handleCheckout)
+				r.With(s.requirePermission("billing:manage")).Post("/billing/confirm-checkout", s.handleConfirmCheckout)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/portal", s.handlePortal)
 
 				r.Route("/patients", func(r chi.Router) {
@@ -109,6 +112,8 @@ func (s *Server) Router() http.Handler {
 				r.Put("/tenants/{id}/features", s.handleAdminSetFeature)
 				r.Get("/plans", s.handleAdminListPlans)
 				r.Put("/plans/{key}", s.handleAdminUpdatePlan)
+				r.Get("/leads", s.handleAdminListLeads)
+				r.Patch("/leads/{id}", s.handleAdminUpdateLeadStatus)
 			})
 		})
 	})

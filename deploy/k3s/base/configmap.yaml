@@ -4,7 +4,7 @@ metadata:
   name: dentistes-config
 data:
   PORT: "8080"
-  CORS_ORIGINS: "https://app.dentistes.2mes4.com,https://admin.dentistes.2mes4.com"
+  CORS_ORIGINS: "https://app.dentistes.2mes4.com,https://admin.dentistes.2mes4.com,https://dentistes.2mes4.com"
   APP_URL: "https://app.dentistes.2mes4.com"
   ADMIN_URL: "https://admin.dentistes.2mes4.com"
   MARKETING_URL: "https://dentistes.2mes4.com"
@@ -12,7 +12,7 @@ data:
   COOKIE_DOMAIN: ".dentistes.2mes4.com"
   ACCESS_TOKEN_TTL: "15m"
   REFRESH_TOKEN_TTL: "720h"
-  TRIAL_DAYS: "14"
+  TRIAL_DAYS: "30"
   STRIPE_PORTAL_RETURN_URL: "https://app.dentistes.2mes4.com/billing"
   TENANT_BASE_DOMAIN: "dentistes.2mes4.com"
   K8S_PROVISIONING: "true"

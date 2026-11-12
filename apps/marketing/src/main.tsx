@@ -1,11 +1,17 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import "@dentistes/ui/tokens.css";
+import { StrictMode } from "react";
+import { hydrateRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./App";
+import { parsePath } from "./lib/seo";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const page = parsePath(window.location.pathname);
+const root = document.getElementById("root");
+
+if (root) {
+  hydrateRoot(
+    root,
+    <StrictMode>
+      <App page={page} />
+    </StrictMode>,
+  );
+}

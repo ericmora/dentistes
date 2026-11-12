@@ -3,7 +3,8 @@ import { Spinner } from "@dentistes/ui";
 import { useSession } from "./lib/session";
 import { Layout } from "./ui/Layout";
 import { LoginPage } from "./pages/Login";
-import { SignupPage } from "./pages/Signup";
+import { OnboardingPage } from "./pages/Onboarding";
+import { OnboardingCompletePage } from "./pages/OnboardingComplete";
 import { DashboardPage } from "./pages/Dashboard";
 import { PatientsPage } from "./pages/Patients";
 import { BillingPage } from "./pages/Billing";
@@ -20,11 +21,24 @@ export function App() {
     );
   }
 
+  const needsStripe = Boolean(me && me.billing?.status === "INCOMPLETE");
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={me ? <Navigate to="/" replace /> : <LoginPage />} />
-        <Route path="/signup" element={me ? <Navigate to="/" replace /> : <SignupPage />} />
+        <Route
+          path="/signup"
+          element={me && !needsStripe ? <Navigate to="/" replace /> : <OnboardingPage />}
+        />
+        <Route
+          path="/onboarding"
+          element={me && !needsStripe ? <Navigate to="/" replace /> : <OnboardingPage />}
+        />
+        <Route
+          path="/onboarding/complete"
+          element={me ? <OnboardingCompletePage /> : <Navigate to="/login" replace />}
+        />
         <Route
           path="/*"
           element={

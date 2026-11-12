@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -129,9 +130,25 @@ func (s *Store) GetPublicTenantByHostname(ctx context.Context, tx pgx.Tx, hostna
 	return &t, nil
 }
 
+var cabinetColors = []string{"#0D9488", "#2563EB", "#7C3AED", "#D97706", "#059669", "#DC2626"}
+
 func (s *Store) CreateDefaultCabinet(ctx context.Context, tx pgx.Tx, tenantID, name string) error {
 	_, err := tx.Exec(ctx, `insert into cabinets (tenant_id, name, color_code) values ($1, $2, '#0D9488')`, tenantID, name)
 	return err
+}
+
+func (s *Store) CreateCabinets(ctx context.Context, tx pgx.Tx, tenantID string, count int) error {
+	if count < 1 {
+		count = 1
+	}
+	for i := 0; i < count; i++ {
+		color := cabinetColors[i%len(cabinetColors)]
+		name := "Gabinete " + strconv.Itoa(i+1)
+		if _, err := tx.Exec(ctx, `insert into cabinets (tenant_id, name, color_code) values ($1, $2, $3)`, tenantID, name, color); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) UpdateTenantConfig(ctx context.Context, tx pgx.Tx, tenantID, configJSON string) error {

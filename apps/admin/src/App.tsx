@@ -13,6 +13,8 @@ import {
 import {
   DentistesClient,
   type Feature,
+  type Lead,
+  type LeadStatus,
   type Plan,
   type TenantDomain,
   type TenantSummary,
@@ -24,7 +26,7 @@ const sdk = new DentistesClient({
   mode: "browser",
 });
 
-type Tab = "tenants" | "plans";
+type Tab = "tenants" | "plans" | "leads";
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -130,6 +132,7 @@ function AdminApp({ user, onLogout }: { user: User; onLogout: () => void }) {
           {([
             ["tenants", "Tenants"],
             ["plans", "Planes"],
+            ["leads", "Leads"],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -144,7 +147,7 @@ function AdminApp({ user, onLogout }: { user: User; onLogout: () => void }) {
         </nav>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-8">
-        {tab === "tenants" ? <TenantsPanel /> : <PlansPanel />}
+        {tab === "tenants" ? <TenantsPanel /> : tab === "plans" ? <PlansPanel /> : <LeadsPanel />}
       </main>
     </div>
   );
@@ -434,5 +437,129 @@ function PlanEditor({ plan, onSaved }: { plan: Plan; onSaved: () => void }) {
         {message ? <p className="text-xs text-slate-500">{message}</p> : null}
       </div>
     </Card>
+  );
+}
+
+const LEAD_STATUSES: LeadStatus[] = ["NEW", "CONTACTED", "QUALIFIED", "CONVERTED", "ARCHIVED"];
+
+function LeadsPanel() {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [statusFilter, setStatusFilter] = useState<LeadStatus | "">("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await sdk.admin.listLeads(statusFilter ? { status: statusFilter } : {});
+      setLeads(res.leads);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar los leads");
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function updateStatus(id: string, status: LeadStatus) {
+    try {
+      await sdk.admin.updateLeadStatus(id, status);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el lead");
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Leads"
+        description="Solicitudes de demo y contacto desde la web comercial"
+        actions={
+          <div className="flex items-center gap-2">
+            <select
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as LeadStatus | "")}
+            >
+              <option value="">Todos los estados</option>
+              {LEAD_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <Button variant="outline" onClick={() => void load()}>
+              Recargar
+            </Button>
+          </div>
+        }
+      />
+      {error ? (
+        <div className="mb-4">
+          <Alert tone="danger">{error}</Alert>
+        </div>
+      ) : null}
+      <Card title="Solicitudes recibidas">
+        {loading ? (
+          <p className="text-sm text-slate-500">Cargando…</p>
+        ) : leads.length === 0 ? (
+          <EmptyState title="Sin leads" description="No hay solicitudes de demo o contacto registradas." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="py-2">Clínica / Contacto</th>
+                  <th className="py-2">Email / Teléfono</th>
+                  <th className="py-2">Interés</th>
+                  <th className="py-2">Origen</th>
+                  <th className="py-2">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {leads.map((lead) => (
+                  <tr key={lead.id}>
+                    <td className="py-3">
+                      <p className="font-medium text-slate-900">{lead.clinic_name}</p>
+                      <p className="text-xs text-slate-500">{lead.contact_name}</p>
+                    </td>
+                    <td className="py-3">
+                      <p className="text-slate-800">{lead.email}</p>
+                      <p className="text-xs text-slate-500">{lead.phone || "—"}</p>
+                    </td>
+                    <td className="py-3">
+                      <Badge tone={lead.interest === "DEMO" ? "info" : "neutral"}>{lead.interest}</Badge>
+                      <span className="ml-2 text-xs uppercase text-slate-400">{lead.lang}</span>
+                    </td>
+                    <td className="py-3 text-xs text-slate-500">
+                      <p>{lead.source}</p>
+                      {lead.utm_source ? <p>utm: {lead.utm_source}</p> : null}
+                    </td>
+                    <td className="py-3">
+                      <select
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800"
+                        value={lead.status}
+                        onChange={(e) => void updateStatus(lead.id, e.target.value as LeadStatus)}
+                      >
+                        {LEAD_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

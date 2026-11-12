@@ -32,8 +32,24 @@ export function DashboardPage() {
 
       {blocked ? (
         <div className="mb-6">
-          <Alert tone="danger" title="Acceso a funcionalidades bloqueado">
-            La suscripción no está activa. Las funciones de pago están deshabilitadas hasta regularizar el pago.
+          <Alert
+            tone={me.billing?.status === "INCOMPLETE" ? "warning" : "danger"}
+            title={
+              me.billing?.status === "INCOMPLETE"
+                ? "Falta completar Stripe per activar els 30 dies de prova"
+                : "Acceso a funcionalidades bloqueado"
+            }
+          >
+            {me.billing?.status === "INCOMPLETE" ? (
+              <span>
+                La clínica està creada però encara no s'ha validat la targeta a Stripe ($0 avui).{" "}
+                <Link className="font-semibold underline" to="/onboarding">
+                  Activar 30 dies amb Stripe →
+                </Link>
+              </span>
+            ) : (
+              "La suscripción no está activa. Las funciones de pago están deshabilitadas hasta regularizar el pago."
+            )}
           </Alert>
         </div>
       ) : null}
