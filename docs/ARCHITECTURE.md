@@ -65,7 +65,7 @@ La API devuelve `402` cuando el módulo no está contratado y `403` cuando el ro
 
 - Stripe Checkout (suscripción) y Billing Portal.
 - Webhook con verificación HMAC de firma (`Stripe-Signature`), tolerancia 5 min.
-- Eventos tratados: `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.paid`, `invoice.payment_failed`.
+- Eventos tratados: `checkout.session.completed`, `customer.created|deleted`, `customer.subscription.created|updated|deleted|paused|resumed`, `invoice.paid`, `invoice.payment_succeeded`, `invoice.payment_failed`.
 - `tenant_id` viaja en metadata de customer, checkout y subscription; el webhook fija el contexto del tenant antes de escribir.
 - La suscripción se sincroniza con plan (por `stripe_price_id`), estado, periodo y cancelación.
 - La elegibilidad se calcula en cada request; no hay job de bloqueo: si el estado deja de ser `ACTIVE`/`TRIALING` vigente, las features se bloquean inmediatamente.

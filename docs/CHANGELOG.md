@@ -2,6 +2,14 @@
 
 Registro de cambios ingeridos desde la carpeta de Drive `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` y su estabilización en el repositorio.
 
+## 2026-11-12 (Webhooks Stripe complets — 11 esdeveniments i estat `PAUSED`)
+
+- **Migració DB:** [`0008_subscription_paused_status.sql`](../apps/api/migrations/0008_subscription_paused_status.sql) amplia el `CHECK` de `subscriptions.status` amb `'PAUSED'`.
+- **Backend Go (`apps/api`):**
+  - [`handleStripeWebhook`](../apps/api/internal/httpapi/handlers_billing.go) tracta tots 11 esdeveniments configurats a Stripe: `checkout.session.completed`, `customer.created`, `customer.deleted`, `customer.subscription.created|updated|deleted|paused|resumed`, `invoice.paid`, `invoice.payment_succeeded`, `invoice.payment_failed`.
+  - [`stripeapi.Invoice.SubscriptionID()`](../apps/api/internal/stripeapi/stripeapi.go) suporta tant `invoice.subscription` com `invoice.parent.subscription_details.subscription` (versions recents de l'API Stripe).
+  - Tests unitaris de signatura i esdeveniments a [`handlers_webhook_test.go`](../apps/api/internal/httpapi/handlers_webhook_test.go).
+
 ## 2026-11-12 (Àrea d'Administració de Clínica, Factures Stripe i Cancel·lació)
 
 - **Backend Go (`apps/api`):**

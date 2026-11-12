@@ -382,9 +382,36 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-	case "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted":
+	case "customer.created":
+		var cust stripeapi.Customer
+		if json.Unmarshal(event.Data.Object, &cust) == nil {
+			tenantID := cust.Metadata["tenant_id"]
+			if tenantID != "" && cust.ID != "" {
+				_ = s.db.WithTenant(r.Context(), tenantID, "", func(tx pgx.Tx) error {
+					return s.store.SetStripeCustomer(r.Context(), tx, tenantID, cust.ID)
+				})
+			}
+		}
+	case "customer.deleted":
+		var cust stripeapi.Customer
+		if json.Unmarshal(event.Data.Object, &cust) == nil {
+			tenantID := cust.Metadata["tenant_id"]
+			if tenantID != "" && cust.ID != "" {
+				_ = s.db.WithTenant(r.Context(), tenantID, "", func(tx pgx.Tx) error {
+					return s.store.SetSubscriptionStatusByCustomer(r.Context(), tx, cust.ID, "CANCELED")
+				})
+			}
+		}
+	case "customer.subscription.created",
+		"customer.subscription.updated",
+		"customer.subscription.deleted",
+		"customer.subscription.paused",
+		"customer.subscription.resumed":
 		var sub stripeapi.Subscription
 		if json.Unmarshal(event.Data.Object, &sub) == nil {
+			if event.Type == "customer.subscription.paused" && sub.Status == "" {
+				sub.Status = "paused"
+			}
 			tenantID := sub.Metadata["tenant_id"]
 			if tenantID != "" {
 				_ = s.db.WithTenant(r.Context(), tenantID, "", func(tx pgx.Tx) error {
@@ -392,19 +419,21 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 		}
-	case "invoice.payment_failed", "invoice.paid":
+	case "invoice.payment_failed", "invoice.paid", "invoice.payment_succeeded":
 		var inv stripeapi.Invoice
-		if json.Unmarshal(event.Data.Object, &inv) == nil && inv.Subscription != "" {
-			sub, err := s.stripe.GetSubscription(r.Context(), inv.Subscription)
-			if err == nil {
-				tenantID := sub.Metadata["tenant_id"]
-				if tenantID != "" {
-					_ = s.db.WithTenant(r.Context(), tenantID, "", func(tx pgx.Tx) error {
-						if event.Type == "invoice.payment_failed" {
-							sub.Status = "past_due"
-						}
-						return s.syncSubscription(r.Context(), tx, tenantID, sub)
-					})
+		if json.Unmarshal(event.Data.Object, &inv) == nil {
+			if subID := inv.SubscriptionID(); subID != "" && s.stripe.Enabled() {
+				sub, err := s.stripe.GetSubscription(r.Context(), subID)
+				if err == nil {
+					tenantID := sub.Metadata["tenant_id"]
+					if tenantID != "" {
+						_ = s.db.WithTenant(r.Context(), tenantID, "", func(tx pgx.Tx) error {
+							if event.Type == "invoice.payment_failed" {
+								sub.Status = "past_due"
+							}
+							return s.syncSubscription(r.Context(), tx, tenantID, sub)
+						})
+					}
 				}
 			}
 		}

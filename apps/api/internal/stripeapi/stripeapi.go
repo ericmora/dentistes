@@ -260,11 +260,30 @@ type CheckoutSession struct {
 	Status            string            `json:"status"`
 }
 
+type Customer struct {
+	ID       string            `json:"id"`
+	Email    string            `json:"email"`
+	Metadata map[string]string `json:"metadata"`
+	Deleted  bool              `json:"deleted"`
+}
+
 type Invoice struct {
 	ID           string `json:"id"`
 	Customer     string `json:"customer"`
 	Subscription string `json:"subscription"`
 	Status       string `json:"status"`
+	Parent       struct {
+		SubscriptionDetails struct {
+			Subscription string `json:"subscription"`
+		} `json:"subscription_details"`
+	} `json:"parent"`
+}
+
+func (i Invoice) SubscriptionID() string {
+	if i.Subscription != "" {
+		return i.Subscription
+	}
+	return i.Parent.SubscriptionDetails.Subscription
 }
 
 func ParseEvent(payload []byte) (*Event, error) {
