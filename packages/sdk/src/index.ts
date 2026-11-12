@@ -327,10 +327,42 @@ export class DentistesError extends Error {
   }
 }
 
+export interface TokenStorage {
+  getAccessToken(): string | null | Promise<string | null>;
+  setAccessToken(token: string | null): void | Promise<void>;
+  getRefreshToken(): string | null | Promise<string | null>;
+  setRefreshToken(token: string | null): void | Promise<void>;
+}
+
+export class MemoryTokenStorage implements TokenStorage {
+  private access: string | null = null;
+  private refresh: string | null = null;
+
+  constructor(initialAccess: string | null = null, initialRefresh: string | null = null) {
+    this.access = initialAccess;
+    this.refresh = initialRefresh;
+  }
+
+  getAccessToken(): string | null {
+    return this.access;
+  }
+  setAccessToken(token: string | null): void {
+    this.access = token;
+  }
+  getRefreshToken(): string | null {
+    return this.refresh;
+  }
+  setRefreshToken(token: string | null): void {
+    this.refresh = token;
+  }
+}
+
 export interface DentistesClientOptions {
   baseUrl: string;
   fetch?: typeof fetch;
   mode?: "browser" | "native";
+  tenantId?: string;
+  storage?: TokenStorage;
   getAccessToken?: () => string | null;
   onAccessToken?: (token: string | null) => void;
   getRefreshToken?: () => string | null;
@@ -342,41 +374,75 @@ interface RequestOptions {
   body?: unknown;
   auth?: boolean;
   retry?: boolean;
+  headers?: Record<string, string>;
 }
 
 export class DentistesClient {
   readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly mode: "browser" | "native";
+  private readonly storage?: TokenStorage;
   private readonly getAccessToken?: () => string | null;
   private readonly onAccessToken?: (token: string | null) => void;
   private readonly getRefreshToken?: () => string | null;
   private readonly onRefreshToken?: (token: string | null) => void;
   private accessToken: string | null = null;
+  private activeTenantId: string | null = null;
 
   constructor(options: DentistesClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.mode = options.mode ?? "browser";
+    this.storage = options.storage;
+    this.activeTenantId = options.tenantId ?? null;
     this.getAccessToken = options.getAccessToken;
     this.onAccessToken = options.onAccessToken;
     this.getRefreshToken = options.getRefreshToken;
     this.onRefreshToken = options.onRefreshToken;
   }
 
-  private token(): string | null {
+  setTenantId(tenantId: string | null): void {
+    this.activeTenantId = tenantId;
+  }
+
+  getTenantId(): string | null {
+    return this.activeTenantId;
+  }
+
+  private async token(): Promise<string | null> {
+    if (this.storage) {
+      return (await this.storage.getAccessToken()) ?? this.accessToken;
+    }
     return this.getAccessToken?.() ?? this.accessToken;
   }
 
-  private setToken(token: string | null): void {
+  private async setToken(token: string | null): Promise<void> {
     this.accessToken = token;
+    if (this.storage) {
+      await this.storage.setAccessToken(token);
+    }
     this.onAccessToken?.(token);
   }
 
-  private async request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-    const token = this.token();
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+  private async getStoredRefreshToken(): Promise<string | null> {
+    if (this.storage) {
+      return await this.storage.getRefreshToken();
+    }
+    return this.getRefreshToken?.() ?? null;
+  }
+
+  private async setStoredRefreshToken(token: string | null): Promise<void> {
+    if (this.storage) {
+      await this.storage.setRefreshToken(token);
+    }
+    this.onRefreshToken?.(token);
+  }
+
+  async request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
+    const token = await this.token();
+    const headers: Record<string, string> = { "Content-Type": "application/json", ...opts.headers };
     if (token) headers.Authorization = `Bearer ${token}`;
+    if (this.activeTenantId) headers["X-Tenant-ID"] = this.activeTenantId;
     if (this.mode === "native") headers["X-Client"] = "native";
 
     const res = await this.fetchImpl(this.baseUrl + path, {
@@ -404,17 +470,17 @@ export class DentistesClient {
   }
 
   get accessTokenValue(): string | null {
-    return this.token();
+    return this.accessToken;
   }
 
   async login(email: string, password: string, opts: { tenantId?: string; subdomain?: string } = {}): Promise<AuthResponse> {
     const res = await this.request<AuthResponse>("/v1/auth/login", {
       method: "POST",
       auth: false,
-      body: { email, password, tenant_id: opts.tenantId, subdomain: opts.subdomain },
+      body: { email, password, tenant_id: opts.tenantId ?? this.activeTenantId, subdomain: opts.subdomain },
     });
-    this.setToken(res.access_token);
-    if (res.refresh_token) this.onRefreshToken?.(res.refresh_token);
+    await this.setToken(res.access_token);
+    if (res.refresh_token) await this.setStoredRefreshToken(res.refresh_token);
     return res;
   }
 
@@ -430,8 +496,8 @@ export class DentistesClient {
       auth: false,
       body: input,
     });
-    this.setToken(res.access_token);
-    if (res.refresh_token) this.onRefreshToken?.(res.refresh_token);
+    await this.setToken(res.access_token);
+    if (res.refresh_token) await this.setStoredRefreshToken(res.refresh_token);
     return res;
   }
 
@@ -441,13 +507,13 @@ export class DentistesClient {
       auth: false,
       body: input,
     });
-    this.setToken(res.access_token);
-    if (res.refresh_token) this.onRefreshToken?.(res.refresh_token);
+    await this.setToken(res.access_token);
+    if (res.refresh_token) await this.setStoredRefreshToken(res.refresh_token);
     return res;
   }
 
   async refreshSession(): Promise<AuthResponse | null> {
-    const refreshToken = this.getRefreshToken?.() ?? null;
+    const refreshToken = await this.getStoredRefreshToken();
     if (this.mode === "native" && !refreshToken) return null;
     try {
       const res = await this.request<AuthResponse>("/v1/auth/refresh", {
@@ -455,11 +521,11 @@ export class DentistesClient {
         auth: false,
         body: this.mode === "native" ? { refresh_token: refreshToken } : {},
       });
-      this.setToken(res.access_token);
-      if (res.refresh_token) this.onRefreshToken?.(res.refresh_token);
+      await this.setToken(res.access_token);
+      if (res.refresh_token) await this.setStoredRefreshToken(res.refresh_token);
       return res;
     } catch {
-      this.setToken(null);
+      await this.setToken(null);
       return null;
     }
   }
@@ -469,14 +535,14 @@ export class DentistesClient {
   }
 
   async logout(): Promise<void> {
-    const refreshToken = this.getRefreshToken?.() ?? null;
+    const refreshToken = await this.getStoredRefreshToken();
     await this.request<void>("/v1/auth/logout", {
       method: "POST",
       auth: false,
       body: this.mode === "native" && refreshToken ? { refresh_token: refreshToken } : {},
     }).catch(() => undefined);
-    this.setToken(null);
-    this.onRefreshToken?.(null);
+    await this.setToken(null);
+    await this.setStoredRefreshToken(null);
   }
 
   async bootstrap(): Promise<MeResponse | null> {
@@ -650,7 +716,7 @@ export class DentistesClient {
   }
 
   appointmentStreamUrl(): string | null {
-    const token = this.token();
+    const token = this.accessToken ?? this.getAccessToken?.();
     if (!token) return null;
     return `${this.baseUrl}/v1/appointments/stream?access_token=${encodeURIComponent(token)}`;
   }

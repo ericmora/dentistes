@@ -44,6 +44,7 @@ export function App() {
           path="/onboarding/complete"
           element={me ? <OnboardingCompletePage /> : <Navigate to="/login" replace />}
         />
+        <Route path="/design-system" element={<DesignSystemPage />} />
         <Route
           path="/*"
           element={

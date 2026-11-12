@@ -7,7 +7,9 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "scripts": {
     "build": "pnpm run build:sdk && pnpm run build:web && pnpm run build:admin && pnpm run build:marketing && pnpm run build:cli",
@@ -18,8 +20,11 @@
     "build:cli": "pnpm --filter @dentistes/cli build",
     "check": "pnpm -r --if-present check && pnpm run check:api",
     "check:api": "cd apps/api && go vet ./... && go test ./...",
-    "test": "pnpm --filter @dentistes/sdk test && cd apps/api && go test -count=1 -cover ./...",
-    "test:e2e": "cd apps/api && go test -v -count=1 -run 'TestCriticalPath' ./internal/httpapi",
+    "test": "pnpm --filter @dentistes/sdk test && pnpm --filter @dentistes/web test && cd apps/api && go test -count=1 -cover ./...",
+    "test:ui": "pnpm --filter @dentistes/web test",
+    "test:e2e:api": "cd apps/api && go test -v -count=1 -run 'TestCriticalPath' ./internal/httpapi",
+    "test:e2e:ui": "playwright test",
+    "test:e2e": "pnpm run test:e2e:api && pnpm run test:e2e:ui",
     "dev:api": "cd apps/api && go run ./cmd/api",
     "dev:web": "pnpm --filter @dentistes/web dev",
     "dev:admin": "pnpm --filter @dentistes/admin dev",
@@ -27,5 +32,8 @@
     "db:up": "docker compose up -d postgres",
     "db:migrate": "cd apps/api && go run ./cmd/api migrate",
     "deploy": "./deploy/deploy.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0"
   }
 }

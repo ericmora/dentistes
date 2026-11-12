@@ -54,3 +54,19 @@ Els camins crítics de l'aplicació han de tenir sempre cobertura de tests E2E /
   - Temps d'execució < 10 segons, zero cost de xarxa i determinisme absolut.
 - **Testing Namespace K8s (`dentistes-qa`) + Wildcard Test Domain:**
   - S'utilitza com a entorn d'Staging / QA integrat per validar certificats Let's Encrypt Staging, Ingress Controller real de Kubernetes, cookies HTTPS multi-subdomini i recepció de webhooks de Stripe Test en directe.
+
+## 4. Bateria de Comandes de Qualitat
+
+```bash
+# 1. Tests Unitaris i Components (SDK, Vitest UI i Go)
+pnpm test
+
+# 2. Tests E2E de Punta a Punta (API Go + Navegador Real Playwright)
+pnpm run test:e2e
+
+# 3. Comprovació de Tipus Estàtica a tot el Monorepo
+pnpm run check
+
+# 4. Construcció de Producció de totes les Apps
+pnpm run build
+```

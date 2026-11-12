@@ -10,10 +10,11 @@ Qualsevol agent d'IA que operi en aquest repositori ha de seguir obligatòriamen
 2. **Objectiu de Cobertura 100%:**
    - La lògica de negoci, permisos RBAC, multi-tenancy RLS, integracions (Stripe, K8s) i utilitats han de comptar amb el 100% de cobertura en tests unitaris.
 3. **Validació al Final de Desenvolupament:**
-   - Abans de finalitzar la tasca o sincronitzar el treball, s'han d'executar tots els tests unitaris i E2E:
+   - Abans de finalitzar la tasca o sincronitzar el treball, s'han d'executar tots els tests unitaris, de components i E2E:
      ```bash
-     cd apps/api && go vet ./... && go test -cover ./...
-     pnpm run check
+     pnpm test          # Executa tests SDK (100%), Vitest UI (components) i Go backend
+     pnpm run test:e2e   # Executa E2E API (Go) i E2E de navegador (Playwright)
+     pnpm run check     # Comprovació de tipus estàtica a tot el monorepo
      ```
    - Cap tasca es dóna per bona si falla algun test o la cobertura no s'ha mantingut/millorat.
 

@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/sdk.test.ts"
+    "test": "node --experimental-strip-types --test test/*.test.ts"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

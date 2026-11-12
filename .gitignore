@@ -5,6 +5,8 @@ build/
 coverage/
 *.log
 .DS_Store
+test-results/
+playwright-report/
 
 .env
 .env.*
