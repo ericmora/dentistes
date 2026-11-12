@@ -2,6 +2,15 @@ package auth
 
 import "slices"
 
+const (
+	RoleOwner        = "OWNER"
+	RoleAdmin        = "ADMIN"
+	RoleDentist      = "DENTIST"
+	RoleDoctor       = "DENTIST"
+	RoleHygienist    = "HYGIENIST"
+	RoleReceptionist = "RECEPTIONIST"
+)
+
 var rolePermissions = map[string][]string{
 	"OWNER": {"*"},
 	"ADMIN": {

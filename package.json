@@ -18,6 +18,8 @@
     "build:cli": "pnpm --filter @dentistes/cli build",
     "check": "pnpm -r --if-present check && pnpm run check:api",
     "check:api": "cd apps/api && go vet ./... && go test ./...",
+    "test": "pnpm --filter @dentistes/sdk test && cd apps/api && go test -count=1 -cover ./...",
+    "test:e2e": "cd apps/api && go test -v -count=1 -run 'TestCriticalPath' ./internal/httpapi",
     "dev:api": "cd apps/api && go run ./cmd/api",
     "dev:web": "pnpm --filter @dentistes/web dev",
     "dev:admin": "pnpm --filter @dentistes/admin dev",

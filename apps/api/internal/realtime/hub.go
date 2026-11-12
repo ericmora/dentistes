@@ -31,16 +31,19 @@ func (h *Hub) Subscribe(tenantID string) (<-chan []byte, func()) {
 	h.subs[tenantID][ch] = struct{}{}
 	h.mu.Unlock()
 
+	var once sync.Once
 	cancel := func() {
-		h.mu.Lock()
-		if set, ok := h.subs[tenantID]; ok {
-			delete(set, ch)
-			if len(set) == 0 {
-				delete(h.subs, tenantID)
+		once.Do(func() {
+			h.mu.Lock()
+			if set, ok := h.subs[tenantID]; ok {
+				delete(set, ch)
+				if len(set) == 0 {
+					delete(h.subs, tenantID)
+				}
 			}
-		}
-		close(ch)
-		h.mu.Unlock()
+			close(ch)
+			h.mu.Unlock()
+		})
 	}
 	return ch, cancel
 }

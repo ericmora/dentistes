@@ -52,9 +52,20 @@ Carpeta de Drive: `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` (subcarpetas `Producte`, `
    - Para documentos eliminados, marca los requisitos como obsoletos, ajusta o retira código y anótalo.
    - Usa `grill-with-docs` (carga también `grilling` y `domain-modeling`) **solo** cuando haya ambigüedad, contradicción o una decisión difícil de revertir: entrevista por rondas, actualiza `GLOSSARY.md` y crea ADRs en `docs/adr/`. No grilles por cambios triviales.
 
-5. **Implementar** lo que exijan los cambios: código, tests y configuración. Si un cambio documental contradice una decisión previa, detente y grilla al usuario antes de elegir.
+5. **Definir camins crítics i tests E2E/integració (TDD - Fase Red)**:
+   - Abans de desenvolupar qualsevol línia de negoci, identificar els **camins crítics (critical paths)** de la funcionalitat (veure `docs/TESTING_AND_QUALITY.md`).
+   - Crear o actualitzar el set de dades de prova determinista (fixtures).
+   - Escriure els tests E2E / integració dels camins crítics i comprovar que fallen d'entrada.
 
-6. **Verificar** (tests, lint, build) y después **cerrar el ciclo**:
+6. **Implementar (TDD - Fase Green & Refactor)**:
+   - Implementar el codi de producció necessari per passar els tests.
+   - Afegir tests unitaris exhaustius per assolir el 100% de cobertura en la lògica de negoci, autorització RBAC i multi-tenancy.
+   - Refactoritzar mantenint tota la suite en verd.
+
+7. **Verificar i validar qualitat de tancament**:
+   - Executar la bateria completa (`cd apps/api && go test -cover ./...`, `pnpm run check`).
+   - Validar que el 100% dels tests passen i que la cobertura compleix l'estàndard.
+   - Després, **tancar el cicle**:
 
    ```bash
    drive sync 17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx --out docs/drive --prune
@@ -72,6 +83,8 @@ Carpeta de Drive: `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` (subcarpetas `Producte`, `
 
 ## Reglas
 
+- **TDD obligatori:** Sempre s'escriuen els tests dels camins crítics abans que el codi de la feature.
+- **Cobertura 100% de la lògica de negoci:** Tots els paquets amb lògica (auth, billing, realtime, entitlements, agenda, waiting list) han de tenir el 100% de cobertura.
 - Cita siempre documento + fecha de modificación para cada requisito.
 - No commitees salvo que el usuario lo pida.
 - No introduzcas secretos en código ni documentación.
