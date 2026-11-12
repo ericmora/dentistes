@@ -191,6 +191,58 @@ func (c *Client) GetSubscription(ctx context.Context, id string) (*Subscription,
 	return &out, nil
 }
 
+func (c *Client) SetCancelAtPeriodEnd(ctx context.Context, id string, cancel bool) (*Subscription, error) {
+	form := url.Values{}
+	form.Set("cancel_at_period_end", boolString(cancel))
+	var out Subscription
+	if err := c.postForm(ctx, "/subscriptions/"+url.PathEscape(id), form, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) CancelSubscriptionNow(ctx context.Context, id string) (*Subscription, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/subscriptions/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.secretKey)
+	var out Subscription
+	if err := c.do(req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+type InvoiceItem struct {
+	ID               string `json:"id"`
+	Number           string `json:"number"`
+	Status           string `json:"status"`
+	AmountPaid       int64  `json:"amount_paid"`
+	AmountDue        int64  `json:"amount_due"`
+	Currency         string `json:"currency"`
+	Created          int64  `json:"created"`
+	HostedInvoiceURL string `json:"hosted_invoice_url"`
+	InvoicePDF       string `json:"invoice_pdf"`
+}
+
+func (c *Client) ListInvoices(ctx context.Context, customerID string, limit int) ([]InvoiceItem, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 24
+	}
+	path := fmt.Sprintf("/invoices?customer=%s&limit=%d", url.QueryEscape(customerID), limit)
+	var out struct {
+		Data []InvoiceItem `json:"data"`
+	}
+	if err := c.get(ctx, path, &out); err != nil {
+		return nil, err
+	}
+	if out.Data == nil {
+		return []InvoiceItem{}, nil
+	}
+	return out.Data, nil
+}
+
 type Event struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`

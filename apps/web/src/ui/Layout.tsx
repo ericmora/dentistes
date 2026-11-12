@@ -9,14 +9,14 @@ const baseLinks = [
   { to: "/agenda", label: "Agenda" },
   { to: "/patients", label: "Pacientes" },
   { to: "/waiting-list", label: "Espera" },
-  { to: "/billing", label: "Facturación" },
   { to: "/design-system", label: "UI / DS" },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
   const { me, logout } = useSession();
   if (!me) return null;
-  const links = can(me, "users:manage") ? [...baseLinks, { to: "/users", label: "Usuarios" }] : baseLinks;
+  const isClinicAdmin = me.role === "OWNER" || me.role === "ADMIN" || can(me, "users:manage") || can(me, "billing:manage");
+  const links = isClinicAdmin ? [...baseLinks, { to: "/settings", label: "Administración" }] : baseLinks;
 
   return (
     <div className="min-h-screen bg-slate-50">

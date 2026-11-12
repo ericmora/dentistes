@@ -86,9 +86,13 @@ func (s *Server) Router() http.Handler {
 				r.Use(s.tenantTx)
 				r.Get("/me", s.handleMe)
 				r.Get("/billing/subscription", s.handleSubscription)
+				r.With(s.requirePermission("billing:manage")).Get("/billing/invoices", s.handleListInvoices)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/checkout", s.handleCheckout)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/confirm-checkout", s.handleConfirmCheckout)
+				r.With(s.requirePermission("billing:manage")).Post("/billing/cancel", s.handleCancelSubscription)
+				r.With(s.requirePermission("billing:manage")).Post("/billing/resume", s.handleResumeSubscription)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/portal", s.handlePortal)
+				r.With(s.requirePermission("settings:manage")).Post("/clinic/cancel", s.handleCancelClinicAccount)
 
 				r.Route("/patients", func(r chi.Router) {
 					r.Use(s.requireFeature("patients"))

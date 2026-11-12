@@ -143,3 +143,8 @@ func (s *Store) DeleteSessionByHash(ctx context.Context, tx pgx.Tx, tokenHash st
 	_, err := tx.Exec(ctx, "delete from sessions where token_hash = $1", tokenHash)
 	return err
 }
+
+func (s *Store) RevokeTenantSessions(ctx context.Context, tx pgx.Tx, tenantID string) error {
+	_, err := tx.Exec(ctx, "update sessions set revoked_at = now() where tenant_id = $1 and revoked_at is null", tenantID)
+	return err
+}

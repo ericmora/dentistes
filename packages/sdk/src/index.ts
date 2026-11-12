@@ -215,6 +215,18 @@ export interface WaitingCandidateMatch {
   match_score: number;
 }
 
+export interface StripeInvoice {
+  id: string;
+  number: string;
+  status: string;
+  amount_paid: number;
+  amount_due: number;
+  currency: string;
+  created: number;
+  hosted_invoice_url: string;
+  invoice_pdf: string;
+}
+
 export interface PublicTenant {
   tenant_id: string;
   name: string;
@@ -697,12 +709,23 @@ export class DentistesClient {
   billing = {
     subscription: (): Promise<{ subscription: Subscription | null; entitlements: Entitlements }> =>
       this.request("/v1/billing/subscription"),
+    invoices: (): Promise<{ invoices: StripeInvoice[] }> =>
+      this.request("/v1/billing/invoices"),
     checkout: (planKey: string): Promise<{ url: string }> =>
       this.request("/v1/billing/checkout", { method: "POST", body: { plan_key: planKey } }),
     confirmCheckout: (sessionId: string): Promise<{ subscription: Subscription | null; entitlements: Entitlements }> =>
       this.request("/v1/billing/confirm-checkout", { method: "POST", body: { session_id: sessionId } }),
+    cancel: (immediately = false): Promise<{ subscription: Subscription | null; entitlements: Entitlements }> =>
+      this.request("/v1/billing/cancel", { method: "POST", body: { immediately } }),
+    resume: (): Promise<{ subscription: Subscription | null; entitlements: Entitlements }> =>
+      this.request("/v1/billing/resume", { method: "POST", body: {} }),
     portal: (): Promise<{ url: string }> =>
       this.request("/v1/billing/portal", { method: "POST", body: {} }),
+  };
+
+  clinic = {
+    cancel: (confirmSubdomain: string): Promise<{ status: string }> =>
+      this.request("/v1/clinic/cancel", { method: "POST", body: { confirm_subdomain: confirmSubdomain } }),
   };
 
   admin = {

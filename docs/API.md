@@ -86,9 +86,13 @@ Respuesta:
 | GET | `/v1/me` | sesión + tenant | Usuario, memberships, rol, permisos, features, plan y billing |
 | POST | `/v1/auth/switch-tenant` | sesión | Cambia tenant activo y emite nuevos tokens |
 | GET | `/v1/billing/subscription` | sesión | Suscripción y entitlements |
+| GET | `/v1/billing/invoices` | `billing:manage` | Lista facturas de Stripe con enlaces PDF (`invoice_pdf`) |
 | POST | `/v1/billing/checkout` | `billing:manage` | Crea Stripe Checkout para `plan_key` (incluye 30 días de trial si aún es `INCOMPLETE`) |
 | POST | `/v1/billing/confirm-checkout` | `billing:manage` | Verifica `session_id` en Stripe y activa inmediatamente `TRIALING`/`ACTIVE` |
+| POST | `/v1/billing/cancel` | `billing:manage` | Programa cancelación al final del periodo (`immediately: false`) o inmediata |
+| POST | `/v1/billing/resume` | `billing:manage` | Reactiva suscripción programada para cancelar |
 | POST | `/v1/billing/portal` | `billing:manage` | Abre Stripe Billing Portal |
+| POST | `/v1/clinic/cancel` | `settings:manage` (`OWNER`) | Cancela suscripción en Stripe, cierra el tenant y revoca sesiones |
 | GET | `/v1/patients` | feature `patients` + `patients:read` | Lista/busca pacientes (`q`, `limit`, `offset`) |
 | POST | `/v1/patients` | feature `patients` + `patients:write` | Crea paciente |
 | GET | `/v1/patients/{id}` | feature `patients` + `patients:read` | Ficha completa (alertas detalladas redactadas si no tiene `clinical:read`) |

@@ -162,6 +162,158 @@ func (s *Server) handleConfirmCheckout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleListInvoices(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	sub, err := s.store.GetSubscription(r.Context(), tx, claims.TenantID)
+	if errors.Is(err, store.ErrNotFound) || sub.StripeCustomerID == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"invoices": []stripeapi.InvoiceItem{}})
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	if !s.stripe.Enabled() {
+		writeJSON(w, http.StatusOK, map[string]any{"invoices": []stripeapi.InvoiceItem{}})
+		return
+	}
+	invoices, err := s.stripe.ListInvoices(r.Context(), sub.StripeCustomerID, 24)
+	if err != nil {
+		slog.Error("stripe list invoices", "error", err)
+		writeError(w, http.StatusBadGateway, "STRIPE_ERROR", "could not list Stripe invoices", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invoices": invoices})
+}
+
+func (s *Server) handleCancelSubscription(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Immediately bool `json:"immediately"`
+	}
+	_ = decodeJSON(r, &req)
+	if !s.stripe.Enabled() {
+		writeError(w, http.StatusServiceUnavailable, "STRIPE_DISABLED", "billing is not configured", nil)
+		return
+	}
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	sub, err := s.store.GetSubscription(r.Context(), tx, claims.TenantID)
+	if errors.Is(err, store.ErrNotFound) || sub.StripeSubscriptionID == "" {
+		writeError(w, http.StatusBadRequest, "NO_ACTIVE_SUBSCRIPTION", "no Stripe subscription to cancel", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	var updated *stripeapi.Subscription
+	if req.Immediately {
+		updated, err = s.stripe.CancelSubscriptionNow(r.Context(), sub.StripeSubscriptionID)
+	} else {
+		updated, err = s.stripe.SetCancelAtPeriodEnd(r.Context(), sub.StripeSubscriptionID, true)
+	}
+	if err != nil {
+		slog.Error("stripe cancel subscription", "error", err)
+		writeError(w, http.StatusBadGateway, "STRIPE_ERROR", "could not cancel subscription", nil)
+		return
+	}
+	if err := s.syncSubscription(r.Context(), tx, claims.TenantID, updated); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	ent, err := s.loadEntitlementsForTenant(r.Context(), tx, claims.TenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscription": ent.Subscription,
+		"entitlements": ent.Result,
+	})
+}
+
+func (s *Server) handleResumeSubscription(w http.ResponseWriter, r *http.Request) {
+	if !s.stripe.Enabled() {
+		writeError(w, http.StatusServiceUnavailable, "STRIPE_DISABLED", "billing is not configured", nil)
+		return
+	}
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	sub, err := s.store.GetSubscription(r.Context(), tx, claims.TenantID)
+	if errors.Is(err, store.ErrNotFound) || sub.StripeSubscriptionID == "" {
+		writeError(w, http.StatusBadRequest, "NO_ACTIVE_SUBSCRIPTION", "no Stripe subscription to resume", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	updated, err := s.stripe.SetCancelAtPeriodEnd(r.Context(), sub.StripeSubscriptionID, false)
+	if err != nil {
+		slog.Error("stripe resume subscription", "error", err)
+		writeError(w, http.StatusBadGateway, "STRIPE_ERROR", "could not resume subscription", nil)
+		return
+	}
+	if err := s.syncSubscription(r.Context(), tx, claims.TenantID, updated); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	ent, err := s.loadEntitlementsForTenant(r.Context(), tx, claims.TenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"subscription": ent.Subscription,
+		"entitlements": ent.Result,
+	})
+}
+
+func (s *Server) handleCancelClinicAccount(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	if claims == nil || claims.Role != "OWNER" {
+		writeError(w, http.StatusForbidden, "FORBIDDEN", "only the clinic owner can cancel the account", nil)
+		return
+	}
+	var req struct {
+		ConfirmSubdomain string `json:"confirm_subdomain"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	tx := txFrom(r.Context())
+	tenant, err := s.store.GetTenantByID(r.Context(), tx, claims.TenantID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(req.ConfirmSubdomain), tenant.Subdomain) {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "confirm_subdomain does not match clinic subdomain", nil)
+		return
+	}
+
+	sub, err := s.store.GetSubscription(r.Context(), tx, claims.TenantID)
+	if err == nil && sub.StripeSubscriptionID != "" && s.stripe.Enabled() {
+		updated, cErr := s.stripe.CancelSubscriptionNow(r.Context(), sub.StripeSubscriptionID)
+		if cErr != nil {
+			slog.Error("stripe cancel subscription on account close", "error", cErr)
+			writeError(w, http.StatusBadGateway, "STRIPE_ERROR", "could not cancel Stripe subscription", nil)
+			return
+		}
+		_ = s.syncSubscription(r.Context(), tx, claims.TenantID, updated)
+	}
+
+	if err := s.store.UpdateTenantStatus(r.Context(), tx, claims.TenantID, "CANCELED"); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not cancel clinic account", nil)
+		return
+	}
+	_ = s.store.RevokeTenantSessions(r.Context(), tx, claims.TenantID)
+	s.clearRefreshCookie(w)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "CANCELED"})
+}
+
 func (s *Server) handlePortal(w http.ResponseWriter, r *http.Request) {
 	if !s.stripe.Enabled() {
 		writeError(w, http.StatusServiceUnavailable, "STRIPE_DISABLED", "billing is not configured", nil)

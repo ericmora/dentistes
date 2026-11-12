@@ -12,6 +12,7 @@ import { PatientsPage } from "./pages/Patients";
 import { PatientDetailPage } from "./pages/PatientDetail";
 import { BillingPage } from "./pages/Billing";
 import { UsersPage } from "./pages/Users";
+import { ClinicAdminPage } from "./pages/ClinicAdmin";
 import { DesignSystemPage } from "./pages/DesignSystem";
 
 export function App() {
@@ -56,6 +57,7 @@ export function App() {
                   <Route path="/patients/:id" element={<PatientDetailPage />} />
                   <Route path="/billing" element={<BillingPage />} />
                   <Route path="/users" element={<UsersPage />} />
+                  <Route path="/settings" element={<ClinicAdminPage />} />
                   <Route path="/design-system" element={<DesignSystemPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

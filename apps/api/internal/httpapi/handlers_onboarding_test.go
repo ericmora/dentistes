@@ -93,3 +93,34 @@ func TestStripeCheckoutSets30DayTrialAndCardCollection(t *testing.T) {
 		t.Fatalf("expected payment_method_collection=always, got %q", received.Get("payment_method_collection"))
 	}
 }
+
+func TestStripeInvoicesAndCancel(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/invoices"):
+			_, _ = w.Write([]byte(`{"data":[{"id":"in_123","number":"INV-0001","status":"paid","amount_paid":1850,"amount_due":0,"currency":"usd","created":1762900000,"hosted_invoice_url":"https://invoice.stripe.com/i/123","invoice_pdf":"https://pay.stripe.com/invoice/123/pdf"}]}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/subscriptions/sub_123":
+			_, _ = w.Write([]byte(`{"id":"sub_123","customer":"cus_123","status":"trialing","cancel_at_period_end":true}`))
+		case r.Method == http.MethodDelete && r.URL.Path == "/subscriptions/sub_123":
+			_, _ = w.Write([]byte(`{"id":"sub_123","customer":"cus_123","status":"canceled","cancel_at_period_end":false}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ts.Close()
+
+	client := stripeapi.NewWithBaseURL("sk_test_mock", ts.URL)
+	invoices, err := client.ListInvoices(context.Background(), "cus_123", 10)
+	if err != nil || len(invoices) != 1 || invoices[0].InvoicePDF == "" {
+		t.Fatalf("unexpected invoices result: %#v, err=%v", invoices, err)
+	}
+	sub, err := client.SetCancelAtPeriodEnd(context.Background(), "sub_123", true)
+	if err != nil || !sub.CancelAtPeriodEnd {
+		t.Fatalf("expected cancel_at_period_end=true, got %#v, err=%v", sub, err)
+	}
+	canceled, err := client.CancelSubscriptionNow(context.Background(), "sub_123")
+	if err != nil || canceled.Status != "canceled" {
+		t.Fatalf("expected canceled subscription, got %#v, err=%v", canceled, err)
+	}
+}

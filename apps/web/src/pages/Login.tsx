@@ -55,8 +55,8 @@ export function LoginPage() {
           </form>
           <p className="mt-4 text-center text-sm text-slate-500">
             ¿Nueva clínica?{" "}
-            <Link className="font-medium text-brand-700 hover:underline" to="/signup">
-              Crear cuenta
+            <Link className="font-medium text-brand-700 hover:underline" to="/onboarding">
+              Crear cuenta (30 días gratis con Stripe)
             </Link>
           </p>
         </Card>

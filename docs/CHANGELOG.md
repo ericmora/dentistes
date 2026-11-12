@@ -2,6 +2,15 @@
 
 Registro de cambios ingeridos desde la carpeta de Drive `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` y su estabilización en el repositorio.
 
+## 2026-11-12 (Àrea d'Administració de Clínica, Factures Stripe i Cancel·lació)
+
+- **Backend Go (`apps/api`):**
+  - Afegits a [`stripeapi.go`](../apps/api/internal/stripeapi/stripeapi.go) `ListInvoices`, `SetCancelAtPeriodEnd` i `CancelSubscriptionNow`.
+  - Nous endpoints a [`handlers_billing.go`](../apps/api/internal/httpapi/handlers_billing.go): `GET /v1/billing/invoices`, `POST /v1/billing/cancel`, `POST /v1/billing/resume` (`billing:manage`) i `POST /v1/clinic/cancel` (exclusiu `OWNER`, cancel·la Stripe, tanca el tenant i revoca sessions).
+- **SDK i Webapp (`apps/web`):**
+  - Nova àrea unificada [`ClinicAdminPage`](../apps/web/src/pages/ClinicAdmin.tsx) (`/settings`, protegida amb `RoleGuard` per a `OWNER` i `ADMIN`) amb pestanyes per a **Facturació i Factures PDF**, **Equip i Rols**, **Gabinets** i **Cancel·lació definitiva del compte** (només `OWNER`).
+  - Ampliada [`BillingPage`](../apps/web/src/pages/Billing.tsx) amb descàrrega directa de factures PDF de Stripe i cancel·lació/reactivació de la subscripció.
+
 ## 2026-11-12 (Enriquiment DS + F2 Agenda Temps Real SSE + F5 Llista d'Espera Dinàmica)
 
 - **Design System (`@dentistes/ui`):**
