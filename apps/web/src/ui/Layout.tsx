@@ -6,7 +6,9 @@ import { useSession } from "../lib/session";
 
 const baseLinks = [
   { to: "/", label: "Resumen" },
+  { to: "/agenda", label: "Agenda" },
   { to: "/patients", label: "Pacientes" },
+  { to: "/waiting-list", label: "Espera" },
   { to: "/billing", label: "Facturación" },
   { to: "/design-system", label: "UI / DS" },
 ];

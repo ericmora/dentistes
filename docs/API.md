@@ -97,6 +97,19 @@ Respuesta:
 | POST | `/v1/patients/{id}/clinical-records` | feature `clinical_history` + `clinical:write` | Añade evolución o addenda (`amends_entry_id`) |
 | GET | `/v1/patients/{id}/odontograms` | feature `odontogram` + `clinical:read` | Lista odontogramas (`INITIAL`, `CURRENT`, `HISTORICAL`) |
 | PUT | `/v1/patients/{id}/odontograms/{type}` | feature `odontogram` + `clinical:write` | Guarda odontograma con control optimista `version` |
+| GET | `/v1/cabinets` | feature `agenda` + `appointments:read` | Lista gabinetes activos |
+| POST | `/v1/cabinets` | feature `agenda` + `settings:manage` | Crea gabinete |
+| GET | `/v1/doctors` | feature `agenda` + `appointments:read` | Lista profesionales clínicos del tenant |
+| GET | `/v1/appointments` | feature `agenda` + `appointments:read` | Lista citas (`?start=&end=&cabinet_id=&doctor_id=`) |
+| POST | `/v1/appointments` | feature `agenda` + `appointments:write` | Crea cita (valida solapamiento en gabinete) |
+| PUT | `/v1/appointments/{id}` | feature `agenda` + `appointments:write` | Reprograma cita (`If-Match`/`version` optimista) |
+| PATCH | `/v1/appointments/{id}/status` | feature `agenda` + `appointments:write` | Cambia estado; al cancelar devuelve matches de lista de espera |
+| GET | `/v1/appointments/stream` | `appointments:read` | Stream SSE en tiempo real por tenant (`?access_token=` o Bearer) |
+| GET | `/v1/waiting-list` | feature `waiting_list` + `appointments:read` | Lista cola de espera (`?status=`) |
+| POST | `/v1/waiting-list` | feature `waiting_list` + `appointments:write` | Añade paciente a la lista de espera |
+| GET | `/v1/waiting-list/matches` | feature `waiting_list` + `appointments:read` | Candidatos ordenados por scoring para un hueco |
+| POST | `/v1/waiting-list/{id}/hold` | feature `waiting_list` + `appointments:write` | Bloqueo temporal de 15 min (`OFFERED`) |
+| PATCH | `/v1/waiting-list/{id}/status` | feature `waiting_list` + `appointments:write` | Actualiza estado en cola |
 | GET | `/v1/users` | `users:manage` | Miembros del tenant |
 | POST | `/v1/users` | `users:manage` | Crea usuario y/o membership con rol |
 | PATCH | `/v1/users/{membershipId}` | `users:manage` | Cambia rol o estado del miembro |

@@ -420,7 +420,11 @@ export function AppointmentCard({
     <button
       type="button"
       draggable={draggable}
-      onDragStart={onDragStart}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", appointment.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart?.();
+      }}
       onClick={onClick}
       className={cn(
         "w-full rounded-lg border border-slate-200 border-l-4 bg-white p-2.5 text-left shadow-sm transition hover:shadow",
@@ -455,13 +459,18 @@ export function MultiCabinetTimeline({
   appointmentsByCabinet,
   onSelectAppointment,
   onSelectSlot,
+  onMoveAppointment,
 }: {
   cabinets: CabinetColumn[];
   slots: string[];
   appointmentsByCabinet: Record<string, AppointmentCardData[]>;
   onSelectAppointment?: (appointment: AppointmentCardData) => void;
   onSelectSlot?: (cabinetId: string, slot: string) => void;
+  onMoveAppointment?: (appointmentId: string, targetCabinetId: string, targetSlot: string) => void;
 }) {
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [hoverTarget, setHoverTarget] = useState<string | null>(null);
+
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <div className="min-w-[680px]">
@@ -486,21 +495,42 @@ export function MultiCabinetTimeline({
             <div className="px-3 py-3 text-xs font-medium tabular-nums text-slate-500">{slot}</div>
             {cabinets.map((cab) => {
               const items = (appointmentsByCabinet[cab.id] ?? []).filter((a) => a.startTime === slot);
+              const cellKey = `${cab.id}-${slot}`;
+              const isDropHover = hoverTarget === cellKey;
               return (
                 <div
-                  key={`${cab.id}-${slot}`}
+                  key={cellKey}
                   onClick={() => {
                     if (items.length === 0) onSelectSlot?.(cab.id, slot);
                   }}
+                  onDragOver={(e) => {
+                    if (!onMoveAppointment) return;
+                    e.preventDefault();
+                    if (hoverTarget !== cellKey) setHoverTarget(cellKey);
+                  }}
+                  onDragLeave={() => {
+                    if (hoverTarget === cellKey) setHoverTarget(null);
+                  }}
+                  onDrop={(e) => {
+                    if (!onMoveAppointment) return;
+                    e.preventDefault();
+                    const id = e.dataTransfer.getData("text/plain") || draggedId;
+                    setHoverTarget(null);
+                    setDraggedId(null);
+                    if (id) onMoveAppointment(id, cab.id, slot);
+                  }}
                   className={cn(
-                    "min-h-[60px] space-y-1 border-l border-slate-100 p-1.5",
+                    "min-h-[60px] space-y-1 border-l border-slate-100 p-1.5 transition-colors",
                     items.length === 0 && onSelectSlot && "cursor-pointer hover:bg-brand-50/40",
+                    isDropHover && "bg-brand-100/60 ring-2 ring-inset ring-brand-400",
                   )}
                 >
                   {items.map((item) => (
                     <AppointmentCard
                       key={item.id}
                       appointment={item}
+                      draggable={Boolean(onMoveAppointment)}
+                      onDragStart={() => setDraggedId(item.id)}
                       onClick={() => onSelectAppointment?.(item)}
                     />
                   ))}

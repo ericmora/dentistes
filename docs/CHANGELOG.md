@@ -2,6 +2,18 @@
 
 Registro de cambios ingeridos desde la carpeta de Drive `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` y su estabilización en el repositorio.
 
+## 2026-11-12 (Enriquiment DS + F2 Agenda Temps Real SSE + F5 Llista d'Espera Dinàmica)
+
+- **Design System (`@dentistes/ui`):**
+  - Afegits tokens de tractament a `tokens.css`, `ConfirmDialog` a `overlays.tsx`, i drag-and-drop natiu a `MultiCabinetTimeline` / `AppointmentCard`.
+- **F2 — Agenda Multigabinet en Temps Real:**
+  - Hub SSE per tenant (`apps/api/internal/realtime/hub.go`) i stream `GET /v1/appointments/stream` amb heartbeat i reconnexió exponencial (`useAppointmentStream`).
+  - Endpoints de `cabinets`, `doctors`, `appointments` amb validació anti-solapament (`409 APPOINTMENT_OVERLAP`) i bloqueig optimista `version`/`If-Match` (`409 VERSION_CONFLICT`).
+  - Nova pàgina `AgendaPage` (`/agenda`) a `apps/web` amb creació, arrossegament entre gabinets/hores i canvi d'estat.
+- **F5 — Llista d'Espera Dinàmica:**
+  - Algorisme de scoring en Go (`ScoreWaitingCandidate`), endpoints `/v1/waiting-list` + `/matches` + `/hold` (bloqueig temporal de 15 minuts).
+  - Enllaç directe amb F2: en cancel·lar una cita es retornen i publiquen per SSE els candidats compatibles; nova pàgina `WaitingListPage` (`/waiting-list`).
+
 ## 2026-11-12 (Muntatge del Design System + F3 Historial/Alertes + F1 Odontograma)
 
 - **Design System muntat (`apps/web`):** ruta `/design-system` amb el catàleg viu de primitives, overlays i components clínics de `@dentistes/ui`.

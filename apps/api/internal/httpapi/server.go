@@ -20,6 +20,7 @@ import (
 	"github.com/ericmora/dentistes/apps/api/internal/config"
 	"github.com/ericmora/dentistes/apps/api/internal/db"
 	"github.com/ericmora/dentistes/apps/api/internal/entitlements"
+	"github.com/ericmora/dentistes/apps/api/internal/realtime"
 	"github.com/ericmora/dentistes/apps/api/internal/store"
 	"github.com/ericmora/dentistes/apps/api/internal/stripeapi"
 )
@@ -42,6 +43,7 @@ type Server struct {
 	tokens  *auth.TokenManager
 	stripe  *stripeapi.Client
 	limiter *rateLimiter
+	hub     *realtime.Hub
 }
 
 func New(cfg *config.Config, database *db.DB, tokens *auth.TokenManager) *Server {
@@ -52,6 +54,7 @@ func New(cfg *config.Config, database *db.DB, tokens *auth.TokenManager) *Server
 		tokens:  tokens,
 		stripe:  stripeapi.NewWithBaseURL(cfg.StripeSecretKey, cfg.StripeAPIBase),
 		limiter: newRateLimiter(30, time.Minute),
+		hub:     realtime.NewHub(),
 	}
 }
 
@@ -113,7 +116,34 @@ func (s *Server) Router() http.Handler {
 					r.Post("/", s.handleCreateUser)
 					r.Patch("/{id}", s.handleUpdateUser)
 				})
+
+				r.Route("/cabinets", func(r chi.Router) {
+					r.Use(s.requireFeature("agenda"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListCabinets)
+					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateCabinet)
+				})
+
+				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/doctors", s.handleListDoctors)
+
+				r.Route("/appointments", func(r chi.Router) {
+					r.Use(s.requireFeature("agenda"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListAppointments)
+					r.With(s.requirePermission("appointments:write")).Post("/", s.handleCreateAppointment)
+					r.With(s.requirePermission("appointments:write")).Put("/{id}", s.handleUpdateAppointment)
+					r.With(s.requirePermission("appointments:write")).Patch("/{id}/status", s.handleUpdateAppointmentStatus)
+				})
+
+				r.Route("/waiting-list", func(r chi.Router) {
+					r.Use(s.requireFeature("waiting_list"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListWaitingList)
+					r.With(s.requirePermission("appointments:write")).Post("/", s.handleCreateWaitingListEntry)
+					r.With(s.requirePermission("appointments:read")).Get("/matches", s.handleMatchWaitingList)
+					r.With(s.requirePermission("appointments:write")).Post("/{id}/hold", s.handleHoldWaitingListEntry)
+					r.With(s.requirePermission("appointments:write")).Patch("/{id}/status", s.handleUpdateWaitingListStatus)
+				})
 			})
+
+			r.With(s.requirePermission("appointments:read")).Get("/appointments/stream", s.handleAppointmentStream)
 
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(s.requirePlatformAdmin)
@@ -203,12 +233,18 @@ func clientIP(r *http.Request) string {
 
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawToken := ""
 		header := r.Header.Get("Authorization")
-		if !strings.HasPrefix(header, "Bearer ") {
+		if strings.HasPrefix(header, "Bearer ") {
+			rawToken = strings.TrimPrefix(header, "Bearer ")
+		} else if q := r.URL.Query().Get("access_token"); q != "" && r.URL.Path == "/v1/appointments/stream" {
+			rawToken = q
+		}
+		if rawToken == "" {
 			writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "missing bearer token", nil)
 			return
 		}
-		claims, err := s.tokens.Parse(strings.TrimPrefix(header, "Bearer "))
+		claims, err := s.tokens.Parse(rawToken)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "UNAUTHENTICATED", "invalid or expired token", nil)
 			return

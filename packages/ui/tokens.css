@@ -16,6 +16,13 @@
   --color-dental-planned: #16a34a;
   --color-dental-missing: #4b5563;
 
+  /* Treatment category tokens */
+  --color-treatment-checkup: #0d9488;
+  --color-treatment-hygiene: #0284c7;
+  --color-treatment-surgery: #dc2626;
+  --color-treatment-ortho: #7c3aed;
+  --color-treatment-emergency: #ea580c;
+
   /* Surface & typography */
   --surface: #f8fafc;
   --surface-elevated: #ffffff;

@@ -6,6 +6,8 @@ import { LoginPage } from "./pages/Login";
 import { OnboardingPage } from "./pages/Onboarding";
 import { OnboardingCompletePage } from "./pages/OnboardingComplete";
 import { DashboardPage } from "./pages/Dashboard";
+import { AgendaPage } from "./pages/Agenda";
+import { WaitingListPage } from "./pages/WaitingList";
 import { PatientsPage } from "./pages/Patients";
 import { PatientDetailPage } from "./pages/PatientDetail";
 import { BillingPage } from "./pages/Billing";
@@ -48,6 +50,8 @@ export function App() {
               <Layout>
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
+                  <Route path="/agenda" element={<AgendaPage />} />
+                  <Route path="/waiting-list" element={<WaitingListPage />} />
                   <Route path="/patients" element={<PatientsPage />} />
                   <Route path="/patients/:id" element={<PatientDetailPage />} />
                   <Route path="/billing" element={<BillingPage />} />

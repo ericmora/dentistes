@@ -76,6 +76,63 @@ export function Modal({
 
 export const Dialog = Modal;
 
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  description,
+  confirmLabel = "Confirmar",
+  cancelLabel = "Cancelar",
+  danger = false,
+  loading = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={title}
+      description={description}
+      maxWidth="max-w-md"
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={loading}
+            className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={loading}
+            className={cn(
+              "min-h-[40px] rounded-lg px-4 text-sm font-medium text-white disabled:opacity-60",
+              danger ? "bg-critical hover:bg-red-700" : "bg-brand-600 hover:bg-brand-700",
+            )}
+          >
+            {loading ? "Procesando…" : confirmLabel}
+          </button>
+        </>
+      }
+    >
+      <div />
+    </Modal>
+  );
+}
+
 export function Sheet({
   open,
   onClose,

@@ -149,6 +149,72 @@ export interface Odontogram {
   updated_at: string;
 }
 
+export interface Cabinet {
+  id: string;
+  name: string;
+  color_code: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Doctor {
+  id: string;
+  full_name: string;
+  role: string;
+}
+
+export type AppointmentStatus =
+  | "SCHEDULED"
+  | "WHATSAPP_SENT"
+  | "CONFIRMED"
+  | "WAITING_ROOM"
+  | "IN_CABINET"
+  | "COMPLETED"
+  | "NO_SHOW"
+  | "CANCELLED";
+
+export interface Appointment {
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  patient_high_risk: boolean;
+  doctor_id: string;
+  doctor_name: string;
+  cabinet_id: string;
+  cabinet_name: string;
+  start_time: string;
+  end_time: string;
+  treatment_type: string;
+  status: AppointmentStatus;
+  cancellation_reason?: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WaitingListEntry {
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  patient_phone: string;
+  doctor_id?: string;
+  doctor_name?: string;
+  treatment_type: string;
+  estimated_duration_minutes: number;
+  preferred_time_slot: "ANY" | "MORNING" | "AFTERNOON";
+  preferred_days: number[];
+  urgency_level: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+  status: "WAITING" | "OFFERED" | "SCHEDULED" | "EXPIRED" | "CANCELLED";
+  hold_expires_at?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface WaitingCandidateMatch {
+  entry: WaitingListEntry;
+  match_score: number;
+}
+
 export interface PublicTenant {
   tenant_id: string;
   name: string;
@@ -509,6 +575,107 @@ export class DentistesClient {
     input: { teeth_data: Record<string, unknown>; version?: number },
   ): Promise<{ odontogram: Odontogram }> {
     return this.request(`/v1/patients/${patientId}/odontograms/${type}`, { method: "PUT", body: input });
+  }
+
+  listCabinets(): Promise<{ cabinets: Cabinet[] }> {
+    return this.request("/v1/cabinets");
+  }
+
+  createCabinet(input: { name: string; color_code?: string }): Promise<{ cabinet: Cabinet }> {
+    return this.request("/v1/cabinets", { method: "POST", body: input });
+  }
+
+  listDoctors(): Promise<{ doctors: Doctor[] }> {
+    return this.request("/v1/doctors");
+  }
+
+  listAppointments(params: { start?: string; end?: string; cabinet_id?: string; doctor_id?: string } = {}): Promise<{
+    appointments: Appointment[];
+  }> {
+    const query = new URLSearchParams();
+    if (params.start) query.set("start", params.start);
+    if (params.end) query.set("end", params.end);
+    if (params.cabinet_id) query.set("cabinet_id", params.cabinet_id);
+    if (params.doctor_id) query.set("doctor_id", params.doctor_id);
+    const suffix = query.toString() ? `?${query}` : "";
+    return this.request(`/v1/appointments${suffix}`);
+  }
+
+  createAppointment(input: {
+    patient_id: string;
+    doctor_id: string;
+    cabinet_id: string;
+    start_time: string;
+    end_time: string;
+    treatment_type: string;
+  }): Promise<{ appointment: Appointment }> {
+    return this.request("/v1/appointments", { method: "POST", body: input });
+  }
+
+  updateAppointment(
+    id: string,
+    input: {
+      doctor_id: string;
+      cabinet_id: string;
+      start_time: string;
+      end_time: string;
+      treatment_type: string;
+      version?: number;
+    },
+  ): Promise<{ appointment: Appointment }> {
+    return this.request(`/v1/appointments/${id}`, { method: "PUT", body: input });
+  }
+
+  updateAppointmentStatus(
+    id: string,
+    status: AppointmentStatus,
+    cancellationReason?: string,
+  ): Promise<{ appointment: Appointment; waiting_list_matches?: WaitingCandidateMatch[] }> {
+    return this.request(`/v1/appointments/${id}/status`, {
+      method: "PATCH",
+      body: { status, cancellation_reason: cancellationReason },
+    });
+  }
+
+  appointmentStreamUrl(): string | null {
+    const token = this.token();
+    if (!token) return null;
+    return `${this.baseUrl}/v1/appointments/stream?access_token=${encodeURIComponent(token)}`;
+  }
+
+  listWaitingList(status?: WaitingListEntry["status"]): Promise<{ entries: WaitingListEntry[] }> {
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
+    return this.request(`/v1/waiting-list${suffix}`);
+  }
+
+  createWaitingListEntry(input: {
+    patient_id: string;
+    doctor_id?: string;
+    treatment_type: string;
+    estimated_duration_minutes?: number;
+    preferred_time_slot?: WaitingListEntry["preferred_time_slot"];
+    preferred_days?: number[];
+    urgency_level?: WaitingListEntry["urgency_level"];
+    notes?: string;
+  }): Promise<{ entry: WaitingListEntry }> {
+    return this.request("/v1/waiting-list", { method: "POST", body: input });
+  }
+
+  matchWaitingList(params: { start: string; end: string; doctor_id?: string; limit?: number }): Promise<{
+    matches: WaitingCandidateMatch[];
+  }> {
+    const query = new URLSearchParams({ start: params.start, end: params.end });
+    if (params.doctor_id) query.set("doctor_id", params.doctor_id);
+    if (params.limit) query.set("limit", String(params.limit));
+    return this.request(`/v1/waiting-list/matches?${query}`);
+  }
+
+  holdWaitingListEntry(id: string): Promise<{ entry: WaitingListEntry }> {
+    return this.request(`/v1/waiting-list/${id}/hold`, { method: "POST", body: {} });
+  }
+
+  updateWaitingListStatus(id: string, status: WaitingListEntry["status"]): Promise<{ entry: WaitingListEntry }> {
+    return this.request(`/v1/waiting-list/${id}/status`, { method: "PATCH", body: { status } });
   }
 
   users = {

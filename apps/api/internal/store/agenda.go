@@ -1,0 +1,257 @@
+package store
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+)
+
+var ErrOverlap = errors.New("appointment overlap")
+
+type Cabinet struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	ColorCode string    `json:"color_code"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Doctor struct {
+	ID       string `json:"id"`
+	FullName string `json:"full_name"`
+	Role     string `json:"role"`
+}
+
+type Appointment struct {
+	ID                 string    `json:"id"`
+	PatientID          string    `json:"patient_id"`
+	PatientName        string    `json:"patient_name"`
+	PatientHighRisk    bool      `json:"patient_high_risk"`
+	DoctorID           string    `json:"doctor_id"`
+	DoctorName         string    `json:"doctor_name"`
+	CabinetID          string    `json:"cabinet_id"`
+	CabinetName        string    `json:"cabinet_name"`
+	StartTime          time.Time `json:"start_time"`
+	EndTime            time.Time `json:"end_time"`
+	TreatmentType      string    `json:"treatment_type"`
+	Status             string    `json:"status"`
+	CancellationReason *string   `json:"cancellation_reason,omitempty"`
+	Version            int       `json:"version"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type UpsertAppointmentInput struct {
+	PatientID     string
+	DoctorID      string
+	CabinetID     string
+	StartTime     time.Time
+	EndTime       time.Time
+	TreatmentType string
+	Status        string
+}
+
+func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) {
+	rows, err := tx.Query(ctx, `select id, name, coalesce(color_code, '#0D9488'), is_active, created_at
+		from cabinets where is_active = true order by created_at, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Cabinet{}
+	for rows.Next() {
+		var c Cabinet
+		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode string) (*Cabinet, error) {
+	if colorCode == "" {
+		colorCode = "#0D9488"
+	}
+	var c Cabinet
+	err := tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code)
+		values ($1, $2, $3)
+		returning id, name, color_code, is_active, created_at`,
+		tenantID, name, colorCode).
+		Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &c.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (s *Store) ListDoctors(ctx context.Context, tx pgx.Tx) ([]Doctor, error) {
+	rows, err := tx.Query(ctx, `select u.id, u.full_name, m.role
+		from memberships m
+		join users u on u.id = m.user_id
+		where m.is_active = true and u.is_active = true
+		  and m.role in ('OWNER', 'ADMIN', 'DENTIST', 'HYGIENIST')
+		order by u.full_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Doctor{}
+	for rows.Next() {
+		var d Doctor
+		if err := rows.Scan(&d.ID, &d.FullName, &d.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+const appointmentSelect = `select a.id, a.patient_id, p.last_name || ', ' || p.first_name,
+		coalesce((p.medical_alerts->>'high_risk')::boolean, false),
+		a.doctor_id, u.full_name, a.cabinet_id, c.name,
+		a.start_time, a.end_time, a.treatment_type, a.status, a.cancellation_reason,
+		a.version, a.created_at, a.updated_at
+	from appointments a
+	join patients p on p.id = a.patient_id
+	join users u on u.id = a.doctor_id
+	join cabinets c on c.id = a.cabinet_id`
+
+func scanAppointment(row pgx.Row) (*Appointment, error) {
+	var a Appointment
+	err := row.Scan(
+		&a.ID, &a.PatientID, &a.PatientName, &a.PatientHighRisk,
+		&a.DoctorID, &a.DoctorName, &a.CabinetID, &a.CabinetName,
+		&a.StartTime, &a.EndTime, &a.TreatmentType, &a.Status, &a.CancellationReason,
+		&a.Version, &a.CreatedAt, &a.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (s *Store) ListAppointments(ctx context.Context, tx pgx.Tx, start, end time.Time, cabinetID, doctorID string) ([]Appointment, error) {
+	rows, err := tx.Query(ctx, appointmentSelect+`
+		where a.start_time < $2 and a.end_time > $1
+		  and ($3 = '' or a.cabinet_id::text = $3)
+		  and ($4 = '' or a.doctor_id::text = $4)
+		order by a.start_time`,
+		start, end, cabinetID, doctorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Appointment{}
+	for rows.Next() {
+		var a Appointment
+		if err := rows.Scan(
+			&a.ID, &a.PatientID, &a.PatientName, &a.PatientHighRisk,
+			&a.DoctorID, &a.DoctorName, &a.CabinetID, &a.CabinetName,
+			&a.StartTime, &a.EndTime, &a.TreatmentType, &a.Status, &a.CancellationReason,
+			&a.Version, &a.CreatedAt, &a.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) GetAppointmentByID(ctx context.Context, tx pgx.Tx, id string) (*Appointment, error) {
+	return scanAppointment(tx.QueryRow(ctx, appointmentSelect+" where a.id = $1", id))
+}
+
+func (s *Store) hasAppointmentOverlap(ctx context.Context, tx pgx.Tx, cabinetID string, start, end time.Time, excludeID string) (bool, error) {
+	var exists bool
+	err := tx.QueryRow(ctx, `select exists(
+		select 1 from appointments
+		where cabinet_id = $1::uuid
+		  and status <> 'CANCELLED'
+		  and start_time < $3 and end_time > $2
+		  and ($4 = '' or id::text <> $4)
+	)`, cabinetID, start, end, excludeID).Scan(&exists)
+	return exists, err
+}
+
+func (s *Store) CreateAppointment(ctx context.Context, tx pgx.Tx, tenantID string, in UpsertAppointmentInput) (*Appointment, error) {
+	overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.StartTime, in.EndTime, "")
+	if err != nil {
+		return nil, err
+	}
+	if overlap {
+		return nil, ErrOverlap
+	}
+	status := in.Status
+	if status == "" {
+		status = "SCHEDULED"
+	}
+	var id string
+	err = tx.QueryRow(ctx, `insert into appointments
+			(tenant_id, patient_id, doctor_id, cabinet_id, start_time, end_time, treatment_type, status)
+		values ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8)
+		returning id`,
+		tenantID, in.PatientID, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType, status).
+		Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetAppointmentByID(ctx, tx, id)
+}
+
+func (s *Store) UpdateAppointment(ctx context.Context, tx pgx.Tx, id string, in UpsertAppointmentInput, expectedVersion *int) (*Appointment, error) {
+	var currentVersion int
+	err := tx.QueryRow(ctx, `select version from appointments where id = $1`, id).Scan(&currentVersion)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if expectedVersion != nil && *expectedVersion != currentVersion {
+		return nil, ErrVersionConflict
+	}
+
+	overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.StartTime, in.EndTime, id)
+	if err != nil {
+		return nil, err
+	}
+	if overlap {
+		return nil, ErrOverlap
+	}
+
+	_, err = tx.Exec(ctx, `update appointments
+		set doctor_id = $2::uuid,
+			cabinet_id = $3::uuid,
+			start_time = $4,
+			end_time = $5,
+			treatment_type = $6,
+			version = version + 1
+		where id = $1`,
+		id, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetAppointmentByID(ctx, tx, id)
+}
+
+func (s *Store) UpdateAppointmentStatus(ctx context.Context, tx pgx.Tx, id, status, reason string) (*Appointment, error) {
+	tag, err := tx.Exec(ctx, `update appointments
+		set status = $2,
+			cancellation_reason = nullif($3, ''),
+			version = version + 1
+		where id = $1`,
+		id, status, reason)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return s.GetAppointmentByID(ctx, tx, id)
+}
