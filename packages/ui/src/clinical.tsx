@@ -149,120 +149,170 @@ export interface ToothState {
 
 const SURFACE_COLORS: Record<ToothSurfaceStatus, string> = {
   healthy: "#FFFFFF",
-  caries: "#E11D48",
+  caries: "#DC2626",
   restored: "#2563EB",
   planned: "#16A34A",
-  missing: "#4B5563",
+  missing: "#475569",
 };
 
 export function ToothSurfaceRenderer({
   tooth,
   selected,
+  isUpper = true,
   onSelectSurface,
   onSelectTooth,
 }: {
   tooth: ToothState;
   selected?: boolean;
+  isUpper?: boolean;
   onSelectSurface?: (toothNumber: number, surface: ToothSurfaceName) => void;
   onSelectTooth?: (toothNumber: number) => void;
 }) {
   const isMissing = tooth.general_status === "missing";
+  const isEndo = tooth.general_status === "endodontics";
+  const isCrown = tooth.general_status === "crown";
+  const isImplant = tooth.general_status === "implant";
+
   const fillOf = (s: ToothSurfaceName) =>
     isMissing ? SURFACE_COLORS.missing : SURFACE_COLORS[tooth.surfaces[s] ?? "healthy"];
 
   return (
     <div
       className={cn(
-        "flex flex-col items-center rounded-lg border p-1.5 transition",
-        selected ? "border-brand-600 bg-brand-50/50 ring-2 ring-brand-200" : "border-slate-200 bg-white",
+        "flex flex-col items-center rounded-lg border p-1 transition select-none",
+        selected ? "border-brand-600 bg-brand-50/70 ring-2 ring-brand-300" : "border-slate-200 bg-white hover:border-slate-300",
+        isMissing && "opacity-60",
       )}
     >
       <button
         type="button"
         onClick={() => onSelectTooth?.(tooth.tooth_number)}
-        className="mb-1 text-xs font-semibold tabular-nums text-slate-700 hover:text-brand-700"
+        className={cn(
+          "mb-1 text-[11px] font-bold tabular-nums px-1.5 py-0.5 rounded transition",
+          selected ? "bg-brand-600 text-white" : "text-slate-700 hover:bg-slate-100",
+        )}
       >
         {tooth.tooth_number}
       </button>
-      <svg viewBox="0 0 60 60" className="h-11 w-11 touch-manipulation" role="img" aria-label={`Pieza ${tooth.tooth_number}`}>
-        {/* Vestibular (top) */}
+
+      <svg viewBox="0 0 60 60" className="h-10 w-10 sm:h-11 sm:w-11 touch-manipulation" role="img" aria-label={`Pieza ${tooth.tooth_number}`}>
+        {/* Top surface: Vestibular (upper) or Lingual (lower) */}
         <polygon
           points="5,5 55,5 42,18 18,18"
           fill={fillOf("vestibular")}
-          stroke="#334155"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:opacity-80"
+          stroke="#475569"
+          strokeWidth="1.2"
+          className="cursor-pointer transition hover:opacity-80"
           onClick={() => onSelectSurface?.(tooth.tooth_number, "vestibular")}
-        />
-        {/* Lingual (bottom) */}
+        >
+          <title>{isUpper ? "Vestibular" : "Lingual"}</title>
+        </polygon>
+
+        {/* Bottom surface: Palatino (upper) or Vestibular (lower) */}
         <polygon
           points="18,42 42,42 55,55 5,55"
           fill={fillOf("lingual")}
-          stroke="#334155"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:opacity-80"
+          stroke="#475569"
+          strokeWidth="1.2"
+          className="cursor-pointer transition hover:opacity-80"
           onClick={() => onSelectSurface?.(tooth.tooth_number, "lingual")}
-        />
-        {/* Mesial (left) */}
+        >
+          <title>{isUpper ? "Palatino" : "Vestibular"}</title>
+        </polygon>
+
+        {/* Left surface: Mesial / Distal */}
         <polygon
           points="5,5 18,18 18,42 5,55"
           fill={fillOf("mesial")}
-          stroke="#334155"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:opacity-80"
+          stroke="#475569"
+          strokeWidth="1.2"
+          className="cursor-pointer transition hover:opacity-80"
           onClick={() => onSelectSurface?.(tooth.tooth_number, "mesial")}
-        />
-        {/* Distal (right) */}
+        >
+          <title>Mesial</title>
+        </polygon>
+
+        {/* Right surface: Distal / Mesial */}
         <polygon
           points="55,5 55,55 42,42 42,18"
           fill={fillOf("distal")}
-          stroke="#334155"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:opacity-80"
+          stroke="#475569"
+          strokeWidth="1.2"
+          className="cursor-pointer transition hover:opacity-80"
           onClick={() => onSelectSurface?.(tooth.tooth_number, "distal")}
-        />
-        {/* Occlusal / Incisal (center) */}
+        >
+          <title>Distal</title>
+        </polygon>
+
+        {/* Occlusal / Incisal center */}
         <rect
           x="18"
           y="18"
           width="24"
           height="24"
           fill={fillOf("occlusal")}
-          stroke="#334155"
-          strokeWidth="1.5"
-          className="cursor-pointer hover:opacity-80"
+          stroke="#475569"
+          strokeWidth="1.2"
+          className="cursor-pointer transition hover:opacity-80"
           onClick={() => onSelectSurface?.(tooth.tooth_number, "occlusal")}
-        />
-        {isMissing ? (
-          <g stroke="#F8FAFC" strokeWidth="2.5">
-            <line x1="10" y1="10" x2="50" y2="50" />
-            <line x1="50" y1="10" x2="10" y2="50" />
+        >
+          <title>Oclusal / Incisal</title>
+        </rect>
+
+        {/* Standard Treatment Drawings */}
+
+        {/* Endodoncia: conducto radicular vertical en rojo o azul */}
+        {isEndo ? (
+          <g className="pointer-events-none">
+            <line x1="30" y1="6" x2="30" y2="54" stroke="#DC2626" strokeWidth="3" strokeLinecap="round" />
+            <line x1="24" y1="20" x2="36" y2="20" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="26" y1="30" x2="34" y2="30" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="27" y1="40" x2="33" y2="40" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="30" cy="50" r="3" fill="#DC2626" />
           </g>
         ) : null}
-        {tooth.general_status === "crown" ? (
-          <circle cx="30" cy="30" r="26" fill="none" stroke="#0F766E" strokeWidth="2.5" strokeDasharray="4 2" />
+
+        {/* Corona / Funda: contorno circular dorado exterior */}
+        {isCrown ? (
+          <g className="pointer-events-none">
+            <circle cx="30" cy="30" r="27" fill="none" stroke="#D97706" strokeWidth="3" />
+            <circle cx="30" cy="30" r="24" fill="none" stroke="#FBBF24" strokeWidth="1" strokeDasharray="3 2" />
+          </g>
         ) : null}
-        {tooth.general_status === "implant" ? (
-          <circle cx="30" cy="30" r="6" fill="#0F172A" />
+
+        {/* Implante: tornillo osteointegrado de titanio */}
+        {isImplant ? (
+          <g className="pointer-events-none">
+            <rect x="23" y="10" width="14" height="40" rx="3" fill="#334155" stroke="#0F172A" strokeWidth="1" />
+            <line x1="20" y1="18" x2="40" y2="18" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+            <line x1="20" y1="26" x2="40" y2="26" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+            <line x1="20" y1="34" x2="40" y2="34" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+            <line x1="20" y1="42" x2="40" y2="42" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+            <polygon points="26,14 30,10 34,14 30,18" fill="#F8FAFC" />
+          </g>
+        ) : null}
+
+        {/* Ausente / Extracción: gran cruz roja 'X' */}
+        {isMissing ? (
+          <g className="pointer-events-none">
+            <line x1="6" y1="6" x2="54" y2="54" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" />
+            <line x1="54" y1="6" x2="6" y2="54" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" />
+          </g>
         ) : null}
       </svg>
     </div>
   );
 }
 
-const ADULT_QUADRANTS = [
-  [18, 17, 16, 15, 14, 13, 12, 11],
-  [21, 22, 23, 24, 25, 26, 27, 28],
-  [48, 47, 46, 45, 44, 43, 42, 41],
-  [31, 32, 33, 34, 35, 36, 37, 38],
-];
+const ADULT_UPPER_RIGHT = [18, 17, 16, 15, 14, 13, 12, 11];
+const ADULT_UPPER_LEFT = [21, 22, 23, 24, 25, 26, 27, 28];
+const ADULT_LOWER_RIGHT = [48, 47, 46, 45, 44, 43, 42, 41];
+const ADULT_LOWER_LEFT = [31, 32, 33, 34, 35, 36, 37, 38];
 
-const CHILD_QUADRANTS = [
-  [55, 54, 53, 52, 51],
-  [61, 62, 63, 64, 65],
-  [85, 84, 83, 82, 81],
-  [71, 72, 73, 74, 75],
-];
+const CHILD_UPPER_RIGHT = [55, 54, 53, 52, 51];
+const CHILD_UPPER_LEFT = [61, 62, 63, 64, 65];
+const CHILD_LOWER_RIGHT = [85, 84, 83, 82, 81];
+const CHILD_LOWER_LEFT = [71, 72, 73, 74, 75];
 
 export function emptyTooth(tooth_number: number): ToothState {
   return {
@@ -278,6 +328,8 @@ export function emptyTooth(tooth_number: number): ToothState {
   };
 }
 
+export type OdontogramActiveTool = ToothSurfaceStatus | "endodontics" | "crown" | "implant" | "general_missing" | "general_present";
+
 export function OdontogramGrid({
   teeth,
   dentition = "adult",
@@ -285,48 +337,112 @@ export function OdontogramGrid({
   activeTool = "caries",
   onToolChange,
   onToggleSurface,
+  onSetGeneralStatus,
   selectedTooth,
   onSelectTooth,
 }: {
   teeth: Record<number, ToothState>;
   dentition?: "adult" | "child";
   onDentitionChange?: (d: "adult" | "child") => void;
-  activeTool?: ToothSurfaceStatus;
-  onToolChange?: (tool: ToothSurfaceStatus) => void;
+  activeTool?: OdontogramActiveTool;
+  onToolChange?: (tool: OdontogramActiveTool) => void;
   onToggleSurface?: (toothNumber: number, surface: ToothSurfaceName, nextStatus: ToothSurfaceStatus) => void;
+  onSetGeneralStatus?: (toothNumber: number, status: NonNullable<ToothState["general_status"]>) => void;
   selectedTooth?: number;
   onSelectTooth?: (toothNumber: number) => void;
 }) {
-  const quadrants = dentition === "adult" ? ADULT_QUADRANTS : CHILD_QUADRANTS;
-  const tools: Array<{ key: ToothSurfaceStatus; label: string; dot: string }> = [
-    { key: "caries", label: "Patología / Caries", dot: "bg-dental-caries" },
-    { key: "restored", label: "Realizado", dot: "bg-dental-restored" },
-    { key: "planned", label: "Planificado", dot: "bg-dental-planned" },
-    { key: "missing", label: "Ausente", dot: "bg-dental-missing" },
-    { key: "healthy", label: "Sana", dot: "border border-slate-300 bg-white" },
+  const upperRight = dentition === "adult" ? ADULT_UPPER_RIGHT : CHILD_UPPER_RIGHT;
+  const upperLeft = dentition === "adult" ? ADULT_UPPER_LEFT : CHILD_UPPER_LEFT;
+  const lowerRight = dentition === "adult" ? ADULT_LOWER_RIGHT : CHILD_LOWER_RIGHT;
+  const lowerLeft = dentition === "adult" ? ADULT_LOWER_LEFT : CHILD_LOWER_LEFT;
+
+  const surfaceTools: Array<{ key: OdontogramActiveTool; label: string; dot: string }> = [
+    { key: "caries", label: "Caries / Patología", dot: "bg-red-600" },
+    { key: "restored", label: "Obturación / Empaste", dot: "bg-blue-600" },
+    { key: "planned", label: "Tratamiento planificado", dot: "bg-emerald-600" },
+    { key: "healthy", label: "Superficie sana", dot: "border border-slate-300 bg-white" },
   ];
 
+  const generalTools: Array<{ key: OdontogramActiveTool; label: string; badge: string; status: NonNullable<ToothState["general_status"]> }> = [
+    { key: "endodontics", label: "Endodoncia", badge: "border-red-500 text-red-700 bg-red-50", status: "endodontics" },
+    { key: "crown", label: "Corona / Funda", badge: "border-amber-500 text-amber-700 bg-amber-50", status: "crown" },
+    { key: "implant", label: "Implante", badge: "border-slate-700 text-slate-800 bg-slate-100", status: "implant" },
+    { key: "general_missing", label: "Pieza ausente", badge: "border-slate-500 text-slate-700 bg-slate-50", status: "missing" },
+    { key: "general_present", label: "Diente normal", badge: "border-slate-300 text-slate-600 bg-white", status: "present" },
+  ];
+
+  function handleToothClick(num: number) {
+    onSelectTooth?.(num);
+    const tool = generalTools.find((g) => g.key === activeTool);
+    if (tool && onSetGeneralStatus) {
+      onSetGeneralStatus(num, tool.status);
+    }
+  }
+
+  function handleSurfaceClick(toothNum: number, surface: ToothSurfaceName) {
+    onSelectTooth?.(toothNum);
+    const state = teeth[toothNum] ?? emptyTooth(toothNum);
+    // If active tool is a surface tool
+    if (activeTool === "caries" || activeTool === "restored" || activeTool === "planned" || activeTool === "healthy") {
+      const current = state.surfaces[surface];
+      const next = current === activeTool ? "healthy" : activeTool;
+      onToggleSurface?.(toothNum, surface, next);
+    } else {
+      // If a general tool is selected, clicking any surface applies that general status to the tooth
+      const tool = generalTools.find((g) => g.key === activeTool);
+      if (tool && onSetGeneralStatus) {
+        onSetGeneralStatus(toothNum, tool.status);
+      }
+    }
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-1.5">
-          {tools.map((tool) => (
+    <div className="space-y-5">
+      {/* Tool Palette */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Herramienta:</span>
+          {surfaceTools.map((tool) => (
             <button
               key={tool.key}
               type="button"
               onClick={() => onToolChange?.(tool.key)}
               className={cn(
-                "inline-flex min-h-[40px] items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                "inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
                 activeTool === tool.key
-                  ? "border-brand-600 bg-brand-50 text-brand-800"
+                  ? "border-brand-600 bg-brand-50 text-brand-800 font-semibold shadow-xs"
                   : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
               )}
             >
-              <span className={cn("h-3 w-3 rounded-full", tool.dot)} />
+              <span className={cn("h-2.5 w-2.5 rounded-full", tool.dot)} />
               {tool.label}
             </button>
           ))}
+          <div className="mx-1 h-5 w-px bg-slate-200" />
+          {generalTools.map((tool) => (
+            <button
+              key={tool.key}
+              type="button"
+              onClick={() => {
+                onToolChange?.(tool.key);
+                if (selectedTooth && onSetGeneralStatus) {
+                  onSetGeneralStatus(selectedTooth, tool.status);
+                }
+              }}
+              className={cn(
+                "inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
+                activeTool === tool.key
+                  ? "border-brand-600 bg-brand-50 text-brand-800 font-semibold shadow-xs"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              )}
+            >
+              <span className={cn("inline-block rounded px-1 text-[10px] font-bold border", tool.badge)}>
+                {tool.label}
+              </span>
+            </button>
+          ))}
         </div>
+
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
           {(["adult", "child"] as const).map((mode) => (
             <button
@@ -334,39 +450,145 @@ export function OdontogramGrid({
               type="button"
               onClick={() => onDentitionChange?.(mode)}
               className={cn(
-                "min-h-[36px] rounded-md px-3 text-xs font-medium",
-                dentition === mode ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900",
+                "min-h-[34px] rounded-md px-3 text-xs font-medium transition",
+                dentition === mode ? "bg-slate-900 text-white font-semibold" : "text-slate-600 hover:text-slate-900",
               )}
             >
-              {mode === "adult" ? "Adulto (32)" : "Infantil (20)"}
+              {mode === "adult" ? "Adulto (32 piezas)" : "Infantil (20 piezas)"}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {quadrants.map((q, qIdx) => (
-          <div key={qIdx} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {q.map((num) => {
-                const state = teeth[num] ?? emptyTooth(num);
-                return (
-                  <ToothSurfaceRenderer
-                    key={num}
-                    tooth={state}
-                    selected={selectedTooth === num}
-                    onSelectTooth={onSelectTooth}
-                    onSelectSurface={(toothNum, surface) => {
-                      const current = state.surfaces[surface];
-                      const next = current === activeTool ? "healthy" : activeTool;
-                      onToggleSurface?.(toothNum, surface, next);
-                    }}
-                  />
-                );
-              })}
+      {/* Anatomical Mouth Layout: Upper and Lower Arches */}
+      <div className="space-y-6 overflow-x-auto pb-2">
+        {/* Arcada Superior (Maxilar) */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between text-xs font-semibold text-slate-600">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-brand-600" />
+              Arcada Superior (Maxilar) · Cuadrante 1 (Derecha)
+            </span>
+            <span className="rounded bg-slate-200/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              Vestibular ↑ / Palatino ↓
+            </span>
+            <span>Cuadrante 2 (Izquierda)</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-1 sm:gap-2">
+            {/* Quadrant 1 (18..11) */}
+            <div className="flex gap-1 sm:gap-1.5">
+              {upperRight.map((num) => (
+                <ToothSurfaceRenderer
+                  key={num}
+                  tooth={teeth[num] ?? emptyTooth(num)}
+                  selected={selectedTooth === num}
+                  isUpper={true}
+                  onSelectTooth={handleToothClick}
+                  onSelectSurface={handleSurfaceClick}
+                />
+              ))}
+            </div>
+
+            {/* Central Midline Divider */}
+            <div className="flex flex-col items-center justify-center px-1">
+              <div className="h-16 w-0.5 rounded bg-brand-500" />
+              <span className="text-[9px] font-bold uppercase text-brand-700">Línea media</span>
+              <div className="h-16 w-0.5 rounded bg-brand-500" />
+            </div>
+
+            {/* Quadrant 2 (21..28) */}
+            <div className="flex gap-1 sm:gap-1.5">
+              {upperLeft.map((num) => (
+                <ToothSurfaceRenderer
+                  key={num}
+                  tooth={teeth[num] ?? emptyTooth(num)}
+                  selected={selectedTooth === num}
+                  isUpper={true}
+                  onSelectTooth={handleToothClick}
+                  onSelectSurface={handleSurfaceClick}
+                />
+              ))}
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Arcada Inferior (Mandíbula) */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-xs">
+          <div className="mb-3 flex items-center justify-between text-xs font-semibold text-slate-600">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2 w-2 rounded-full bg-slate-700" />
+              Arcada Inferior (Mandíbula) · Cuadrante 4 (Derecha)
+            </span>
+            <span className="rounded bg-slate-200/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+              Lingual ↑ / Vestibular ↓
+            </span>
+            <span>Cuadrante 3 (Izquierda)</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-1 sm:gap-2">
+            {/* Quadrant 4 (48..41) */}
+            <div className="flex gap-1 sm:gap-1.5">
+              {lowerRight.map((num) => (
+                <ToothSurfaceRenderer
+                  key={num}
+                  tooth={teeth[num] ?? emptyTooth(num)}
+                  selected={selectedTooth === num}
+                  isUpper={false}
+                  onSelectTooth={handleToothClick}
+                  onSelectSurface={handleSurfaceClick}
+                />
+              ))}
+            </div>
+
+            {/* Central Midline Divider */}
+            <div className="flex flex-col items-center justify-center px-1">
+              <div className="h-16 w-0.5 rounded bg-brand-500" />
+              <span className="text-[9px] font-bold uppercase text-brand-700">Línea media</span>
+              <div className="h-16 w-0.5 rounded bg-brand-500" />
+            </div>
+
+            {/* Quadrant 3 (31..38) */}
+            <div className="flex gap-1 sm:gap-1.5">
+              {lowerLeft.map((num) => (
+                <ToothSurfaceRenderer
+                  key={num}
+                  tooth={teeth[num] ?? emptyTooth(num)}
+                  selected={selectedTooth === num}
+                  isUpper={false}
+                  onSelectTooth={handleToothClick}
+                  onSelectSurface={handleSurfaceClick}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Visual Legend */}
+      <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+        <span className="font-semibold text-slate-800">Convención visual clínica:</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-red-600" /> Caries (Superficie)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-blue-600" /> Empaste / Obturación
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-emerald-600" /> Planificado
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-red-600 font-bold">|</span> Endodoncia (Conducto)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full border-2 border-amber-600" /> Corona
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-2 bg-slate-800 rounded-xs" /> Implante
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-red-600 font-extrabold text-sm leading-none">✕</span> Ausente / Extracción
+        </span>
       </div>
     </div>
   );

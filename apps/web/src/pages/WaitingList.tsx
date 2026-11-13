@@ -7,7 +7,6 @@ import {
   Combobox,
   EmptyState,
   FeatureGate,
-  Input,
   Modal,
   PageHeader,
   PermissionGate,
@@ -16,7 +15,7 @@ import {
   WaitingListCandidateCard,
   useToast,
 } from "@dentistes/ui";
-import type { WaitingListEntry } from "@dentistes/sdk";
+import { DENTAL_TREATMENTS_MASTER, findMasterTreatment, type WaitingListEntry } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 
 export function WaitingListPage() {
@@ -28,8 +27,8 @@ export function WaitingListPage() {
 
   const [form, setForm] = useState({
     patient_id: "",
-    treatment_type: "Revisió",
-    estimated_duration_minutes: "30",
+    treatment_type: DENTAL_TREATMENTS_MASTER[0].name,
+    estimated_duration_minutes: String(DENTAL_TREATMENTS_MASTER[0].default_duration_minutes),
     preferred_time_slot: "ANY" as WaitingListEntry["preferred_time_slot"],
     urgency_level: "NORMAL" as WaitingListEntry["urgency_level"],
     notes: "",
@@ -61,13 +60,13 @@ export function WaitingListPage() {
       }),
     onSuccess: async () => {
       setModalOpen(false);
-      notify({ tone: "success", title: "Pacient afegit a la llista d'espera" });
+      notify({ tone: "success", title: "Paciente añadido a la lista de espera" });
       await queryClient.invalidateQueries({ queryKey: ["waiting-list"] });
     },
     onError: (err) => {
       notify({
         tone: "danger",
-        title: "No s'ha pogut afegir",
+        title: "No se pudo añadir a la lista",
         description: err instanceof Error ? err.message : undefined,
       });
     },
@@ -76,13 +75,13 @@ export function WaitingListPage() {
   const holdMutation = useMutation({
     mutationFn: (id: string) => sdk.holdWaitingListEntry(id),
     onSuccess: async () => {
-      notify({ tone: "success", title: "Bloqueig temporal (15 min) activat" });
+      notify({ tone: "success", title: "Bloqueo temporal (15 min) activado" });
       await queryClient.invalidateQueries({ queryKey: ["waiting-list"] });
     },
     onError: (err) => {
       notify({
         tone: "danger",
-        title: "No s'ha pogut reservar",
+        title: "No se pudo reservar el turno",
         description: err instanceof Error ? err.message : undefined,
       });
     },
@@ -94,13 +93,13 @@ export function WaitingListPage() {
     <FeatureGate me={me} feature="waiting_list">
       <div className="space-y-6">
         <PageHeader
-          title="Llista d'espera dinàmica"
-          description="Cua prioritzada per cobrir cancel·lacions d'última hora amb bloqueig temporal de 15 minuts."
+          title="Lista de espera inteligente"
+          description="Cola priorizada para cubrir cancelaciones de última hora con reserva temporal de 15 minutos."
           actions={
             <PermissionGate me={me} permission="appointments:write">
               <Button onClick={() => setModalOpen(true)}>
                 <Plus className="h-4 w-4" />
-                Afegir pacient
+                Añadir a lista de espera
               </Button>
             </PermissionGate>
           }
@@ -109,15 +108,15 @@ export function WaitingListPage() {
         <Card>
           <div className="mb-4 max-w-xs">
             <Select
-              label="Estat"
+              label="Estado"
               value={statusFilter}
               onChange={setStatusFilter}
-              placeholder="Tots els estats"
+              placeholder="Todos los estados"
               options={[
                 { value: "WAITING", label: "En espera" },
-                { value: "OFFERED", label: "Ofertada (Hold 15m)" },
+                { value: "OFFERED", label: "Ofertada (Reserva 15 min)" },
                 { value: "SCHEDULED", label: "Programada" },
-                { value: "CANCELLED", label: "Cancel·lada" },
+                { value: "CANCELLED", label: "Cancelada" },
               ]}
             />
           </div>
@@ -129,8 +128,8 @@ export function WaitingListPage() {
             </div>
           ) : entries.length === 0 ? (
             <EmptyState
-              title="Sense pacients en aquesta cua"
-              description="Afegeix pacients perquè el sistema suggereixi candidats quan s'alliberi un forat."
+              title="Sin pacientes en esta cola"
+              description="Añade pacientes para que el sistema sugiera candidatos automáticamente al liberarse un hueco en la agenda."
             />
           ) : (
             <div className="space-y-3">
@@ -152,7 +151,7 @@ export function WaitingListPage() {
           )}
         </Card>
 
-        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Inscriure a la llista d'espera">
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Inscribir en lista de espera">
           <form
             className="space-y-4"
             onSubmit={(e: FormEvent) => {
@@ -161,25 +160,36 @@ export function WaitingListPage() {
             }}
           >
             <Combobox
-              label="Pacient"
+              label="Paciente"
               value={form.patient_id}
               onChange={(v) => setForm({ ...form, patient_id: v })}
-              placeholder="Cerca pacient…"
+              placeholder="Buscar paciente…"
               options={(patientsQuery.data?.patients ?? []).map((p) => ({
                 value: p.id,
                 label: `${p.last_name}, ${p.first_name}`,
                 hint: p.phone,
               }))}
             />
-            <Input
-              label="Tractament requerit"
+            <Select
+              label="Tratamiento dental (catálogo maestro)"
               value={form.treatment_type}
-              onChange={(e) => setForm({ ...form, treatment_type: e.target.value })}
-              required
+              onChange={(v) => {
+                const found = findMasterTreatment(v);
+                setForm((prev) => ({
+                  ...prev,
+                  treatment_type: v,
+                  estimated_duration_minutes: found ? String(found.default_duration_minutes) : prev.estimated_duration_minutes,
+                }));
+              }}
+              placeholder="Seleccionar tratamiento..."
+              options={DENTAL_TREATMENTS_MASTER.map((t) => ({
+                value: t.name,
+                label: `${t.name} (${t.category} · ${t.default_duration_minutes} min)`,
+              }))}
             />
             <div className="grid gap-3 sm:grid-cols-3">
               <Select
-                label="Durada"
+                label="Duración"
                 value={form.estimated_duration_minutes}
                 onChange={(v) => setForm({ ...form, estimated_duration_minutes: v })}
                 placeholder=""
@@ -188,29 +198,30 @@ export function WaitingListPage() {
                   { value: "30", label: "30 min" },
                   { value: "45", label: "45 min" },
                   { value: "60", label: "60 min" },
+                  { value: "90", label: "90 min" },
                 ]}
               />
               <Select
-                label="Franja"
+                label="Franja preferida"
                 value={form.preferred_time_slot}
                 onChange={(v) => setForm({ ...form, preferred_time_slot: v as WaitingListEntry["preferred_time_slot"] })}
                 placeholder=""
                 options={[
-                  { value: "ANY", label: "Qualsevol" },
-                  { value: "MORNING", label: "Matins" },
+                  { value: "ANY", label: "Cualquiera" },
+                  { value: "MORNING", label: "Mañanas" },
                   { value: "AFTERNOON", label: "Tardes" },
                 ]}
               />
               <Select
-                label="Urgència"
+                label="Urgencia"
                 value={form.urgency_level}
                 onChange={(v) => setForm({ ...form, urgency_level: v as WaitingListEntry["urgency_level"] })}
                 placeholder=""
                 options={[
-                  { value: "LOW", label: "Baixa" },
+                  { value: "LOW", label: "Baja" },
                   { value: "NORMAL", label: "Normal" },
                   { value: "HIGH", label: "Alta" },
-                  { value: "URGENT", label: "Urgent" },
+                  { value: "URGENT", label: "Urgente" },
                 ]}
               />
             </div>
@@ -220,7 +231,7 @@ export function WaitingListPage() {
               disabled={!form.patient_id}
               className="w-full"
             >
-              Desar a la llista
+              Guardar en lista de espera
             </Button>
           </form>
         </Modal>

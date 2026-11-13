@@ -116,7 +116,7 @@ export function PatientsPage() {
 
   return (
     <div>
-      <PageHeader title="Pacientes" description="Ficha básica de pacientes del tenant activo" />
+      <PageHeader title="Pacientes" description="Fichas clínicas y directorio de pacientes" />
 
       {error ? (
         <div className="mb-4">

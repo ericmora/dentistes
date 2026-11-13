@@ -291,7 +291,7 @@ export function PatientDetailPage() {
         items={[
           {
             id: "overview",
-            label: "Dades i Alertes",
+            label: "Datos y Alertas",
             content: (
               <form
                 className="grid gap-6 lg:grid-cols-2"
@@ -300,58 +300,58 @@ export function PatientDetailPage() {
                   updatePatientMutation.mutate();
                 }}
               >
-                <Card title="Dades de contacte">
+                <Card title="Datos de contacto">
                   <div className="space-y-3">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Input label="Nom" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
-                      <Input label="Cognoms" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
+                      <Input label="Nombre" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
+                      <Input label="Apellidos" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Input label="Data de naixement" type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} required />
+                      <Input label="Fecha de nacimiento" type="date" value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} required />
                       <Input label="DNI / NIE" value={form.dni_nie} onChange={(e) => setForm({ ...form, dni_nie: e.target.value })} />
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Input label="Telèfon" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
+                      <Input label="Teléfono" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
                       <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                     </div>
                     <Switch
-                      label="Consentiment explícit WhatsApp (Opt-in)"
+                      label="Consentimiento explícito WhatsApp (Opt-in)"
                       checked={form.whatsapp_opt_in}
                       onChange={(checked) => setForm({ ...form, whatsapp_opt_in: checked })}
                     />
                   </div>
                 </Card>
 
-                <Card title="Alertes Mèdiques (JSONB)" description={canReadClinical ? "Visibles permanentment a la capçalera" : "Accés restringit al personal facultatiu"}>
+                <Card title="Alertas Médicas Críticas" description={canReadClinical ? "Visibles permanentemente en la cabecera de la ficha" : "Acceso restringido al personal facultativo"}>
                   {canReadClinical ? (
                     <div className="space-y-3">
                       <div className="flex flex-wrap gap-4">
-                        <Switch label="Risc alt" checked={form.high_risk} onChange={(v) => setForm({ ...form, high_risk: v })} disabled={!canWriteClinical} />
-                        <Switch label="Profilaxi antibiòtica" checked={form.prophylaxis} onChange={(v) => setForm({ ...form, prophylaxis: v })} disabled={!canWriteClinical} />
+                        <Switch label="Riesgo alto" checked={form.high_risk} onChange={(v) => setForm({ ...form, high_risk: v })} disabled={!canWriteClinical} />
+                        <Switch label="Profilaxis antibiótica" checked={form.prophylaxis} onChange={(v) => setForm({ ...form, prophylaxis: v })} disabled={!canWriteClinical} />
                       </div>
                       <Input
-                        label="Al·lèrgies (separades per comes)"
+                        label="Alergias (separadas por comas)"
                         value={form.allergiesText}
                         onChange={(e) => setForm({ ...form, allergiesText: e.target.value })}
-                        placeholder="Penicil·lina, Làtex"
+                        placeholder="Penicilina, Látex"
                         disabled={!canWriteClinical}
                       />
                       <Input
-                        label="Patologies / Antecedents (separats per comes)"
+                        label="Patologías / Antecedentes (separados por comas)"
                         value={form.conditionsText}
                         onChange={(e) => setForm({ ...form, conditionsText: e.target.value })}
-                        placeholder="Hipertensió, Anticoagulats"
+                        placeholder="Hipertensión, Anticoagulados"
                         disabled={!canWriteClinical}
                       />
                       <Input
-                        label="Medicació crònica"
+                        label="Medicación crónica"
                         value={form.medicationsText}
                         onChange={(e) => setForm({ ...form, medicationsText: e.target.value })}
                         placeholder="Sintrom 4mg"
                         disabled={!canWriteClinical}
                       />
                       <Textarea
-                        label="Notes d'alerta"
+                        label="Notas de alerta clínica"
                         value={form.alertNotes}
                         onChange={(e) => setForm({ ...form, alertNotes: e.target.value })}
                         disabled={!canWriteClinical}
@@ -359,7 +359,7 @@ export function PatientDetailPage() {
                     </div>
                   ) : (
                     <Alert tone="info">
-                      El rol actual només visualitza l'indicador de risc clínic sense detall diagnòstic (RGPD Art. 9).
+                      El rol actual solo visualiza el indicador de riesgo clínico sin detalle diagnóstico (RGPD Art. 9).
                     </Alert>
                   )}
                 </Card>
@@ -368,7 +368,7 @@ export function PatientDetailPage() {
                   <div className="lg:col-span-2">
                     <Button type="submit" loading={updatePatientMutation.isPending}>
                       <Save className="h-4 w-4" />
-                      Desar fitxa
+                      Guardar ficha
                     </Button>
                   </div>
                 </PermissionGate>
@@ -377,13 +377,13 @@ export function PatientDetailPage() {
           },
           {
             id: "history",
-            label: "Historial Clínic",
+            label: "Historial Clínico",
             badge: recordsQuery.data?.records.length,
             content: (
               <FeatureGate me={me} feature="clinical_history">
                 {!canReadClinical ? (
-                  <Alert tone="warning" title="Accés restringit">
-                    Només el personal facultatiu pot consultar les evolucions clíniques detallades.
+                  <Alert tone="warning" title="Acceso restringido">
+                    Solo el personal facultativo puede consultar las evoluciones clínicas detalladas.
                   </Alert>
                 ) : (
                   <div className="grid gap-6 lg:grid-cols-3">
@@ -391,7 +391,7 @@ export function PatientDetailPage() {
                       {recordsQuery.isLoading ? (
                         <Skeleton className="h-40 w-full" />
                       ) : (recordsQuery.data?.records.length ?? 0) === 0 ? (
-                        <Alert tone="neutral">Sense evolucions registrades encara.</Alert>
+                        <Alert tone="neutral">Sin evoluciones registradas todavía.</Alert>
                       ) : (
                         <ClinicalHistoryTimeline
                           entries={(recordsQuery.data?.records ?? []).map((r) => ({
@@ -407,7 +407,7 @@ export function PatientDetailPage() {
                     </div>
 
                     <PermissionGate me={me} permission="clinical:write">
-                      <Card title="Nova evolució (immutable)" description="Registre append-only auditable">
+                      <Card title="Nueva evolución (inmutable)" description="Registro append-only auditable">
                         <form
                           className="space-y-3"
                           onSubmit={(e: FormEvent) => {
@@ -416,30 +416,30 @@ export function PatientDetailPage() {
                           }}
                         >
                           <Select
-                            label="Tipus d'entrada"
+                            label="Tipo de entrada"
                             value={entryType}
                             onChange={(v) => setEntryType(v as ClinicalRecord["entry_type"])}
                             placeholder=""
                             options={[
                               { value: "NOTE", label: "Nota clínica" },
-                              { value: "DIAGNOSIS", label: "Diagnòstic" },
-                              { value: "PROCEDURE", label: "Procediment executat" },
-                              { value: "PRESCRIPTION", label: "Prescripció" },
+                              { value: "DIAGNOSIS", label: "Diagnóstico" },
+                              { value: "PROCEDURE", label: "Procedimiento ejecutado" },
+                              { value: "PRESCRIPTION", label: "Prescripción" },
                             ]}
                           />
                           <Textarea
-                            label="Descripció clínica"
+                            label="Descripción clínica"
                             value={entryContent}
                             onChange={(e) => setEntryContent(e.target.value)}
-                            placeholder="Motiu, troballes, anestèsia, recomanacions…"
+                            placeholder="Motivo, hallazgos, anestesia, recomendaciones…"
                             required
                           />
                           {(recordsQuery.data?.records.length ?? 0) > 0 ? (
                             <Select
-                              label="Esmena / Addenda a (opcional)"
+                              label="Enmienda / Addenda a (opcional)"
                               value={amendsEntryId}
                               onChange={setAmendsEntryId}
-                              placeholder="Nova entrada independent"
+                              placeholder="Nueva entrada independiente"
                               options={(recordsQuery.data?.records ?? []).map((r) => ({
                                 value: r.id,
                                 label: `${r.entry_type} · ${r.content.slice(0, 32)}`,
@@ -447,7 +447,7 @@ export function PatientDetailPage() {
                             />
                           ) : null}
                           <Button type="submit" loading={createRecordMutation.isPending} className="w-full">
-                            Signar i desar
+                            Firmar y guardar
                           </Button>
                         </form>
                       </Card>
@@ -463,13 +463,13 @@ export function PatientDetailPage() {
             content: (
               <FeatureGate me={me} feature="odontogram">
                 {!canReadClinical ? (
-                  <Alert tone="warning" title="Accés restringit">
-                    Només el personal facultatiu pot consultar l'odontograma detallat.
+                  <Alert tone="warning" title="Acceso restringido">
+                    Solo el personal facultativo puede consultar el odontograma detallado.
                   </Alert>
                 ) : (
                   <Card
-                    title="Odontograma interactiu (FDI / ISO 3950)"
-                    description={currentOdo ? `Versió ${currentOdo.version} · Actualitzat ${new Date(currentOdo.updated_at).toLocaleString("es-ES")}` : "Sense registre guardat encara"}
+                    title="Odontograma interactivo (FDI / ISO 3950)"
+                    description={currentOdo ? `Versión ${currentOdo.version} · Actualizado ${new Date(currentOdo.updated_at).toLocaleString("es-ES")}` : "Sin registro guardado todavía"}
                     footer={
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
@@ -480,7 +480,7 @@ export function PatientDetailPage() {
                               variant={odoType === t ? "secondary" : "outline"}
                               onClick={() => setOdoType(t)}
                             >
-                              {t === "CURRENT" ? "Estat Actual" : t === "INITIAL" ? "Estat Inicial" : "Històric"}
+                              {t === "CURRENT" ? "Estado Actual" : t === "INITIAL" ? "Estado Inicial" : "Histórico"}
                             </Button>
                           ))}
                         </div>
@@ -490,7 +490,7 @@ export function PatientDetailPage() {
                             loading={saveOdontogramMutation.isPending}
                           >
                             <Save className="h-4 w-4" />
-                            Desar odontograma
+                            Guardar odontograma
                           </Button>
                         </PermissionGate>
                       </div>
@@ -506,19 +506,42 @@ export function PatientDetailPage() {
                         selectedTooth={selectedTooth}
                         onSelectTooth={setSelectedTooth}
                         onToggleSurface={handleToggleSurface}
+                        onSetGeneralStatus={setToothGeneralStatus}
                       />
                       {selectedTooth ? (
                         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs">
-                          <span className="font-semibold text-slate-800">Peça seleccionada: {selectedTooth}</span>
+                          <span className="font-semibold text-slate-800">Pieza dental seleccionada: {selectedTooth}</span>
                           <div className="flex flex-wrap gap-1.5">
-                            {(["present", "crown", "implant", "missing"] as const).map((st) => (
+                            {(
+                              [
+                                ["present", "Normal / Sano"],
+                                ["caries", "Caries"],
+                                ["restored", "Obturado"],
+                                ["endodontics", "Endodoncia"],
+                                ["crown", "Corona"],
+                                ["implant", "Implante"],
+                                ["missing", "Ausente / Extraído"],
+                              ] as const
+                            ).map(([st, label]) => (
                               <Button
                                 key={st}
                                 size="sm"
-                                variant={(teeth[selectedTooth]?.general_status ?? "present") === st ? "primary" : "outline"}
-                                onClick={() => setToothGeneralStatus(selectedTooth, st)}
+                                variant={
+                                  st === "caries" || st === "restored"
+                                    ? "outline"
+                                    : (teeth[selectedTooth]?.general_status ?? "present") === st
+                                    ? "primary"
+                                    : "outline"
+                                }
+                                onClick={() => {
+                                  if (st === "caries" || st === "restored") {
+                                    handleToggleSurface(selectedTooth, "occlusal", st);
+                                  } else {
+                                    setToothGeneralStatus(selectedTooth, st);
+                                  }
+                                }}
                               >
-                                {st === "present" ? "Normal" : st === "crown" ? "Corona" : st === "implant" ? "Implant" : "Absent"}
+                                {label}
                               </Button>
                             ))}
                           </div>

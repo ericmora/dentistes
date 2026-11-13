@@ -70,14 +70,14 @@ export function ClinicAdminPage() {
       roles={["OWNER", "ADMIN"]}
       fallback={
         <Alert tone="danger" title="Acceso restringido">
-          Solo los propietarios (OWNER) y administradores (ADMIN) pueden acceder al área de administración de la clínica.
+          Solo los titulares y administradores de la clínica pueden acceder a esta configuración.
         </Alert>
       }
     >
       <div className="space-y-6">
         <PageHeader
           title="Administración de la clínica"
-          description={`${me?.active_tenant.name ?? ""} · Gestión exclusiva para owners y administradores`}
+          description={`${me?.active_tenant.name ?? ""} · Gestión de clínica, usuarios y facturación`}
         />
 
         <Tabs
@@ -150,21 +150,21 @@ export function ClinicAdminPage() {
                     content: (
                       <Card
                         title="Cerrar y cancelar cuenta de la clínica"
-                        description="Acción irreversible: cancela inmediatamente la suscripción en Stripe, cierra el acceso del equipo y desactiva el tenant."
+                        description="Acción irreversible: cancela inmediatamente la suscripción en Stripe, revoca los accesos del equipo y archiva la cuenta."
                       >
                         <div className="space-y-4">
-                          <Alert tone="danger" title="Zona de peligro (solo Owner)">
+                          <Alert tone="danger" title="Zona de baja de clínica (solo titular)">
                             <div className="flex items-start gap-2">
                               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                               <span>
-                                Para confirmar, escribe el subdominio de la clínica:{" "}
+                                Para confirmar la baja definitiva, escribe el identificador de la clínica:{" "}
                                 <strong>{me.active_tenant.subdomain}</strong>
                               </span>
                             </div>
                           </Alert>
                           <div className="max-w-sm">
                             <Input
-                              label="Subdominio de confirmación"
+                              label="Identificador de confirmación"
                               value={confirmSubdomain}
                               onChange={(e) => setConfirmSubdomain(e.target.value)}
                               placeholder={me.active_tenant.subdomain}

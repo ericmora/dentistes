@@ -241,6 +241,58 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface MasterTreatment {
+  code: string;
+  name: string;
+  category: "PREVENCION" | "CONSERVADORA" | "ENDODONCIA" | "CIRUGIA" | "PROTESIS" | "ORTODONCIA" | "ESTETICA" | "PERIODONCIA";
+  category_label: string;
+  default_duration_minutes: number;
+  color: string;
+}
+
+export const DENTAL_TREATMENTS_MASTER: MasterTreatment[] = [
+  // Diagnóstico y Prevención
+  { code: "REVISION", name: "Revisión y Diagnóstico", category: "PREVENCION", category_label: "Diagnóstico y Prevención", default_duration_minutes: 30, color: "#0EA5E9" },
+  { code: "LIMPIEZA", name: "Limpieza dental (Tartrectomía)", category: "PREVENCION", category_label: "Diagnóstico y Prevención", default_duration_minutes: 30, color: "#06B6D4" },
+  { code: "RADIOGRAFIA", name: "Radiografía / Ortopantomografía", category: "PREVENCION", category_label: "Diagnóstico y Prevención", default_duration_minutes: 15, color: "#64748B" },
+  { code: "URGENCIA", name: "Urgencia dental", category: "PREVENCION", category_label: "Diagnóstico y Prevención", default_duration_minutes: 30, color: "#EF4444" },
+
+  // Odontología Conservadora
+  { code: "OBTURACION_SIMPLE", name: "Obturación / Empaste simple", category: "CONSERVADORA", category_label: "Conservadora", default_duration_minutes: 30, color: "#3B82F6" },
+  { code: "OBTURACION_COMPLEJA", name: "Reconstrucción compleja", category: "CONSERVADORA", category_label: "Conservadora", default_duration_minutes: 45, color: "#2563EB" },
+  { code: "SELLADOR", name: "Sellador de fisuras", category: "CONSERVADORA", category_label: "Conservadora", default_duration_minutes: 20, color: "#60A5FA" },
+
+  // Endodoncia
+  { code: "ENDODONCIA_UNIRRADICULAR", name: "Endodoncia unirradicular", category: "ENDODONCIA", category_label: "Endodoncia", default_duration_minutes: 45, color: "#8B5CF6" },
+  { code: "ENDODONCIA_MULTIRRADICULAR", name: "Endodoncia multirradicular", category: "ENDODONCIA", category_label: "Endodoncia", default_duration_minutes: 60, color: "#7C3AED" },
+  { code: "REENDODONCIA", name: "Reendodoncia", category: "ENDODONCIA", category_label: "Endodoncia", default_duration_minutes: 60, color: "#6D28D9" },
+
+  // Cirugía e Implantes
+  { code: "EXTRACCION_SIMPLE", name: "Extracción simple", category: "CIRUGIA", category_label: "Cirugía e Implantes", default_duration_minutes: 30, color: "#F97316" },
+  { code: "EXTRACCION_QUIRURGICA", name: "Extracción quirúrgica / Cordal", category: "CIRUGIA", category_label: "Cirugía e Implantes", default_duration_minutes: 45, color: "#EA580C" },
+  { code: "IMPLANTE", name: "Colocación de implante", category: "CIRUGIA", category_label: "Cirugía e Implantes", default_duration_minutes: 60, color: "#0F172A" },
+
+  // Periodoncia
+  { code: "CURETAJE_CUADRANTE", name: "Curetaje / Raspado por cuadrante", category: "PERIODONCIA", category_label: "Periodoncia", default_duration_minutes: 45, color: "#10B981" },
+  { code: "MANTENIMIENTO_PERIODONTAL", name: "Mantenimiento periodontal", category: "PERIODONCIA", category_label: "Periodoncia", default_duration_minutes: 30, color: "#059669" },
+
+  // Prótesis
+  { code: "CORONA", name: "Corona / Funda", category: "PROTESIS", category_label: "Prótesis", default_duration_minutes: 45, color: "#D97706" },
+  { code: "PUENTE", name: "Puente fijo", category: "PROTESIS", category_label: "Prótesis", default_duration_minutes: 45, color: "#B45309" },
+  { code: "PROTESIS_REMOVIBLE", name: "Prótesis removible", category: "PROTESIS", category_label: "Prótesis", default_duration_minutes: 30, color: "#92400E" },
+
+  // Ortodoncia y Estética
+  { code: "ORTODONCIA_REVISION", name: "Ortodoncia (Ajuste mensual)", category: "ORTODONCIA", category_label: "Ortodoncia", default_duration_minutes: 15, color: "#EC4899" },
+  { code: "ORTODONCIA_COLOCACION", name: "Colocación brackets / Alineadores", category: "ORTODONCIA", category_label: "Ortodoncia", default_duration_minutes: 60, color: "#DB2777" },
+  { code: "BLANQUEAMIENTO", name: "Blanqueamiento dental", category: "ESTETICA", category_label: "Estética dental", default_duration_minutes: 45, color: "#F59E0B" },
+  { code: "FERULA_DESCARGA", name: "Férula de descarga (Bruxismo)", category: "ESTETICA", category_label: "Estética dental", default_duration_minutes: 30, color: "#6366F1" },
+];
+
+export function findMasterTreatment(codeOrName: string): MasterTreatment | undefined {
+  const norm = codeOrName.trim().toLowerCase();
+  return DENTAL_TREATMENTS_MASTER.find((t) => t.code.toLowerCase() === norm || t.name.toLowerCase() === norm);
+}
+
 export interface WaitingListEntry {
   id: string;
   patient_id: string;

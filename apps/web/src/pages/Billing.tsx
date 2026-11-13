@@ -49,11 +49,11 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
     setBusy("waitlist");
     setError(null);
     try {
-      const updated = await sdk.fiscal.joinWaitlist("fiscal.electronic_invoicing", "Sol·licitud des de panell");
+      const updated = await sdk.fiscal.joinWaitlist("fiscal.electronic_invoicing", "Solicitud desde panel");
       setFiscalCaps(updated);
-      notify({ tone: "success", title: "Sol·licitud registrada", description: "T'avisarem tan bon punt activem el connector tributari." });
+      notify({ tone: "success", title: "Solicitud registrada", description: "Te avisaremos tan pronto como activemos el conector tributario." });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No s'ha pogut registrar la sol·licitud");
+      setError(err instanceof Error ? err.message : "No se pudo registrar la solicitud");
     } finally {
       setBusy(null);
     }
@@ -231,13 +231,13 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
 
       {fiscalCaps ? (
         <Card
-          title="Compliment Fiscal i Facturació Regional"
-          description={`Jurisdicció: ${fiscalCaps.country_code} · Divisa clínica: ${fiscalCaps.currency}`}
+          title="Cumplimiento Fiscal y Facturación Regional"
+          description={`Jurisdicción: ${fiscalCaps.country_code} · Divisa clínica: ${fiscalCaps.currency}`}
         >
           <div className="space-y-4 text-sm">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-medium text-slate-500">Autoritat Tributària / Normativa</p>
+                <p className="text-xs font-medium text-slate-500">Autoridad Tributaria / Normativa</p>
                 <p className="mt-1 font-semibold text-slate-900">
                   {fiscalCaps.localization.fiscal_authority} ({fiscalCaps.localization.document_label})
                 </p>
@@ -247,7 +247,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                   {fiscalCaps.localization.tax_id_label} de la clínica
                 </p>
                 <p className="mt-1 font-semibold text-slate-900">
-                  {me?.active_tenant.tax_id || "No registrat (opcional a l'onboarding)"}
+                  {me?.active_tenant.tax_id || "No registrado (opcional en el registro inicial)"}
                 </p>
               </div>
             </div>
@@ -256,24 +256,24 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-brand-600" />
-                  <span className="font-semibold text-slate-900">Mòdul de Facturació Electrònica</span>
+                  <span className="font-semibold text-slate-900">Módulo de Facturación Electrónica</span>
                   {fiscalCaps.features.electronic_invoicing.enabled ? (
-                    <Badge tone="success">Actiu ({fiscalCaps.features.electronic_invoicing.status})</Badge>
+                    <Badge tone="success">Activo ({fiscalCaps.features.electronic_invoicing.status})</Badge>
                   ) : fiscalCaps.features.electronic_invoicing.status === "COMING_SOON" ? (
-                    <Badge tone="warning">En Integració (Properament)</Badge>
+                    <Badge tone="warning">En integración (Próximamente)</Badge>
                   ) : (
-                    <Badge tone="neutral">Rebuts Interns</Badge>
+                    <Badge tone="neutral">Recibos internos</Badge>
                   )}
                 </div>
                 <p className="text-xs text-slate-600">
                   {fiscalCaps.features.electronic_invoicing.ui_notice ||
-                    "Connexió directa i emissió fiscal homologada per a tractaments dentals."}
+                    "Conexión directa y emisión fiscal homologada para tratamientos dentales."}
                 </p>
               </div>
 
               {fiscalCaps.features.electronic_invoicing.status === "COMING_SOON" ? (
                 fiscalCaps.features.electronic_invoicing.waitlist_joined ? (
-                  <Badge tone="info">Sol·licitud registrada a la llista d'espera</Badge>
+                  <Badge tone="info">Solicitud registrada en lista de espera</Badge>
                 ) : (
                   <Button
                     size="sm"
@@ -281,7 +281,7 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
                     loading={busy === "waitlist"}
                     onClick={() => void joinFiscalWaitlist()}
                   >
-                    Sol·licitar activació prioritària ({fiscalCaps.localization.fiscal_authority})
+                    Solicitar activación prioritaria ({fiscalCaps.localization.fiscal_authority})
                   </Button>
                 )
               ) : null}

@@ -1,13 +1,13 @@
 import { create } from "zustand";
-import type { ToothSurfaceStatus } from "@dentistes/ui";
+import type { OdontogramActiveTool } from "@dentistes/ui";
 
 export type AgendaViewMode = "day" | "week" | "month";
 
 interface UiState {
   agendaView: AgendaViewMode;
   setAgendaView: (view: AgendaViewMode) => void;
-  odontogramTool: ToothSurfaceStatus;
-  setOdontogramTool: (tool: ToothSurfaceStatus) => void;
+  odontogramTool: OdontogramActiveTool;
+  setOdontogramTool: (tool: OdontogramActiveTool) => void;
   odontogramDentition: "adult" | "child";
   setOdontogramDentition: (dentition: "adult" | "child") => void;
 }

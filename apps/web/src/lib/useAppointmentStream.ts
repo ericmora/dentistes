@@ -37,7 +37,7 @@ export function useAppointmentStream(enabled: boolean) {
             notify({
               tone: "info",
               title: "Forat alliberat a l'agenda",
-              description: "Hi ha candidats compatibles a la llista d'espera.",
+              description: "Hay candidatos compatibles en la lista de espera.",
             });
           }
         } catch {

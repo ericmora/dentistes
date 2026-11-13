@@ -31,6 +31,7 @@ import {
   useToast,
   type InvoiceLineItem,
   type ToothState,
+  type OdontogramActiveTool,
 } from "@dentistes/ui";
 
 export function DesignSystemPage() {
@@ -43,7 +44,7 @@ export function DesignSystemPage() {
   const [radioVal, setRadioVal] = useState("morning");
   const [tab, setTab] = useState("primitives");
   const [teeth, setTeeth] = useState<Record<number, ToothState>>({});
-  const [tool, setTool] = useState<"healthy" | "caries" | "restored" | "planned" | "missing">("caries");
+  const [tool, setTool] = useState<OdontogramActiveTool>("caries");
   const [lines, setLines] = useState<InvoiceLineItem[]>([
     { id: "1", description: "Obturación composite", toothNumber: "16", quantity: 1, unitPriceCents: 6500, taxRatePercent: 0 },
   ]);

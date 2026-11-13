@@ -8,8 +8,7 @@ const baseLinks = [
   { to: "/", label: "Resumen" },
   { to: "/agenda", label: "Agenda" },
   { to: "/patients", label: "Pacientes" },
-  { to: "/waiting-list", label: "Espera" },
-  { to: "/design-system", label: "UI / DS" },
+  { to: "/waiting-list", label: "Lista de espera" },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

@@ -75,7 +75,7 @@ export function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="Usuarios" description="Miembros y roles del tenant activo" />
+      <PageHeader title="Equipo y permisos" description="Profesionales, asistentes y permisos de acceso a la clínica" />
       {error ? (
         <div className="mb-4">
           <Alert tone="danger">{error}</Alert>

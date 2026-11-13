@@ -36,15 +36,15 @@ export function DashboardPage() {
             tone={me.billing?.status === "INCOMPLETE" ? "warning" : "danger"}
             title={
               me.billing?.status === "INCOMPLETE"
-                ? "Falta completar Stripe per activar els 30 dies de prova"
+                ? "Falta completar Stripe para activar los 30 días de prueba"
                 : "Acceso a funcionalidades bloqueado"
             }
           >
             {me.billing?.status === "INCOMPLETE" ? (
               <span>
-                La clínica està creada però encara no s'ha validat la targeta a Stripe ($0 avui).{" "}
+                La clínica está creada pero aún no se ha validado la tarjeta en Stripe ($0 hoy).{" "}
                 <Link className="font-semibold underline" to="/onboarding">
-                  Activar 30 dies amb Stripe →
+                  Activar 30 días con Stripe →
                 </Link>
               </span>
             ) : (
@@ -62,7 +62,7 @@ export function DashboardPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card title="Funcionalidades" description="Según tu plan y los addons del tenant" className="lg:col-span-2">
+        <Card title="Funcionalidades" description="Según tu plan y los módulos activos de la clínica" className="lg:col-span-2">
           <ul className="grid gap-3 sm:grid-cols-2">
             {me.feature_catalog.map((feature) => {
               const active = me.features[feature.key];
@@ -89,7 +89,7 @@ export function DashboardPage() {
                 <dd className="font-medium text-slate-900">{me.user.email}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Tenant</dt>
+                <dt className="text-slate-500">Clínica</dt>
                 <dd className="font-medium text-slate-900">{me.active_tenant.name}</dd>
               </div>
               <div className="flex justify-between gap-4">
