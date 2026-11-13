@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Card, Input } from "@dentistes/ui";
+import { Alert, BrandLogo, Button, Card, Input } from "@dentistes/ui";
 import { sdk, useSession } from "../lib/session";
 import { currentTenantSubdomain } from "../lib/tenant";
 
@@ -37,12 +37,14 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50/80 px-4">
       <div className="w-full max-w-md">
-        <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Dentistes</p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">{clinic ? `Accede a ${clinic}` : "Accede a tu clínica"}</h1>
-          <p className="mt-1 text-sm text-slate-500">{subdomain ? `${subdomain}.${import.meta.env.VITE_TENANT_BASE_DOMAIN ?? "dentistes.2mes4.com"}` : "Gestión dental multi-clínica"}</p>
+        <div className="mb-8 text-center">
+          <div className="flex justify-center mb-4">
+            <BrandLogo size="lg" subtitle="Gestión clínica dental" />
+          </div>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{clinic ? `Accede a ${clinic}` : "Accede a tu clínica"}</h1>
+          <p className="mt-1 text-sm text-slate-500">{subdomain ? `${subdomain}.${import.meta.env.VITE_TENANT_BASE_DOMAIN ?? "dentistes.2mes4.com"}` : "Plataforma clínica integral para odontólogos"}</p>
         </div>
         <Card>
           <form className="space-y-4" onSubmit={onSubmit}>

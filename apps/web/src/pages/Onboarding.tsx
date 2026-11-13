@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, CheckCircle2, CreditCard, ShieldCheck } from "lucide-react";
-import { Alert, Badge, Button, Card, Input, Select } from "@dentistes/ui";
+import { Alert, Badge, BrandLogo, Button, Card, Input, Select } from "@dentistes/ui";
 import { useSession } from "../lib/session";
 
 const BASE_DOMAIN = import.meta.env.VITE_TENANT_BASE_DOMAIN ?? "dentistes.2mes4.com";
@@ -174,8 +174,10 @@ export function OnboardingPage() {
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
         <div className="w-full max-w-lg">
           <div className="mb-6 text-center">
-            <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Dentistes</p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900">Activa tus 30 días de prueba</h1>
+            <div className="flex justify-center mb-3">
+              <BrandLogo size="lg" />
+            </div>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Activa tus 30 días de prueba</h1>
             <p className="mt-1 text-sm text-slate-500">
               Clínica creada: <strong>{me.active_tenant.name}</strong> ({me.active_tenant.subdomain}.{BASE_DOMAIN})
             </p>
@@ -212,8 +214,10 @@ export function OnboardingPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Dentistes</p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Abre tu clínica en 1 minuto</h1>
+          <div className="flex justify-center mb-3">
+            <BrandLogo size="lg" />
+          </div>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Abre tu clínica en 1 minuto</h1>
           <p className="mt-1 text-sm text-slate-500">
             Paso {step} de 2 · 30 días de prueba gratis activando Stripe ($0 hoy)
           </p>

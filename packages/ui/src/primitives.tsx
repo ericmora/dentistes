@@ -624,3 +624,65 @@ export function EmptyState({ title, description, action }: { title: string; desc
 export function Skeleton({ className }: { className?: string }) {
   return <div aria-hidden="true" className={cn("animate-pulse rounded-md bg-slate-200", className)} />;
 }
+
+export function BrandLogo({
+  className,
+  size = "md",
+  showWordmark = true,
+  subtitle,
+}: {
+  className?: string;
+  size?: "sm" | "md" | "lg";
+  showWordmark?: boolean;
+  subtitle?: string;
+}) {
+  const iconSizes = {
+    sm: "h-7 w-7 rounded-lg",
+    md: "h-8 w-8 rounded-xl",
+    lg: "h-10 w-10 rounded-2xl",
+  };
+  const textSizes = {
+    sm: "text-base",
+    md: "text-lg",
+    lg: "text-xl",
+  };
+
+  return (
+    <div className={cn("inline-flex items-center gap-2.5 select-none", className)}>
+      <div
+        className={cn(
+          "relative flex items-center justify-center bg-gradient-to-br from-[#0F3F34] via-[#103D33] to-[#062620] shadow-xs ring-1 ring-black/10 overflow-hidden",
+          iconSizes[size],
+        )}
+      >
+        <svg viewBox="0 0 32 32" className="h-[75%] w-[75%]" aria-hidden="true">
+          <path
+            d="M10 8.5c1.5-.7 3.2-.4 4.3.7 1.1-1.1 2.8-1.4 4.3-.7 2 1 2.7 3.5 2 6-.4 1.9-1.2 3.8-1.7 5.4-.4 1.4-1.3 2.6-2.3 2.6-1.3 0-1.6-1.5-2.2-3.2-.3-.8-.8-.8-1.2 0-.5 1.7-.9 3.2-2.2 3.2-1 0-1.8-1.2-2.3-2.6-.5-1.6-1.3-3.5-1.7-5.4-.7-2.5 0-5 2-6Z"
+            fill="#C9F5E4"
+          />
+          <path
+            d="M13.2 9.2v9M18.8 9.2v9"
+            stroke="#0F3F34"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
+          <circle cx="11.5" cy="11.5" r="1" fill="#FFFFFF" fillOpacity="0.8" />
+        </svg>
+      </div>
+      {showWordmark ? (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <span className={cn("font-bold tracking-tight text-slate-900 leading-none", textSizes[size])}>
+              Dentistes
+            </span>
+          </div>
+          {subtitle ? (
+            <span className="text-[11px] font-medium tracking-tight text-slate-400 leading-tight">
+              {subtitle}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
