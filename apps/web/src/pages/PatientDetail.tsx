@@ -1,7 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Sparkles } from "lucide-react";
 import {
   Alert,
   Badge,
@@ -19,6 +19,7 @@ import {
   Switch,
   Tabs,
   Textarea,
+  ToothDetailHistoryPanel,
   emptyTooth,
   useToast,
   type ToothState,
@@ -240,6 +241,50 @@ export function PatientDetailPage() {
       const base = prev[toothNum] ?? emptyTooth(toothNum);
       return { ...prev, [toothNum]: { ...base, general_status: status } };
     });
+  }
+
+  // Count clinical history entries by tooth number
+  const historyCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    const records = recordsQuery.data?.records ?? [];
+    for (const r of records) {
+      const matches = r.content.match(/\b(?:pieza|diente|peça)?\s*#?([1-4][1-8]|[5-8][1-5])\b/gi);
+      if (matches) {
+        for (const m of matches) {
+          const numMatch = m.match(/([1-4][1-8]|[5-8][1-5])/);
+          if (numMatch) {
+            const num = Number(numMatch[1]);
+            counts[num] = (counts[num] ?? 0) + 1;
+          }
+        }
+      }
+    }
+    return counts;
+  }, [recordsQuery.data?.records]);
+
+  // Specific clinical records for the currently selected tooth
+  const selectedToothRecords = useMemo(() => {
+    if (!selectedTooth) return [];
+    const records = recordsQuery.data?.records ?? [];
+    const pattern = new RegExp(`\\b(?:pieza|diente|peça)?\\s*#?${selectedTooth}\\b`, "i");
+    return records
+      .filter((r) => pattern.test(r.content))
+      .map((r) => ({
+        id: r.id,
+        entryType: r.entry_type,
+        content: r.content,
+        doctorName: r.doctor_name,
+        createdAt: new Date(r.created_at).toLocaleString("es-ES"),
+      }));
+  }, [selectedTooth, recordsQuery.data?.records]);
+
+  async function handleCreateToothRecord(content: string, type: "NOTE" | "DIAGNOSIS" | "PROCEDURE" | "PRESCRIPTION") {
+    await sdk.createClinicalRecord(id, {
+      entry_type: type,
+      content,
+    });
+    notify({ tone: "success", title: "Evolución registrada para la pieza" });
+    await queryClient.invalidateQueries({ queryKey: ["patient-records", id] });
   }
 
   if (patientQuery.isLoading) {
@@ -496,7 +541,7 @@ export function PatientDetailPage() {
                       </div>
                     }
                   >
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       <OdontogramGrid
                         teeth={teeth}
                         dentition={odontogramDentition}
@@ -507,46 +552,41 @@ export function PatientDetailPage() {
                         onSelectTooth={setSelectedTooth}
                         onToggleSurface={handleToggleSurface}
                         onSetGeneralStatus={setToothGeneralStatus}
+                        historyCounts={historyCounts}
                       />
+
                       {selectedTooth ? (
-                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs">
-                          <span className="font-semibold text-slate-800">Pieza dental seleccionada: {selectedTooth}</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {(
-                              [
-                                ["present", "Normal / Sano"],
-                                ["caries", "Caries"],
-                                ["restored", "Obturado"],
-                                ["endodontics", "Endodoncia"],
-                                ["crown", "Corona"],
-                                ["implant", "Implante"],
-                                ["missing", "Ausente / Extraído"],
-                              ] as const
-                            ).map(([st, label]) => (
-                              <Button
-                                key={st}
-                                size="sm"
-                                variant={
-                                  st === "caries" || st === "restored"
-                                    ? "outline"
-                                    : (teeth[selectedTooth]?.general_status ?? "present") === st
-                                    ? "primary"
-                                    : "outline"
-                                }
-                                onClick={() => {
-                                  if (st === "caries" || st === "restored") {
-                                    handleToggleSurface(selectedTooth, "occlusal", st);
-                                  } else {
-                                    setToothGeneralStatus(selectedTooth, st);
-                                  }
-                                }}
-                              >
-                                {label}
-                              </Button>
-                            ))}
+                        <ToothDetailHistoryPanel
+                          toothNumber={selectedTooth}
+                          toothState={teeth[selectedTooth] ?? emptyTooth(selectedTooth)}
+                          records={selectedToothRecords}
+                          canWriteClinical={canWriteClinical}
+                          onUpdateGeneralStatus={(st) => setToothGeneralStatus(selectedTooth, st)}
+                          onToggleSurface={(surf, next) => handleToggleSurface(selectedTooth, surf, next)}
+                          onUpdateNotes={(notes) => {
+                            setTeeth((prev) => {
+                              const base = prev[selectedTooth] ?? emptyTooth(selectedTooth);
+                              return { ...prev, [selectedTooth]: { ...base, notes } };
+                            });
+                          }}
+                          onCreateRecordForTooth={handleCreateToothRecord}
+                          onClose={() => setSelectedTooth(undefined)}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/80 p-4 text-xs text-slate-600">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                            <Sparkles className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <p className="font-semibold text-slate-800">
+                              Exploración clínica por pieza dental
+                            </p>
+                            <p className="text-slate-500">
+                              Haz clic en cualquier pieza del odontograma para inspeccionar sus 5 caras, estado general, notas y consultar su historial clínico completo. Las piezas con badge numérico indican que tienen intervenciones registradas.
+                            </p>
                           </div>
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   </Card>
                 )}
