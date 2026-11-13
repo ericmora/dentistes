@@ -1,4 +1,5 @@
 import {
+  forwardRef,
   useEffect,
   useId,
   useMemo,
@@ -153,17 +154,20 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   onClear?: () => void;
 }
 
-export function Input({
-  label,
-  hint,
-  error,
-  prefixIcon,
-  suffixIcon,
-  onClear,
-  className,
-  id,
-  ...rest
-}: InputProps) {
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  {
+    label,
+    hint,
+    error,
+    prefixIcon,
+    suffixIcon,
+    onClear,
+    className,
+    id,
+    ...rest
+  },
+  ref,
+) {
   const autoId = useId();
   const inputId = id ?? rest.name ?? autoId;
   return (
@@ -172,6 +176,7 @@ export function Input({
       <div className="relative flex items-center">
         {prefixIcon ? <span className="pointer-events-none absolute left-3 text-slate-400">{prefixIcon}</span> : null}
         <input
+          ref={ref}
           id={inputId}
           aria-invalid={error ? true : undefined}
           className={cn(
@@ -200,15 +205,19 @@ export function Input({
       {hint && !error ? <span className="mt-1 block text-xs text-slate-500">{hint}</span> : null}
     </label>
   );
-}
+});
 
 export interface NumberInputProps extends Omit<InputProps, "type"> {
   currencySymbol?: string;
 }
 
-export function NumberInput({ currencySymbol, className, ...rest }: NumberInputProps) {
+export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(function NumberInput(
+  { currencySymbol, className, ...rest },
+  ref,
+) {
   return (
     <Input
+      ref={ref}
       type="number"
       inputMode="decimal"
       prefixIcon={currencySymbol ? <span className="text-xs font-semibold text-slate-500">{currencySymbol}</span> : undefined}
@@ -216,12 +225,15 @@ export function NumberInput({ currencySymbol, className, ...rest }: NumberInputP
       {...rest}
     />
   );
-}
+});
 
-export function CurrencyInput({ currency = "USD", ...props }: NumberInputProps & { currency?: string }) {
+export const CurrencyInput = forwardRef<HTMLInputElement, NumberInputProps & { currency?: string }>(function CurrencyInput(
+  { currency = "USD", ...props },
+  ref,
+) {
   const symbol = currency === "EUR" ? "€" : "$";
-  return <NumberInput step="0.01" min="0" currencySymbol={symbol} {...props} />;
-}
+  return <NumberInput ref={ref} step="0.01" min="0" currencySymbol={symbol} {...props} />;
+});
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
@@ -230,22 +242,34 @@ export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
   autoGrow?: boolean;
 }
 
-export function Textarea({ label, hint, error, autoGrow = true, className, id, onChange, ...rest }: TextareaProps) {
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+  { label, hint, error, autoGrow = true, className, id, onChange, ...rest },
+  forwardedRef,
+) {
   const autoId = useId();
   const textareaId = id ?? rest.name ?? autoId;
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const innerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const setRefs = (node: HTMLTextAreaElement | null) => {
+    innerRef.current = node;
+    if (typeof forwardedRef === "function") {
+      forwardedRef(node);
+    } else if (forwardedRef) {
+      (forwardedRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+    }
+  };
 
   return (
     <label className="block" htmlFor={textareaId}>
       {label ? <span className="mb-1 block text-sm font-medium text-slate-700">{label}</span> : null}
       <textarea
-        ref={ref}
+        ref={setRefs}
         id={textareaId}
         aria-invalid={error ? true : undefined}
         onChange={(e) => {
-          if (autoGrow && ref.current) {
-            ref.current.style.height = "auto";
-            ref.current.style.height = `${ref.current.scrollHeight}px`;
+          if (autoGrow && innerRef.current) {
+            innerRef.current.style.height = "auto";
+            innerRef.current.style.height = `${innerRef.current.scrollHeight}px`;
           }
           onChange?.(e);
         }}
@@ -260,7 +284,7 @@ export function Textarea({ label, hint, error, autoGrow = true, className, id, o
       {hint && !error ? <span className="mt-1 block text-xs text-slate-500">{hint}</span> : null}
     </label>
   );
-}
+});
 
 export interface SelectOption {
   value: string;

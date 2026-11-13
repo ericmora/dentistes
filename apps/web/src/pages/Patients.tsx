@@ -25,7 +25,36 @@ import { useSession } from "../lib/session";
 const createPatientSchema = z.object({
   first_name: z.string().trim().min(1, "El nombre es obligatorio"),
   last_name: z.string().trim().min(1, "Los apellidos son obligatorios"),
-  birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Formato YYYY-MM-DD"),
+  birth_date: z
+    .string()
+    .trim()
+    .min(1, "La fecha de nacimiento es obligatoria")
+    .transform((val, ctx) => {
+      const trimmed = val.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+      const parts = trimmed.split(/[/.-]/);
+      if (parts.length === 3) {
+        if (parts[2].length === 4) {
+          const day = parts[0].padStart(2, "0");
+          const month = parts[1].padStart(2, "0");
+          const year = parts[2];
+          return `${year}-${month}-${day}`;
+        }
+        if (parts[0].length === 4) {
+          const year = parts[0];
+          const month = parts[1].padStart(2, "0");
+          const day = parts[2].padStart(2, "0");
+          return `${year}-${month}-${day}`;
+        }
+      }
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Formato de fecha inválido (use AAAA-MM-DD o DD/MM/AAAA)",
+      });
+      return val;
+    }),
   phone: z.string().trim().min(6, "El teléfono es obligatorio"),
   email: z.string().trim().email("Email inválido").optional().or(z.literal("")),
 });
