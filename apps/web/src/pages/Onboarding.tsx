@@ -17,24 +17,24 @@ function slugifyClinic(value: string): string {
 }
 
 const LOCALE_OPTIONS = [
-  { value: "ca-ES", label: "Català (Espanya / Europa)" },
   { value: "es-ES", label: "Español (España)" },
   { value: "es-MX", label: "Español (México / LATAM)" },
+  { value: "ca-ES", label: "Català" },
   { value: "en-GB", label: "English" },
 ];
 
 const COUNTRY_OPTIONS = [
-  { value: "ES", label: "Espanya (EUR €)" },
-  { value: "MX", label: "Mèxic (MXN $)" },
-  { value: "CO", label: "Colòmbia (USD $)" },
-  { value: "CL", label: "Xile (USD $)" },
+  { value: "ES", label: "España (EUR €)" },
+  { value: "MX", label: "México (MXN $)" },
+  { value: "CO", label: "Colombia (USD $)" },
+  { value: "CL", label: "Chile (USD $)" },
   { value: "PE", label: "Perú (USD $)" },
   { value: "AR", label: "Argentina (USD $)" },
   { value: "CR", label: "Costa Rica (USD $)" },
-  { value: "EC", label: "Equador (USD $)" },
+  { value: "EC", label: "Ecuador (USD $)" },
   { value: "DO", label: "Rep. Dominicana (USD $)" },
-  { value: "UY", label: "Uruguai (USD $)" },
-  { value: "US", label: "Estats Units / Internacional (USD $)" },
+  { value: "UY", label: "Uruguay (USD $)" },
+  { value: "US", label: "Estados Unidos / Internacional (USD $)" },
 ];
 
 function taxLabelForCountry(code: string): { label: string; placeholder: string } {
@@ -42,7 +42,7 @@ function taxLabelForCountry(code: string): { label: string; placeholder: string 
     case "MX":
       return { label: "RFC de la clínica (opcional)", placeholder: "XAXX010101000" };
     case "CO":
-      return { label: "NIT / Cédula tributària (opcional)", placeholder: "900123456-1" };
+      return { label: "NIT / Cédula tributaria (opcional)", placeholder: "900123456-1" };
     case "PE":
       return { label: "RUC de la clínica (opcional)", placeholder: "20123456789" };
     case "CL":
@@ -83,9 +83,10 @@ export function OnboardingPage() {
   const [taxId, setTaxId] = useState("");
   const [locale, setLocale] = useState(() => {
     const lang = params.get("lang");
-    if (lang === "es") return "es-ES";
+    if (lang === "ca") return "ca-ES";
     if (lang === "en") return "en-GB";
-    return "ca-ES";
+    if (lang === "mx") return "es-MX";
+    return "es-ES";
   });
   const [fullName, setFullName] = useState(() => params.get("contact_name") ?? "");
   const [email, setEmail] = useState(() => params.get("email") ?? "");
@@ -100,6 +101,37 @@ export function OnboardingPage() {
 
   const pendingStripeActivation = Boolean(me && me.billing?.status === "INCOMPLETE");
 
+  function translateError(msg: string): string {
+    if (msg.includes("Stripe must be configured") || msg.includes("STRIPE_DISABLED")) {
+      return "Stripe debe estar configurado para activar la prueba gratuita de 30 días.";
+    }
+    if (msg.includes("clinic_name is required")) {
+      return "El nombre de la clínica es obligatorio.";
+    }
+    if (msg.includes("full_name is required")) {
+      return "El nombre del responsable es obligatorio.";
+    }
+    if (msg.includes("invalid email")) {
+      return "El correo electrónico no es válido.";
+    }
+    if (msg.includes("password must be at least 10 characters")) {
+      return "La contraseña debe tener al menos 10 caracteres.";
+    }
+    if (msg.includes("already registered") || msg.includes("conflict") || msg.includes("already exists")) {
+      return "Ya existe una clínica o usuario con este correo o subdominio.";
+    }
+    if (msg.includes("plan has no Stripe price configured") || msg.includes("PLAN_NOT_CONFIGURED")) {
+      return "El plan seleccionado no tiene un precio configurado en Stripe.";
+    }
+    if (msg.includes("unknown or inactive plan") || msg.includes("UNKNOWN_PLAN")) {
+      return "El plan seleccionado no es válido o no está activo.";
+    }
+    if (msg.includes("could not complete onboarding with Stripe") || msg.includes("ONBOARDING_FAILED")) {
+      return "No se pudo iniciar el proceso de pago con Stripe. Por favor, inténtalo de nuevo.";
+    }
+    return msg;
+  }
+
   async function resumeStripeCheckout() {
     setError(null);
     setLoading(true);
@@ -107,7 +139,7 @@ export function OnboardingPage() {
       const { url } = await sdk.billing.checkout(me?.billing?.plan_key || "base");
       window.location.href = url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No s'ha pogut iniciar Stripe Checkout");
+      setError(err instanceof Error ? translateError(err.message) : "No se pudo iniciar Stripe Checkout");
       setLoading(false);
     }
   }
@@ -132,7 +164,7 @@ export function OnboardingPage() {
       });
       window.location.href = res.checkout_url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No s'ha pogut completar l'onboarding");
+      setError(err instanceof Error ? translateError(err.message) : "No se pudo completar el registro");
       setLoading(false);
     }
   }
@@ -143,7 +175,7 @@ export function OnboardingPage() {
         <div className="w-full max-w-lg">
           <div className="mb-6 text-center">
             <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Dentistes</p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-900">Activa els teus 30 dies de prova</h1>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-900">Activa tus 30 días de prueba</h1>
             <p className="mt-1 text-sm text-slate-500">
               Clínica creada: <strong>{me.active_tenant.name}</strong> ({me.active_tenant.subdomain}.{BASE_DOMAIN})
             </p>
@@ -152,20 +184,22 @@ export function OnboardingPage() {
             <div className="space-y-4">
               {canceled ? (
                 <Alert tone="warning">
-                  Has cancel·lat el pas de Stripe. Afegeix la targeta sense càrrec avui per activar els 30 dies de prova.
+                  Has cancelado el paso de Stripe. Añade la tarjeta sin cargo hoy para activar los 30 días de prueba.
                 </Alert>
               ) : null}
               {error ? <Alert tone="danger">{error}</Alert> : null}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-slate-900">Pla Base Essencial</span>
-                  <Badge tone="info">30 dies gratis</Badge>
+                  <span className="font-semibold text-slate-900">Plan Base Esencial</span>
+                  <Badge tone="info">30 días gratis</Badge>
                 </div>
-                <p className="mt-1 text-slate-600">$0,00 USD avui · Després $18.50 USD/mes. Cancel·lació en un clic.</p>
+                <p className="mt-1 text-slate-600">
+                  {currency === "EUR" ? "0 € hoy · Después 49 €/mes" : currency === "MXN" ? "$0 MXN hoy · Después $999 MXN/mes" : "$0 hoy · Después $49 USD/mes"}. Cancelación en un clic.
+                </p>
               </div>
               <Button onClick={() => void resumeStripeCheckout()} loading={loading} className="w-full">
                 <CreditCard className="h-4 w-4" />
-                Activar 30 dies a Stripe
+                Activar 30 días con Stripe
               </Button>
             </div>
           </Card>
@@ -179,25 +213,25 @@ export function OnboardingPage() {
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
           <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Dentistes</p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Obre la teva clínica en 1 minut</h1>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">Abre tu clínica en 1 minuto</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Pas {step} de 2 · 30 dies de prova gratis activant Stripe ($0 avui, després $18.50 USD/mes)
+            Paso {step} de 2 · 30 días de prueba gratis activando Stripe ($0 hoy)
           </p>
         </div>
 
         <Card>
           <div className="mb-5 flex items-center gap-2 text-xs font-medium text-slate-500">
             <span className={step === 1 ? "text-brand-700 font-semibold" : "text-confirmed inline-flex items-center gap-1"}>
-              {step === 2 ? <CheckCircle2 className="h-3.5 w-3.5" /> : "1."} Dades bàsiques
+              {step === 2 ? <CheckCircle2 className="h-3.5 w-3.5" /> : "1."} Datos básicos
             </span>
             <span>→</span>
-            <span className={step === 2 ? "text-brand-700 font-semibold" : ""}>2. Responsable i Stripe</span>
+            <span className={step === 2 ? "text-brand-700 font-semibold" : ""}>2. Responsable y Stripe</span>
           </div>
 
           {demo ? (
             <div className="mb-4">
               <Alert tone="info">
-                Has sol·licitat una demo. Si vols començar ja, crea la clínica ara i activa els 30 dies amb Stripe.
+                Has solicitado una demo. Si quieres empezar ya, crea tu clínica ahora y activa los 30 días con Stripe.
               </Alert>
             </div>
           ) : null}
@@ -210,25 +244,25 @@ export function OnboardingPage() {
           {step === 1 ? (
             <div className="space-y-4">
               <Input
-                label="Com es diu la teva clínica?"
+                label="¿Cómo se llama tu clínica?"
                 value={clinicName}
                 onChange={(e) => setClinicName(e.target.value)}
-                placeholder="Clínica Dental Garraf"
+                placeholder="Clínica Dental San Jerónimo"
                 required
               />
               <Input
-                label="Adreça web de la clínica"
+                label="Dirección web de la clínica"
                 value={subdomainTouched ? customSubdomain : subdomain}
                 onChange={(e) => {
                   setSubdomainTouched(true);
                   setCustomSubdomain(e.target.value.toLowerCase());
                 }}
-                hint={`Accedireu a https://${subdomain || "la-teva-clinica"}.${BASE_DOMAIN}`}
+                hint={`Accederéis en https://${subdomain || "tu-clinica"}.${BASE_DOMAIN}`}
                 required
               />
 
               <div>
-                <span className="mb-1.5 block text-sm font-medium text-slate-700">Quants gabinets / boxes teniu?</span>
+                <span className="mb-1.5 block text-sm font-medium text-slate-700">¿Cuántos gabinetes / boxes tenéis?</span>
                 <div className="grid grid-cols-5 gap-2">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
@@ -259,7 +293,7 @@ export function OnboardingPage() {
                   placeholder=""
                 />
                 <Select
-                  label="Divisa de subscripció"
+                  label="Divisa de suscripción"
                   options={[
                     { value: "EUR", label: "EUR (€)" },
                     { value: "MXN", label: "MXN ($)" },
@@ -301,26 +335,26 @@ export function OnboardingPage() {
           ) : (
             <form className="space-y-4" onSubmit={handleSubmit}>
               <Input
-                label="Nom del responsable"
+                label="Nombre del responsable"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="Dra. Laia Serra"
+                placeholder="Dr. Roberto Gómez"
                 required
               />
               <Input
-                label="Email de treball"
+                label="Email de trabajo"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="laia@clinica.cat"
+                placeholder="roberto@clinica.com"
                 required
               />
               <Input
-                label="Contrasenya"
+                label="Contraseña"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                hint="Mínim 10 caràcters"
+                hint="Mínimo 10 caracteres"
                 minLength={10}
                 required
               />
@@ -329,34 +363,34 @@ export function OnboardingPage() {
                 <div className="flex items-center justify-between gap-2 text-sm font-semibold text-slate-900">
                   <span className="inline-flex items-center gap-1.5">
                     <ShieldCheck className="h-4 w-4 text-brand-600" />
-                    Activació amb Stripe · 30 dies gratis ({currency})
+                    Activación con Stripe · 30 días gratis ({currency})
                   </span>
                   <span className="tabular-nums">
-                    {currency === "EUR" ? "0 € avui" : currency === "MXN" ? "$0 MXN avui" : "$0 avui"}
+                    {currency === "EUR" ? "0 € hoy" : currency === "MXN" ? "$0 MXN hoy" : "$0 hoy"}
                   </span>
                 </div>
                 <p className="mt-1.5 leading-relaxed">
-                  Al següent pas introduiràs la targeta a Stripe Checkout per activar els 30 dies de prova del Pla Base
-                  Essencial. No es cobra res fins al dia 31 ({currency === "EUR" ? "49 €/mes" : currency === "MXN" ? "$999 MXN/mes" : "$49 USD/mes"}). Cancel·lació en un clic.
+                  En el siguiente paso introducirás la tarjeta en Stripe Checkout para activar los 30 días de prueba del Plan Base
+                  Esencial. No se cobra nada hasta el día 31 ({currency === "EUR" ? "49 €/mes" : currency === "MXN" ? "$999 MXN/mes" : "$49 USD/mes"}). Cancelación en un clic.
                 </p>
               </div>
 
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setStep(1)} disabled={loading}>
-                  Enrere
+                  Atrás
                 </Button>
                 <Button type="submit" loading={loading} className="flex-1">
                   <CreditCard className="h-4 w-4" />
-                  Crear clínica i posar Stripe
+                  Crear clínica y activar Stripe
                 </Button>
               </div>
             </form>
           )}
 
           <p className="mt-4 text-center text-sm text-slate-500">
-            Ja tens compte?{" "}
+            ¿Ya tienes cuenta?{" "}
             <Link className="font-medium text-brand-700 hover:underline" to="/login">
-              Entrar
+              Iniciar sesión
             </Link>
           </p>
         </Card>

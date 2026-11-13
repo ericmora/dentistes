@@ -303,7 +303,7 @@ func (s *Server) executeOnboarding(w http.ResponseWriter, r *http.Request, req o
 		}
 		checkoutURL, err = s.stripe.CreateCheckout(r.Context(), stripeapi.CheckoutParams{
 			CustomerID:              customerID,
-			PriceID:                 plan.StripePriceID,
+			PriceID:                 stripePriceID,
 			TenantID:                tenant.ID,
 			SuccessURL:              s.cfg.AppURL + "/onboarding/complete?session_id={CHECKOUT_SESSION_ID}",
 			CancelURL:               s.cfg.AppURL + "/onboarding?checkout=cancel",
