@@ -560,6 +560,7 @@ export function PatientDetailPage() {
                           toothNumber={selectedTooth}
                           toothState={teeth[selectedTooth] ?? emptyTooth(selectedTooth)}
                           records={selectedToothRecords}
+                          activeTool={odontogramTool}
                           canWriteClinical={canWriteClinical}
                           onUpdateGeneralStatus={(st) => setToothGeneralStatus(selectedTooth, st)}
                           onToggleSurface={(surf, next) => handleToggleSurface(selectedTooth, surf, next)}

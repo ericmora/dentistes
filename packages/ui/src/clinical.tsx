@@ -5,11 +5,15 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Eye,
+  Layers,
   Lock,
   MessageCircle,
+  Palette,
   Phone,
   QrCode,
   ShieldAlert,
+  Sparkles,
   Trash2,
   UserCheck,
 } from "lucide-react";
@@ -264,8 +268,15 @@ export function ToothSurfaceRenderer({
   const info = getFdiToothInfo(tooth.tooth_number);
   const category = info.category;
 
-  const fillOf = (s: ToothSurfaceName) =>
-    isMissing ? SURFACE_COLORS.missing : SURFACE_COLORS[tooth.surfaces[s] ?? "healthy"];
+  const tNum = tooth.tooth_number;
+  const fillOf = (s: ToothSurfaceName) => {
+    if (isMissing) return SURFACE_COLORS.missing;
+    const st = tooth.surfaces[s] ?? "healthy";
+    if (st === "caries") return `url(#caries-grad-${tNum})`;
+    if (st === "restored") return `url(#comp-grad-${tNum})`;
+    if (st === "planned") return `url(#plan-grad-${tNum})`;
+    return `url(#enamel-grad-${tNum})`;
+  };
 
   return (
     <div
@@ -314,6 +325,40 @@ export function ToothSurfaceRenderer({
         role="img"
         aria-label={`Pieza ${tooth.tooth_number} - ${info.name}`}
       >
+        <defs>
+          <radialGradient id={`caries-grad-${tNum}`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#7F1D1D" />
+            <stop offset="60%" stopColor="#DC2626" />
+            <stop offset="100%" stopColor="#991B1B" />
+          </radialGradient>
+          <linearGradient id={`comp-grad-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#60A5FA" />
+            <stop offset="40%" stopColor="#2563EB" />
+            <stop offset="100%" stopColor="#1E40AF" />
+          </linearGradient>
+          <linearGradient id={`plan-grad-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#4ADE80" />
+            <stop offset="100%" stopColor="#15803D" />
+          </linearGradient>
+          <linearGradient id={`impl-grad-${tNum}`} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#1E293B" />
+            <stop offset="25%" stopColor="#475569" />
+            <stop offset="50%" stopColor="#94A3B8" />
+            <stop offset="75%" stopColor="#475569" />
+            <stop offset="100%" stopColor="#0F172A" />
+          </linearGradient>
+          <linearGradient id={`gold-grad-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#FDE68A" />
+            <stop offset="45%" stopColor="#F59E0B" />
+            <stop offset="85%" stopColor="#D97706" />
+            <stop offset="100%" stopColor="#92400E" />
+          </linearGradient>
+          <linearGradient id={`enamel-grad-${tNum}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#FFFFFF" />
+            <stop offset="80%" stopColor="#F8FAFC" />
+            <stop offset="100%" stopColor="#E2E8F0" />
+          </linearGradient>
+        </defs>
         {isUpper ? (
           /* UPPER ARCH: ROOTS AT TOP (y: 2..24), CROWN AT BOTTOM (y: 26..74) */
           <g>
@@ -740,67 +785,118 @@ export function OdontogramGrid({
     }
   }
 
+  const activeToolMeta = surfaceTools.find((t) => t.key === activeTool) ?? generalTools.find((g) => g.key === activeTool);
+
   return (
     <div className="space-y-5">
       {/* Tool Palette */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Herramienta:</span>
-          {surfaceTools.map((tool) => (
-            <button
-              key={tool.key}
-              type="button"
-              onClick={() => onToolChange?.(tool.key)}
-              className={cn(
-                "inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
-                activeTool === tool.key
-                  ? "border-brand-600 bg-brand-50 text-brand-800 font-semibold shadow-xs"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-              )}
-            >
-              <span className={cn("h-2.5 w-2.5 rounded-full", tool.dot)} />
-              {tool.label}
-            </button>
-          ))}
-          <div className="mx-1 h-5 w-px bg-slate-200" />
-          {generalTools.map((tool) => (
-            <button
-              key={tool.key}
-              type="button"
-              onClick={() => {
-                onToolChange?.(tool.key);
-                if (selectedTooth && onSetGeneralStatus) {
-                  onSetGeneralStatus(selectedTooth, tool.status);
-                }
-              }}
-              className={cn(
-                "inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition",
-                activeTool === tool.key
-                  ? "border-brand-600 bg-brand-50 text-brand-800 font-semibold shadow-xs"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
-              )}
-            >
-              <span className={cn("inline-block rounded px-1 text-[10px] font-bold border", tool.badge)}>
-                {tool.label}
-              </span>
-            </button>
-          ))}
+      <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+              <Palette className="h-4 w-4" />
+            </span>
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Paleta Clínica de Tratamientos
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Selecciona una herramienta y haz clic sobre las caras o piezas del odontograma
+              </p>
+            </div>
+          </div>
+
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+            {(["adult", "child"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => onDentitionChange?.(mode)}
+                className={cn(
+                  "min-h-[30px] rounded-md px-3 text-xs font-medium transition",
+                  dentition === mode ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900",
+                )}
+              >
+                {mode === "adult" ? "Adulto (32 piezas)" : "Infantil (20 piezas)"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
-          {(["adult", "child"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onDentitionChange?.(mode)}
-              className={cn(
-                "min-h-[34px] rounded-md px-3 text-xs font-medium transition",
-                dentition === mode ? "bg-slate-900 text-white font-semibold" : "text-slate-600 hover:text-slate-900",
-              )}
-            >
-              {mode === "adult" ? "Adulto (32 piezas)" : "Infantil (20 piezas)"}
-            </button>
-          ))}
+        <div className="grid gap-3 pt-1 md:grid-cols-2">
+          {/* Surface Tools */}
+          <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 p-2.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Ángulos y Caras (Superficie Dental)
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {surfaceTools.map((tool) => (
+                <button
+                  key={tool.key}
+                  type="button"
+                  onClick={() => onToolChange?.(tool.key)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                    activeTool === tool.key
+                      ? "border-brand-600 bg-brand-600 text-white font-semibold shadow-xs"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100",
+                  )}
+                >
+                  <span className={cn("h-2.5 w-2.5 rounded-full ring-1 ring-white/40", tool.dot)} />
+                  {tool.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Whole Tooth Tools */}
+          <div className="rounded-lg border border-slate-200/80 bg-slate-50/60 p-2.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Tratamientos de Pieza Completa
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {generalTools.map((tool) => (
+                <button
+                  key={tool.key}
+                  type="button"
+                  onClick={() => {
+                    onToolChange?.(tool.key);
+                    if (selectedTooth && onSetGeneralStatus) {
+                      onSetGeneralStatus(selectedTooth, tool.status);
+                    }
+                  }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
+                    activeTool === tool.key
+                      ? "border-brand-600 bg-brand-600 text-white font-semibold shadow-xs"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block rounded px-1 text-[10px] font-bold border",
+                      activeTool === tool.key ? "bg-white/20 text-white border-white/40" : tool.badge,
+                    )}
+                  >
+                    {tool.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Active Tool Status Banner */}
+        <div className="flex items-center justify-between rounded-lg bg-brand-50/70 border border-brand-200/60 px-3 py-1.5 text-xs text-brand-900">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Herramienta activa:</span>
+            <span className="inline-flex items-center gap-1.5 rounded bg-white px-2 py-0.5 font-bold shadow-2xs border border-brand-200">
+              {activeToolMeta?.label ?? activeTool}
+            </span>
+          </div>
+          <span className="text-[11px] text-brand-700 hidden sm:inline">
+            Haz clic sobre una cara o pieza para aplicar el tratamiento
+          </span>
         </div>
       </div>
 
@@ -962,10 +1058,560 @@ export interface ToothClinicalRecord {
   createdAt: string;
 }
 
+export function ToothAnatomicalViewer({
+  toothNumber,
+  toothState,
+  activeTool = "caries",
+  canWriteClinical = true,
+  onToggleSurface,
+  onUpdateGeneralStatus,
+}: {
+  toothNumber: number;
+  toothState?: ToothState;
+  activeTool?: OdontogramActiveTool;
+  canWriteClinical?: boolean;
+  onToggleSurface?: (surface: ToothSurfaceName, nextStatus: ToothSurfaceStatus) => void;
+  onUpdateGeneralStatus?: (status: NonNullable<ToothState["general_status"]>) => void;
+}) {
+  const [viewMode, setViewMode] = useState<"occlusal" | "frontal" | "cross_section">("occlusal");
+  const info = getFdiToothInfo(toothNumber);
+  const isUpper = info.arch === "upper";
+  const category = info.category;
+
+  const generalStatus = toothState?.general_status ?? "present";
+  const isMissing = generalStatus === "missing";
+  const isCrown = generalStatus === "crown";
+  const isEndo = generalStatus === "endodontics";
+  const isImplant = generalStatus === "implant";
+
+  const tNum = toothNumber;
+  const fillOf = (s: ToothSurfaceName) => {
+    if (isMissing) return "#94A3B8";
+    const st = toothState?.surfaces?.[s] ?? "healthy";
+    if (st === "caries") return `url(#tv-caries-${tNum})`;
+    if (st === "restored") return `url(#tv-comp-${tNum})`;
+    if (st === "planned") return `url(#tv-plan-${tNum})`;
+    return `url(#tv-enamel-${tNum})`;
+  };
+
+  const handleFaceClick = (surface: ToothSurfaceName) => {
+    if (!canWriteClinical) return;
+    const current = toothState?.surfaces?.[surface] ?? "healthy";
+    if (activeTool === "caries" || activeTool === "restored" || activeTool === "planned" || activeTool === "healthy") {
+      const next = current === activeTool ? "healthy" : activeTool;
+      onToggleSurface?.(surface, next);
+    } else if (
+      activeTool === "endodontics" ||
+      activeTool === "crown" ||
+      activeTool === "implant" ||
+      activeTool === "general_missing" ||
+      activeTool === "general_present"
+    ) {
+      const map: Record<string, NonNullable<ToothState["general_status"]>> = {
+        endodontics: "endodontics",
+        crown: "crown",
+        implant: "implant",
+        general_missing: "missing",
+        general_present: "present",
+      };
+      if (map[activeTool]) {
+        onUpdateGeneralStatus?.(map[activeTool]);
+      }
+    }
+  };
+
+  const handleMacroApply = (preset: "mod" | "occlusal" | "vestibular" | "lingual" | "clean") => {
+    if (!canWriteClinical) return;
+    const targetStatus: ToothSurfaceStatus =
+      activeTool === "caries" || activeTool === "restored" || activeTool === "planned" ? activeTool : "restored";
+
+    if (preset === "clean") {
+      (["occlusal", "mesial", "distal", "vestibular", "lingual"] as ToothSurfaceName[]).forEach((s) => {
+        onToggleSurface?.(s, "healthy");
+      });
+    } else if (preset === "mod") {
+      onToggleSurface?.("mesial", targetStatus);
+      onToggleSurface?.("occlusal", targetStatus);
+      onToggleSurface?.("distal", targetStatus);
+    } else if (preset === "occlusal") {
+      onToggleSurface?.("occlusal", targetStatus);
+    } else if (preset === "vestibular") {
+      onToggleSurface?.("vestibular", targetStatus);
+    } else if (preset === "lingual") {
+      onToggleSurface?.("lingual", targetStatus);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs space-y-3">
+      {/* View Switcher Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+        <div className="flex items-center gap-1.5">
+          <Eye className="h-4 w-4 text-brand-600" />
+          <span className="text-xs font-bold text-slate-800">Visor Anatómico Multi-Ángulo</span>
+        </div>
+
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("occlusal")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition",
+              viewMode === "occlusal" ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900",
+            )}
+          >
+            5 Caras (Corona)
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("frontal")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition",
+              viewMode === "frontal" ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900",
+            )}
+          >
+            Perfil Anatómico
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("cross_section")}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition",
+              viewMode === "cross_section" ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900",
+            )}
+          >
+            Corte Pulpar
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center justify-center min-h-[230px] rounded-lg bg-slate-50/60 p-2">
+        <svg className="hidden">
+          <defs>
+            <radialGradient id={`tv-caries-${tNum}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#450A0A" />
+              <stop offset="50%" stopColor="#DC2626" />
+              <stop offset="100%" stopColor="#991B1B" />
+            </radialGradient>
+            <linearGradient id={`tv-comp-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#93C5FD" />
+              <stop offset="35%" stopColor="#3B82F6" />
+              <stop offset="85%" stopColor="#1E40AF" />
+              <stop offset="100%" stopColor="#172554" />
+            </linearGradient>
+            <linearGradient id={`tv-plan-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#86EFAC" />
+              <stop offset="60%" stopColor="#22C55E" />
+              <stop offset="100%" stopColor="#15803D" />
+            </linearGradient>
+            <linearGradient id={`tv-enamel-${tNum}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#FFFFFF" />
+              <stop offset="65%" stopColor="#F8FAFC" />
+              <stop offset="100%" stopColor="#E2E8F0" />
+            </linearGradient>
+            <linearGradient id={`tv-gold-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FEF08A" />
+              <stop offset="40%" stopColor="#F59E0B" />
+              <stop offset="80%" stopColor="#D97706" />
+              <stop offset="100%" stopColor="#78350F" />
+            </linearGradient>
+            <linearGradient id={`tv-impl-${tNum}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#0F172A" />
+              <stop offset="30%" stopColor="#475569" />
+              <stop offset="55%" stopColor="#94A3B8" />
+              <stop offset="75%" stopColor="#475569" />
+              <stop offset="100%" stopColor="#0F172A" />
+            </linearGradient>
+            <linearGradient id={`tv-dentin-${tNum}`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FEF3C7" />
+              <stop offset="70%" stopColor="#FDE68A" />
+              <stop offset="100%" stopColor="#F59E0B" />
+            </linearGradient>
+            <linearGradient id={`tv-pulp-${tNum}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#FCA5A5" />
+              <stop offset="50%" stopColor="#EF4444" />
+              <stop offset="100%" stopColor="#B91C1C" />
+            </linearGradient>
+          </defs>
+        </svg>
+
+        {viewMode === "occlusal" && (
+          <div className="flex flex-col items-center">
+            <svg
+              viewBox="0 0 220 220"
+              className="h-56 w-56 select-none drop-shadow-sm transition-all"
+              aria-label={`Mapa de 5 caras de la pieza ${toothNumber}`}
+            >
+              {/* Background disc */}
+              <circle cx="110" cy="110" r="100" fill="#F8FAFC" stroke="#CBD5E1" strokeWidth="1.5" strokeDasharray="3 3" />
+
+              {/* Vestibular (Top) */}
+              <polygon
+                points="30,30 190,30 150,70 70,70"
+                fill={fillOf("vestibular")}
+                stroke="#334155"
+                strokeWidth="2"
+                className={cn("transition cursor-pointer hover:stroke-brand-600 hover:opacity-90", !canWriteClinical && "cursor-default")}
+                onClick={() => handleFaceClick("vestibular")}
+              >
+                <title>Cara Vestibular (V)</title>
+              </polygon>
+              <text x="110" y="52" textAnchor="middle" className="text-[11px] font-black fill-slate-700 pointer-events-none select-none">
+                VESTIBULAR (V)
+              </text>
+
+              {/* Palatino / Lingual (Bottom) */}
+              <polygon
+                points="70,150 150,150 190,190 30,190"
+                fill={fillOf("lingual")}
+                stroke="#334155"
+                strokeWidth="2"
+                className={cn("transition cursor-pointer hover:stroke-brand-600 hover:opacity-90", !canWriteClinical && "cursor-default")}
+                onClick={() => handleFaceClick("lingual")}
+              >
+                <title>{isUpper ? "Cara Palatina (P)" : "Cara Lingual (L)"}</title>
+              </polygon>
+              <text x="110" y="174" textAnchor="middle" className="text-[11px] font-black fill-slate-700 pointer-events-none select-none">
+                {isUpper ? "PALATINO (P)" : "LINGUAL (L)"}
+              </text>
+
+              {/* Mesial (Left) */}
+              <polygon
+                points="30,30 70,70 70,150 30,190"
+                fill={fillOf("mesial")}
+                stroke="#334155"
+                strokeWidth="2"
+                className={cn("transition cursor-pointer hover:stroke-brand-600 hover:opacity-90", !canWriteClinical && "cursor-default")}
+                onClick={() => handleFaceClick("mesial")}
+              >
+                <title>Cara Mesial (M)</title>
+              </polygon>
+              <text x="50" y="114" textAnchor="middle" className="text-[11px] font-black fill-slate-700 pointer-events-none select-none">
+                M
+              </text>
+
+              {/* Distal (Right) */}
+              <polygon
+                points="190,30 190,190 150,150 150,70"
+                fill={fillOf("distal")}
+                stroke="#334155"
+                strokeWidth="2"
+                className={cn("transition cursor-pointer hover:stroke-brand-600 hover:opacity-90", !canWriteClinical && "cursor-default")}
+                onClick={() => handleFaceClick("distal")}
+              >
+                <title>Cara Distal (D)</title>
+              </polygon>
+              <text x="170" y="114" textAnchor="middle" className="text-[11px] font-black fill-slate-700 pointer-events-none select-none">
+                D
+              </text>
+
+              {/* Occlusal / Incisal (Center) */}
+              <rect
+                x="70"
+                y="70"
+                width="80"
+                height="80"
+                rx="4"
+                fill={fillOf("occlusal")}
+                stroke="#334155"
+                strokeWidth="2"
+                className={cn("transition cursor-pointer hover:stroke-brand-600 hover:opacity-90", !canWriteClinical && "cursor-default")}
+                onClick={() => handleFaceClick("occlusal")}
+              >
+                <title>{category === "incisor" || category === "canine" ? "Borde Incisal (I)" : "Cara Oclusal (O)"}</title>
+              </rect>
+              <text x="110" y="115" textAnchor="middle" className="text-xs font-black fill-slate-800 pointer-events-none select-none">
+                {category === "incisor" || category === "canine" ? "INCISAL (I)" : "OCLUSAL (O)"}
+              </text>
+
+              {/* Overlays */}
+              {isCrown && (
+                <circle
+                  cx="110"
+                  cy="110"
+                  r="95"
+                  fill="none"
+                  stroke={`url(#tv-gold-${tNum})`}
+                  strokeWidth="6"
+                  strokeDasharray="12 4"
+                  className="pointer-events-none"
+                />
+              )}
+
+              {isMissing && (
+                <g className="pointer-events-none">
+                  <line x1="30" y1="30" x2="190" y2="190" stroke="#DC2626" strokeWidth="6" strokeLinecap="round" />
+                  <line x1="190" y1="30" x2="30" y2="190" stroke="#DC2626" strokeWidth="6" strokeLinecap="round" />
+                </g>
+              )}
+            </svg>
+          </div>
+        )}
+
+        {viewMode === "frontal" && (
+          <div className="flex flex-col items-center">
+            <svg viewBox="0 0 220 250" className="h-56 w-56 select-none drop-shadow-sm">
+              {isUpper ? (
+                /* UPPER TOOTH: Roots at top (y: 20..130), Crown at bottom (y: 130..220) */
+                <g>
+                  {isImplant ? (
+                    <g>
+                      <polygon points="90,130 130,130 124,115 96,115" fill="#475569" stroke="#1E293B" strokeWidth="1.5" />
+                      <rect x="94" y="25" width="32" height="90" rx="4" fill={`url(#tv-impl-${tNum})`} stroke="#0F172A" strokeWidth="1.5" />
+                      {[35, 45, 55, 65, 75, 85, 95, 105].map((y) => (
+                        <line key={y} x1="88" y1={y} x2="132" y2={y} stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" />
+                      ))}
+                      <polygon points="94,25 126,25 110,12" fill="#334155" stroke="#0F172A" strokeWidth="1.5" />
+                    </g>
+                  ) : (
+                    <g>
+                      {category === "molar" ? (
+                        <g>
+                          <path d="M 60 130 C 50 80, 40 40, 52 18 C 65 18, 75 60, 85 130 Z" fill="#F1F5F9" stroke="#64748B" strokeWidth="1.5" />
+                          <path d="M 95 130 C 100 70, 105 35, 110 15 C 118 35, 122 70, 125 130 Z" fill="#F8FAFC" stroke="#64748B" strokeWidth="1.5" />
+                          <path d="M 135 130 C 145 60, 155 18, 168 18 C 180 40, 170 80, 160 130 Z" fill="#F1F5F9" stroke="#64748B" strokeWidth="1.5" />
+                          {isEndo && (
+                            <g>
+                              <path d="M 54 22 Q 62 70 70 130" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <path d="M 110 18 L 110 130" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <path d="M 166 22 Q 158 70 150 130" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <circle cx="54" cy="22" r="3" fill="#DC2626" />
+                              <circle cx="110" cy="18" r="3" fill="#DC2626" />
+                              <circle cx="166" cy="22" r="3" fill="#DC2626" />
+                            </g>
+                          )}
+                        </g>
+                      ) : category === "premolar" ? (
+                        <g>
+                          <path d="M 72 130 C 65 80, 68 35, 82 18 C 96 18, 100 65, 102 130 Z" fill="#F1F5F9" stroke="#64748B" strokeWidth="1.5" />
+                          <path d="M 118 130 C 120 65, 124 18, 138 18 C 152 35, 155 80, 148 130 Z" fill="#F1F5F9" stroke="#64748B" strokeWidth="1.5" />
+                          {isEndo && (
+                            <g>
+                              <path d="M 82 22 Q 88 75 90 130" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <path d="M 138 22 Q 132 75 130 130" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <circle cx="82" cy="22" r="3" fill="#DC2626" />
+                              <circle cx="138" cy="22" r="3" fill="#DC2626" />
+                            </g>
+                          )}
+                        </g>
+                      ) : (
+                        <g>
+                          <path
+                            d={
+                              category === "canine"
+                                ? "M 80 130 C 85 75, 95 20, 110 12 C 125 20, 135 75, 140 130 Z"
+                                : "M 82 130 C 88 80, 96 30, 110 16 C 124 30, 132 80, 138 130 Z"
+                            }
+                            fill="#F1F5F9"
+                            stroke="#64748B"
+                            strokeWidth="1.5"
+                          />
+                          {isEndo && (
+                            <g>
+                              <line x1="110" y1="18" x2="110" y2="130" stroke="#DC2626" strokeWidth="4" strokeLinecap="round" />
+                              <circle cx="110" cy="18" r="3" fill="#DC2626" />
+                            </g>
+                          )}
+                        </g>
+                      )}
+                    </g>
+                  )}
+
+                  <path
+                    d={
+                      category === "molar"
+                        ? "M 55 130 C 50 160, 52 205, 65 218 C 80 216, 95 220, 110 215 C 125 220, 140 216, 155 218 C 168 205, 170 160, 165 130 C 145 133, 75 133, 55 130 Z"
+                        : category === "canine"
+                        ? "M 70 130 C 65 165, 75 205, 110 226 C 145 205, 155 165, 150 130 Z"
+                        : category === "premolar"
+                        ? "M 65 130 C 60 165, 65 210, 85 220 C 100 215, 120 215, 135 220 C 155 210, 160 165, 155 130 Z"
+                        : "M 70 130 C 66 165, 68 215, 80 220 L 140 220 C 152 215, 154 165, 150 130 Z"
+                    }
+                    fill={isCrown ? `url(#tv-gold-${tNum})` : `url(#tv-enamel-${tNum})`}
+                    stroke="#334155"
+                    strokeWidth="2"
+                  />
+
+                  <path d="M 60 130 Q 110 136 160 130" stroke="#64748B" strokeWidth="1.5" fill="none" />
+
+                  {isMissing && (
+                    <g>
+                      <line x1="45" y1="20" x2="175" y2="225" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" />
+                      <line x1="175" y1="20" x2="45" y2="225" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" />
+                    </g>
+                  )}
+                </g>
+              ) : (
+                /* LOWER TOOTH: Crown at top (y: 25..115), Roots at bottom (y: 115..225) */
+                <g>
+                  <path
+                    d={
+                      category === "molar"
+                        ? "M 55 115 C 50 85, 52 40, 65 27 C 80 29, 95 25, 110 30 C 125 25, 140 29, 155 27 C 168 40, 170 85, 165 115 Z"
+                        : category === "canine"
+                        ? "M 70 115 C 65 80, 75 40, 110 19 C 145 40, 155 80, 150 115 Z"
+                        : category === "premolar"
+                        ? "M 65 115 C 60 80, 65 35, 85 25 C 100 30, 120 30, 135 25 C 155 35, 160 80, 155 115 Z"
+                        : "M 70 115 C 66 80, 68 30, 80 25 L 140 25 C 152 30, 154 80, 150 115 Z"
+                    }
+                    fill={isCrown ? `url(#tv-gold-${tNum})` : `url(#tv-enamel-${tNum})`}
+                    stroke="#334155"
+                    strokeWidth="2"
+                  />
+
+                  <path d="M 60 115 Q 110 109 160 115" stroke="#64748B" strokeWidth="1.5" fill="none" />
+
+                  {isImplant ? (
+                    <g>
+                      <polygon points="90,115 130,115 124,130 96,130" fill="#475569" stroke="#1E293B" strokeWidth="1.5" />
+                      <rect x="94" y="130" width="32" height="90" rx="4" fill={`url(#tv-impl-${tNum})`} stroke="#0F172A" strokeWidth="1.5" />
+                      {[140, 150, 160, 170, 180, 190, 200, 210].map((y) => (
+                        <line key={y} x1="88" y1={y} x2="132" y2={y} stroke="#94A3B8" strokeWidth="2.5" strokeLinecap="round" />
+                      ))}
+                      <polygon points="94,220 126,220 110,233" fill="#334155" stroke="#0F172A" strokeWidth="1.5" />
+                    </g>
+                  ) : (
+                    <g>
+                      {category === "molar" ? (
+                        <g>
+                          <path d="M 60 115 C 55 160, 60 215, 78 230 C 92 215, 95 165, 100 115 Z" fill="#F1F5F9" stroke="#64748B" strokeWidth="1.5" />
+                          <path d="M 120 115 C 125 165, 128 215, 142 230 C 160 215, 165 160, 160 115 Z" fill="#F1F5F9" stroke="#64748B" strokeWidth="1.5" />
+                          {isEndo && (
+                            <g>
+                              <path d="M 80 115 Q 75 180 78 226" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <path d="M 140 115 Q 145 180 142 226" stroke="#DC2626" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                              <circle cx="78" cy="226" r="3" fill="#DC2626" />
+                              <circle cx="142" cy="226" r="3" fill="#DC2626" />
+                            </g>
+                          )}
+                        </g>
+                      ) : (
+                        <g>
+                          <path
+                            d="M 80 115 C 85 165, 95 220, 110 230 C 125 220, 135 165, 140 115 Z"
+                            fill="#F1F5F9"
+                            stroke="#64748B"
+                            strokeWidth="1.5"
+                          />
+                          {isEndo && (
+                            <g>
+                              <line x1="110" y1="115" x2="110" y2="226" stroke="#DC2626" strokeWidth="4" strokeLinecap="round" />
+                              <circle cx="110" cy="226" r="3" fill="#DC2626" />
+                            </g>
+                          )}
+                        </g>
+                      )}
+                    </g>
+                  )}
+
+                  {isMissing && (
+                    <g>
+                      <line x1="45" y1="20" x2="175" y2="225" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" />
+                      <line x1="175" y1="20" x2="45" y2="225" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" />
+                    </g>
+                  )}
+                </g>
+              )}
+            </svg>
+          </div>
+        )}
+
+        {viewMode === "cross_section" && (
+          <div className="flex flex-col items-center">
+            <svg viewBox="0 0 220 250" className="h-56 w-56 select-none drop-shadow-sm">
+              <path
+                d="M 50 115 C 45 60, 60 25, 110 20 C 160 25, 175 60, 170 115 C 150 118, 70 118, 50 115 Z"
+                fill={`url(#tv-enamel-${tNum})`}
+                stroke="#475569"
+                strokeWidth="1.5"
+              />
+              <path
+                d="M 62 115 C 58 75, 75 42, 110 38 C 145 42, 162 75, 158 115 C 145 160, 135 210, 110 230 C 85 210, 75 160, 62 115 Z"
+                fill={`url(#tv-dentin-${tNum})`}
+                stroke="#D97706"
+                strokeWidth="1.2"
+              />
+              <path
+                d="M 98 115 C 95 85, 96 70, 104 60 C 107 65, 113 65, 116 60 C 124 70, 125 85, 122 115 C 118 160, 114 205, 110 225 C 106 205, 102 160, 98 115 Z"
+                fill={isEndo ? "#DC2626" : `url(#tv-pulp-${tNum})`}
+                stroke={isEndo ? "#991B1B" : "#B91C1C"}
+                strokeWidth="1.5"
+              />
+
+              <text x="35" y="45" className="text-[10px] font-bold fill-slate-600">
+                Esmalte
+              </text>
+              <line x1="68" y1="42" x2="85" y2="35" stroke="#94A3B8" strokeWidth="1" strokeDasharray="2 2" />
+
+              <text x="25" y="100" className="text-[10px] font-bold fill-amber-700">
+                Dentina
+              </text>
+              <line x1="62" y1="98" x2="78" y2="98" stroke="#D97706" strokeWidth="1" strokeDasharray="2 2" />
+
+              <text x="145" y="80" className="text-[10px] font-bold fill-red-700">
+                {isEndo ? "Gutapercha" : "Pulpa"}
+              </text>
+              <line x1="140" y1="80" x2="120" y2="85" stroke="#DC2626" strokeWidth="1" strokeDasharray="2 2" />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Surface Application Presets */}
+      {canWriteClinical && viewMode === "occlusal" && !isMissing && (
+        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Rápidos:</span>
+          <button
+            type="button"
+            onClick={() => handleMacroApply("mod")}
+            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100 shadow-2xs"
+            title="Aplica en Mesial, Oclusal y Distal"
+          >
+            MOD
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMacroApply("occlusal")}
+            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100 shadow-2xs"
+            title="Aplica en cara Oclusal"
+          >
+            Oclusal
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMacroApply("vestibular")}
+            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100 shadow-2xs"
+            title="Aplica en cara Vestibular"
+          >
+            Vestibular
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMacroApply("lingual")}
+            className="rounded border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100 shadow-2xs"
+            title="Aplica en cara Palatina o Lingual"
+          >
+            {isUpper ? "Palatino" : "Lingual"}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMacroApply("clean")}
+            className="rounded border border-red-200 bg-red-50/60 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100 shadow-2xs"
+            title="Limpiar todas las caras a esmalte sano"
+          >
+            Limpiar caras
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ToothDetailHistoryPanel({
   toothNumber,
   toothState,
   records,
+  activeTool,
   canWriteClinical = true,
   onUpdateGeneralStatus,
   onToggleSurface,
@@ -976,6 +1622,7 @@ export function ToothDetailHistoryPanel({
   toothNumber: number;
   toothState?: ToothState;
   records: ToothClinicalRecord[];
+  activeTool?: OdontogramActiveTool;
   canWriteClinical?: boolean;
   onUpdateGeneralStatus: (status: NonNullable<ToothState["general_status"]>) => void;
   onToggleSurface: (surface: ToothSurfaceName, nextStatus: ToothSurfaceStatus) => void;
@@ -1045,8 +1692,17 @@ export function ToothDetailHistoryPanel({
       </div>
 
       <div className="grid gap-6 p-5 lg:grid-cols-2">
-        {/* Left Column: Clinical Status & Surfaces */}
+        {/* Left Column: Visual Anatomical Inspector & Surface Angle Controls */}
         <div className="space-y-4">
+          <ToothAnatomicalViewer
+            toothNumber={toothNumber}
+            toothState={toothState}
+            activeTool={activeTool}
+            canWriteClinical={canWriteClinical}
+            onToggleSurface={onToggleSurface}
+            onUpdateGeneralStatus={onUpdateGeneralStatus}
+          />
+
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
               Estado general de la pieza
