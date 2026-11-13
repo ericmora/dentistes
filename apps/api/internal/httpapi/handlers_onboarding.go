@@ -18,15 +18,20 @@ import (
 )
 
 type onboardingRequest struct {
-	ClinicName    string `json:"clinic_name"`
-	TenantName    string `json:"tenant_name"`
-	Subdomain     string `json:"subdomain"`
-	FullName      string `json:"full_name"`
-	Email         string `json:"email"`
-	Password      string `json:"password"`
-	CabinetsCount int    `json:"cabinets_count"`
-	Locale        string `json:"locale"`
-	PlanKey       string `json:"plan_key"`
+	ClinicName         string `json:"clinic_name"`
+	TenantName         string `json:"tenant_name"`
+	Subdomain          string `json:"subdomain"`
+	FullName           string `json:"full_name"`
+	Email              string `json:"email"`
+	Password           string `json:"password"`
+	CabinetsCount      int    `json:"cabinets_count"`
+	Locale             string `json:"locale"`
+	PlanKey            string `json:"plan_key"`
+	CountryCode        string `json:"country_code"`
+	BillingCountryCode string `json:"billing_country_code"`
+	Currency           string `json:"currency"`
+	BillingCurrency    string `json:"billing_currency"`
+	TaxID              string `json:"tax_id"`
 }
 
 type validatedOnboarding struct {
@@ -37,7 +42,9 @@ type validatedOnboarding struct {
 	Password      string
 	CabinetsCount int
 	Locale        string
+	CountryCode   string
 	Currency      string
+	TaxID         string
 	Timezone      string
 	PlanKey       string
 }
@@ -91,6 +98,25 @@ func localeDefaults(raw string) (locale, currency, timezone string) {
 	}
 }
 
+func defaultCountryAndCurrency(locale string) (country, currency string) {
+	switch strings.ToLower(strings.TrimSpace(locale)) {
+	case "es-mx", "mx":
+		return "MX", "MXN"
+	case "es-co", "co":
+		return "CO", "USD"
+	case "es-pe", "pe":
+		return "PE", "USD"
+	case "es-cl", "cl":
+		return "CL", "USD"
+	case "en", "en-us":
+		return "US", "USD"
+	case "es", "es-es", "ca", "ca-es":
+		return "ES", "EUR"
+	default:
+		return "ES", "EUR"
+	}
+}
+
 func validateOnboardingRequest(req onboardingRequest) (validatedOnboarding, string) {
 	clinic := strings.TrimSpace(req.ClinicName)
 	if clinic == "" {
@@ -135,7 +161,28 @@ func validateOnboardingRequest(req onboardingRequest) (validatedOnboarding, stri
 		planKey = "base"
 	}
 
-	loc, curr, tz := localeDefaults(req.Locale)
+	country := strings.ToUpper(strings.TrimSpace(req.CountryCode))
+	if country == "" {
+		country = strings.ToUpper(strings.TrimSpace(req.BillingCountryCode))
+	}
+	curr := strings.ToUpper(strings.TrimSpace(req.Currency))
+	if curr == "" {
+		curr = strings.ToUpper(strings.TrimSpace(req.BillingCurrency))
+	}
+
+	defCountry, defCurr := defaultCountryAndCurrency(req.Locale)
+	if country == "" {
+		country = defCountry
+	}
+	if curr == "" {
+		curr = defCurr
+	}
+
+	if curr != "EUR" && curr != "MXN" && curr != "USD" {
+		return validatedOnboarding{}, "currency must be EUR, MXN or USD"
+	}
+
+	loc, _, tz := localeDefaults(req.Locale)
 	return validatedOnboarding{
 		ClinicName:    clinic,
 		Subdomain:     sub,
@@ -144,7 +191,9 @@ func validateOnboardingRequest(req onboardingRequest) (validatedOnboarding, stri
 		Password:      req.Password,
 		CabinetsCount: cabinets,
 		Locale:        loc,
+		CountryCode:   country,
 		Currency:      curr,
+		TaxID:         strings.TrimSpace(req.TaxID),
 		Timezone:      tz,
 		PlanKey:       planKey,
 	}, ""
@@ -212,7 +261,11 @@ func (s *Server) executeOnboarding(w http.ResponseWriter, r *http.Request, req o
 		if err != nil {
 			return err
 		}
-		if plan.StripePriceID == "" {
+		stripePriceID := plan.StripePriceID
+		if planPrice, err := s.store.GetPlanPrice(r.Context(), tx, plan.Key, in.Currency, "month"); err == nil && planPrice != nil && planPrice.StripePriceID != nil && *planPrice.StripePriceID != "" {
+			stripePriceID = *planPrice.StripePriceID
+		}
+		if stripePriceID == "" {
 			return errPlanNotConfigured
 		}
 
@@ -220,7 +273,7 @@ func (s *Server) executeOnboarding(w http.ResponseWriter, r *http.Request, req o
 		if err != nil {
 			return err
 		}
-		tenant, err := s.store.CreateTenant(r.Context(), tx, in.ClinicName, in.Subdomain, trialEnds)
+		tenant, err := s.store.CreateTenantWithBilling(r.Context(), tx, in.ClinicName, in.Subdomain, in.CountryCode, in.Currency, in.TaxID, trialEnds)
 		if err != nil {
 			return err
 		}

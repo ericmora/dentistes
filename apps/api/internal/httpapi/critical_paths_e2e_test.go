@@ -15,6 +15,7 @@ import (
 	"github.com/ericmora/dentistes/apps/api/internal/auth"
 	"github.com/ericmora/dentistes/apps/api/internal/config"
 	"github.com/ericmora/dentistes/apps/api/internal/entitlements"
+	"github.com/ericmora/dentistes/apps/api/internal/fiscal"
 	"github.com/ericmora/dentistes/apps/api/internal/realtime"
 	"github.com/ericmora/dentistes/apps/api/internal/store"
 	"github.com/ericmora/dentistes/apps/api/internal/stripeapi"
@@ -300,5 +301,97 @@ func TestCriticalPath6_PublicLeadCaptation(t *testing.T) {
 	srv.handleCreateLead(rec2, req2)
 	if rec2.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 validation error for invalid email format, got %d", rec2.Code)
+	}
+}
+
+// Critical Path 7: Geolocation, Multi-Currency (EUR/MXN/USD) & LATAM Fiscal Compliance Engine
+func TestCriticalPath7_GeolocationMultiCurrencyAndFiscalCompliance(t *testing.T) {
+	// 1. Edge Geolocation Country Detection
+	reqEdgeMX := httptest.NewRequest(http.MethodGet, "/v1/public/fiscal-capabilities", nil)
+	reqEdgeMX.Header.Set("CF-IPCountry", "MX")
+	if c := detectCountryFromRequest(reqEdgeMX); c != "MX" {
+		t.Fatalf("expected Edge country MX, got %s", c)
+	}
+
+	reqEdgeES := httptest.NewRequest(http.MethodGet, "/v1/public/fiscal-capabilities", nil)
+	reqEdgeES.Header.Set("X-Vercel-IP-Country", "ES")
+	if c := detectCountryFromRequest(reqEdgeES); c != "ES" {
+		t.Fatalf("expected Edge country ES, got %s", c)
+	}
+
+	// 2. Multi-currency and Tax ID Onboarding Validation
+	valMX, errMX := validateOnboardingRequest(onboardingRequest{
+		ClinicName:  "Dental Satélite CDMX",
+		FullName:    "Dr. Alejandro Morales",
+		Email:       "alejandro@dentalsatelite.mx",
+		Password:    "password-segura-1234",
+		CountryCode: "MX",
+		Currency:    "MXN",
+		TaxID:       "MOR850101XYZ",
+	})
+	if errMX != "" {
+		t.Fatalf("unexpected validation error on MX onboarding: %s", errMX)
+	}
+	if valMX.CountryCode != "MX" || valMX.Currency != "MXN" || valMX.TaxID != "MOR850101XYZ" {
+		t.Fatalf("invalid MX fields: %#v", valMX)
+	}
+
+	// Currency arbitrage restriction: only EUR, MXN, USD allowed
+	_, errInvalidCurr := validateOnboardingRequest(onboardingRequest{
+		ClinicName:  "Dental Satélite CDMX",
+		FullName:    "Dr. Alejandro Morales",
+		Email:       "alejandro@dentalsatelite.mx",
+		Password:    "password-segura-1234",
+		CountryCode: "MX",
+		Currency:    "BRL",
+	})
+	if errInvalidCurr != "currency must be EUR, MXN or USD" {
+		t.Fatalf("expected currency validation failure, got: %s", errInvalidCurr)
+	}
+
+	// 3. Fiscal Engine Capabilities Resolution (COMING_SOON vs ACTIVE_DIRECT vs WAITLIST)
+	mxConfig := &store.RegionalFiscalConfig{
+		CountryCode:        "MX",
+		CountryName:        "Mèxic",
+		CurrencyCode:       "MXN",
+		TaxAuthorityName:   "SAT",
+		FiscalDocumentName: "CFDI 4.0",
+		TaxIDLabel:         "RFC",
+		TaxIDRegex:         "^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$",
+		ComplianceStatus:   "COMING_SOON",
+		RequiresPartner:    true,
+	}
+
+	// Standard coming soon clinic: internal receipts mode active, official invoicing disabled
+	capsDefault := fiscal.ResolveCapabilities("tenant-mx-1", mxConfig, nil)
+	if capsDefault.Features.ElectronicInvoicing.Enabled {
+		t.Fatal("expected electronic invoicing disabled in COMING_SOON without override")
+	}
+	if capsDefault.Features.ElectronicInvoicing.FallbackMode != "INTERNAL_RECEIPT_PDF" {
+		t.Fatalf("expected fallback to INTERNAL_RECEIPT_PDF, got %s", capsDefault.Features.ElectronicInvoicing.FallbackMode)
+	}
+
+	// Clinic joins waitlist
+	flagWaitlist := &store.TenantFeatureFlag{
+		TenantID:     "tenant-mx-1",
+		FlagKey:      fiscal.FlagElectronicInvoicing,
+		IsEnabled:    false,
+		RolloutStage: "WAITLIST",
+	}
+	capsWaitlist := fiscal.ResolveCapabilities("tenant-mx-1", mxConfig, flagWaitlist)
+	if !capsWaitlist.Features.ElectronicInvoicing.WaitlistJoined {
+		t.Fatal("expected waitlist_joined=true when clinic registers interest")
+	}
+
+	// Clinic activated for pilot/BETA
+	flagBeta := &store.TenantFeatureFlag{
+		TenantID:     "tenant-mx-1",
+		FlagKey:      fiscal.FlagElectronicInvoicing,
+		IsEnabled:    true,
+		RolloutStage: "BETA",
+	}
+	capsBeta := fiscal.ResolveCapabilities("tenant-mx-1", mxConfig, flagBeta)
+	if !capsBeta.Features.ElectronicInvoicing.Enabled || capsBeta.Features.ElectronicInvoicing.Status != "BETA" {
+		t.Fatalf("expected beta electronic invoicing enabled, got: %#v", capsBeta.Features.ElectronicInvoicing)
 	}
 }

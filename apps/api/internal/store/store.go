@@ -31,12 +31,15 @@ type Membership struct {
 }
 
 type Tenant struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Subdomain   string     `json:"subdomain"`
-	Status      string     `json:"status"`
-	TrialEndsAt *time.Time `json:"trial_ends_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID                 string     `json:"id"`
+	Name               string     `json:"name"`
+	Subdomain          string     `json:"subdomain"`
+	Status             string     `json:"status"`
+	BillingCountryCode string     `json:"billing_country_code"`
+	BillingCurrency    string     `json:"billing_currency"`
+	TaxID              string     `json:"tax_id,omitempty"`
+	TrialEndsAt        *time.Time `json:"trial_ends_at,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
 }
 
 type Plan struct {
@@ -49,6 +52,43 @@ type Plan struct {
 	StripePriceID     string   `json:"stripe_price_id,omitempty"`
 	IsActive          bool     `json:"is_active"`
 	Features          []string `json:"features"`
+}
+
+type RegionalFiscalConfig struct {
+	CountryCode        string    `json:"country_code"`
+	CountryName        string    `json:"country_name"`
+	CurrencyCode       string    `json:"currency_code"`
+	TaxAuthorityName   string    `json:"tax_authority_name"`
+	FiscalDocumentName string    `json:"fiscal_document_name"`
+	TaxIDLabel         string    `json:"tax_id_label"`
+	TaxIDRegex         string    `json:"tax_id_regex"`
+	ComplianceStatus   string    `json:"compliance_status"`
+	RequiresPartner    bool      `json:"requires_partner"`
+	PartnerProviderKey *string   `json:"partner_provider_key,omitempty"`
+	AdapterClass       string    `json:"adapter_class"`
+	DefaultVATRate     float64   `json:"default_vat_rate"`
+	RetentionYears     int       `json:"retention_years"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+type TenantFeatureFlag struct {
+	TenantID     string         `json:"tenant_id"`
+	FlagKey      string         `json:"flag_key"`
+	IsEnabled    bool           `json:"is_enabled"`
+	RolloutStage string         `json:"rollout_stage"`
+	Metadata     map[string]any `json:"metadata"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
+type PlanPrice struct {
+	ID            string    `json:"id"`
+	PlanKey       string    `json:"plan_key"`
+	Currency      string    `json:"currency"`
+	Interval      string    `json:"interval"`
+	AmountCents   int       `json:"amount_cents"`
+	StripePriceID *string   `json:"stripe_price_id,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type Subscription struct {

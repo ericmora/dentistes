@@ -20,6 +20,9 @@ export interface Tenant {
   name: string;
   subdomain: string;
   status: string;
+  billing_country_code?: string;
+  billing_currency?: string;
+  tax_id?: string;
   trial_ends_at?: string;
 }
 
@@ -89,7 +92,53 @@ export interface OnboardingInput {
   password: string;
   cabinets_count?: number;
   locale?: string;
+  country_code?: string;
+  billing_country_code?: string;
+  currency?: string;
+  billing_currency?: string;
+  tax_id?: string;
   plan_key?: string;
+}
+
+export interface FiscalCapabilitiesResponse {
+  tenant_id: string;
+  country_code: string;
+  currency: string;
+  localization: {
+    tax_id_label: string;
+    tax_id_placeholder: string;
+    fiscal_authority: string;
+    document_label: string;
+  };
+  features: {
+    electronic_invoicing: {
+      status: string;
+      enabled: boolean;
+      waitlist_joined: boolean;
+      fallback_mode: string;
+      ui_notice?: string;
+    };
+    internal_cash_register: {
+      status: string;
+      enabled: boolean;
+    };
+  };
+}
+
+export interface RegionalFiscalConfig {
+  country_code: string;
+  country_name: string;
+  currency_code: string;
+  tax_authority_name: string;
+  fiscal_document_name: string;
+  tax_id_label: string;
+  tax_id_regex: string;
+  compliance_status: string;
+  requires_partner: boolean;
+  partner_provider_key?: string;
+  adapter_class: string;
+  default_vat_rate: number;
+  retention_years: number;
 }
 
 export interface OnboardingResponse extends AuthResponse {
@@ -792,6 +841,27 @@ export class DentistesClient {
   clinic = {
     cancel: (confirmSubdomain: string): Promise<{ status: string }> =>
       this.request("/v1/clinic/cancel", { method: "POST", body: { confirm_subdomain: confirmSubdomain } }),
+  };
+
+  fiscal = {
+    getCapabilities: async (countryCode?: string): Promise<FiscalCapabilitiesResponse> => {
+      const q = countryCode ? `?country_code=${encodeURIComponent(countryCode)}` : "";
+      return this.request<FiscalCapabilitiesResponse>(`/v1/tenant/fiscal-capabilities${q}`);
+    },
+    getPublicCapabilities: async (countryCode?: string): Promise<FiscalCapabilitiesResponse> => {
+      const q = countryCode ? `?country_code=${encodeURIComponent(countryCode)}` : "";
+      return this.request<FiscalCapabilitiesResponse>(`/v1/public/fiscal-capabilities${q}`);
+    },
+    listConfigs: async (): Promise<RegionalFiscalConfig[]> => {
+      const res = await this.request<{ data: RegionalFiscalConfig[] }>("/v1/public/fiscal-configs");
+      return res.data;
+    },
+    joinWaitlist: async (featureKey = "fiscal.electronic_invoicing", notes = ""): Promise<FiscalCapabilitiesResponse> => {
+      return this.request<FiscalCapabilitiesResponse>("/v1/tenant/fiscal-capabilities/waitlist", {
+        method: "POST",
+        body: { feature_key: featureKey, notes },
+      });
+    },
   };
 
   admin = {

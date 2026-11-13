@@ -9,12 +9,22 @@ import (
 )
 
 func (s *Store) CreateTenant(ctx context.Context, tx pgx.Tx, name, subdomain string, trialEndsAt time.Time) (*Tenant, error) {
+	return s.CreateTenantWithBilling(ctx, tx, name, subdomain, "ES", "EUR", "", trialEndsAt)
+}
+
+func (s *Store) CreateTenantWithBilling(ctx context.Context, tx pgx.Tx, name, subdomain, countryCode, currency, taxID string, trialEndsAt time.Time) (*Tenant, error) {
+	if countryCode == "" {
+		countryCode = "ES"
+	}
+	if currency == "" {
+		currency = "EUR"
+	}
 	var t Tenant
-	err := tx.QueryRow(ctx, `insert into tenants (name, subdomain, status, trial_ends_at)
-		values ($1, $2, 'TRIAL', $3)
-		returning id, name, subdomain, status, trial_ends_at, created_at`,
-		name, subdomain, trialEndsAt).
-		Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.TrialEndsAt, &t.CreatedAt)
+	err := tx.QueryRow(ctx, `insert into tenants (name, subdomain, billing_country_code, billing_currency, tax_id, status, trial_ends_at)
+		values ($1, $2, $3, $4, nullif($5, ''), 'TRIAL', $6)
+		returning id, name, subdomain, billing_country_code, billing_currency, coalesce(tax_id, ''), status, trial_ends_at, created_at`,
+		name, subdomain, countryCode, currency, taxID, trialEndsAt).
+		Scan(&t.ID, &t.Name, &t.Subdomain, &t.BillingCountryCode, &t.BillingCurrency, &t.TaxID, &t.Status, &t.TrialEndsAt, &t.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -23,9 +33,9 @@ func (s *Store) CreateTenant(ctx context.Context, tx pgx.Tx, name, subdomain str
 
 func (s *Store) GetTenantByID(ctx context.Context, tx pgx.Tx, id string) (*Tenant, error) {
 	var t Tenant
-	err := tx.QueryRow(ctx, `select id, name, subdomain, status, trial_ends_at, created_at
+	err := tx.QueryRow(ctx, `select id, name, subdomain, billing_country_code, billing_currency, coalesce(tax_id, ''), status, trial_ends_at, created_at
 		from tenants where id = $1`, id).
-		Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.TrialEndsAt, &t.CreatedAt)
+		Scan(&t.ID, &t.Name, &t.Subdomain, &t.BillingCountryCode, &t.BillingCurrency, &t.TaxID, &t.Status, &t.TrialEndsAt, &t.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -37,9 +47,9 @@ func (s *Store) GetTenantByID(ctx context.Context, tx pgx.Tx, id string) (*Tenan
 
 func (s *Store) GetTenantBySubdomain(ctx context.Context, tx pgx.Tx, subdomain string) (*Tenant, error) {
 	var t Tenant
-	err := tx.QueryRow(ctx, `select id, name, subdomain, status, trial_ends_at, created_at
+	err := tx.QueryRow(ctx, `select id, name, subdomain, billing_country_code, billing_currency, coalesce(tax_id, ''), status, trial_ends_at, created_at
 		from tenants where subdomain = $1`, subdomain).
-		Scan(&t.ID, &t.Name, &t.Subdomain, &t.Status, &t.TrialEndsAt, &t.CreatedAt)
+		Scan(&t.ID, &t.Name, &t.Subdomain, &t.BillingCountryCode, &t.BillingCurrency, &t.TaxID, &t.Status, &t.TrialEndsAt, &t.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

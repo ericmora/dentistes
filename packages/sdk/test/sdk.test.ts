@@ -312,4 +312,64 @@ describe("Dentistes SDK Unit Tests", () => {
     const leads = await client.admin.listLeads();
     assert.equal(leads.leads.length, 1);
   });
+
+  test("DentistesClient fiscal and multi-currency capabilities APIs", async () => {
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      if (url.includes("/v1/public/fiscal-configs")) {
+        return new Response(JSON.stringify({ data: [{ country_code: "MX", currency_code: "MXN" }] }), { status: 200 });
+      }
+      if (url.includes("/v1/public/fiscal-capabilities")) {
+        return new Response(JSON.stringify({
+          country_code: "MX",
+          currency: "MXN",
+          localization: { tax_id_label: "RFC", tax_id_placeholder: "XAXX010101000", fiscal_authority: "SAT", document_label: "CFDI 4.0" },
+          features: {
+            electronic_invoicing: { status: "COMING_SOON", enabled: false, waitlist_joined: false, fallback_mode: "INTERNAL_RECEIPT_PDF" },
+            internal_cash_register: { status: "ACTIVE", enabled: true },
+          },
+        }), { status: 200 });
+      }
+      if (url.includes("/v1/tenant/fiscal-capabilities/waitlist") && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          country_code: "MX",
+          currency: "MXN",
+          features: {
+            electronic_invoicing: { status: "COMING_SOON", enabled: false, waitlist_joined: true, fallback_mode: "INTERNAL_RECEIPT_PDF" },
+          },
+        }), { status: 200 });
+      }
+      if (url.includes("/v1/tenant/fiscal-capabilities")) {
+        return new Response(JSON.stringify({
+          country_code: "ES",
+          currency: "EUR",
+          features: {
+            electronic_invoicing: { status: "ACTIVE", enabled: true, waitlist_joined: false, fallback_mode: "INTERNAL_RECEIPT_PDF" },
+          },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "auth-token",
+      fetch: mockFetch,
+    });
+
+    const configs = await client.fiscal.listConfigs();
+    assert.equal(configs.length, 1);
+    assert.equal(configs[0].country_code, "MX");
+
+    const pubCaps = await client.fiscal.getPublicCapabilities("MX");
+    assert.equal(pubCaps.country_code, "MX");
+    assert.equal(pubCaps.features.electronic_invoicing.enabled, false);
+
+    const tenantCaps = await client.fiscal.getCapabilities();
+    assert.equal(tenantCaps.country_code, "ES");
+    assert.equal(tenantCaps.features.electronic_invoicing.enabled, true);
+
+    const waitlist = await client.fiscal.joinWaitlist("fiscal.electronic_invoicing", "Prioritat alta");
+    assert.equal(waitlist.features.electronic_invoicing.waitlist_joined, true);
+  });
 });

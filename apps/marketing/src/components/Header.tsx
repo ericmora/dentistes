@@ -4,6 +4,7 @@ import { APP, signupUrl } from "../content/site";
 import { blogPath, homePath, type Page } from "../lib/seo";
 import { Icon } from "./Icon";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { RegionSwitcher } from "./RegionSwitcher";
 import { Logo } from "./Logo";
 
 export function Header({
@@ -40,6 +41,7 @@ export function Header({
         </nav>
 
         <div className="hidden items-center gap-3 lg:flex">
+          <RegionSwitcher lang={lang} />
           <LanguageSwitcher page={page} label={copy.nav.language} />
           <a href={APP.login} className="px-2 text-[13px] font-medium text-pine-700 transition hover:text-ink">
             {copy.nav.login}

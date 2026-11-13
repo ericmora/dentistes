@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { Copy } from "../content/copy";
 import type { Lang } from "../content/languages";
-import { BASE_PRICE, formatPrice, signupUrl } from "../content/site";
+import { formatPrice, getPreferredRegion, signupUrl, type RegionData } from "../content/site";
 import { Icon } from "./Icon";
+import { RegionSwitcher } from "./RegionSwitcher";
 
 function decimalsFor(value: number): number {
   return Number.isInteger(value) ? 0 : 2;
@@ -10,7 +11,7 @@ function decimalsFor(value: number): number {
 
 export function Pricing({ copy, lang }: { copy: Copy; lang: Lang }) {
   const [annual, setAnnual] = useState(false);
-  const region = BASE_PRICE;
+  const [region, setRegion] = useState<RegionData>(() => getPreferredRegion(lang));
   const billing = annual ? "annual" : "monthly";
   const price = annual ? region.yearly : region.monthly;
   const period = annual ? copy.pricing.perYear : copy.pricing.perMonth;
@@ -46,9 +47,12 @@ export function Pricing({ copy, lang }: { copy: Copy; lang: Lang }) {
   return (
     <div>
       <div className="flex flex-col gap-4 border-y border-line py-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-pine-600">
-          {copy.pricing.globalLabel}
-        </p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-pine-600">
+            {copy.pricing.globalLabel}
+          </p>
+          <RegionSwitcher lang={lang} onRegionChange={setRegion} />
+        </div>
 
         <div className="flex items-center gap-1 border border-line p-0.5">
           <button
@@ -123,7 +127,7 @@ export function Pricing({ copy, lang }: { copy: Copy; lang: Lang }) {
           </ul>
 
           <a
-            href={signupUrl({ plan: "base", billing, lang })}
+            href={signupUrl({ plan: "base", billing, lang, country: region.countryCode, currency: region.currency })}
             className="btn-signal mt-8 w-full sm:w-auto"
           >
             {copy.pricing.cta}

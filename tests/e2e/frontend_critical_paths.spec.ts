@@ -14,13 +14,18 @@ test.describe("Frontend Critical Paths E2E", () => {
     // Subdomain preview should update automatically
     await expect(page.getByText("clinica-dental-garraf-e2e")).toBeVisible();
 
+    // Country, Currency and Tax ID fields are present
+    await expect(page.getByLabel("País de la clínica")).toBeVisible();
+    await expect(page.getByLabel("Divisa de subscripció")).toBeVisible();
+    await expect(page.getByLabel(/NIF \/ CIF/i)).toBeVisible();
+
     // Advance to Step 2
     await page.getByRole("button", { name: "Continuar" }).click();
 
     // Step 2: Access & Stripe explanation
     await expect(page.getByText("Pas 2 de 2")).toBeVisible();
-    await expect(page.getByText("Activació amb Stripe · 30 dies gratis")).toBeVisible();
-    await expect(page.getByText("$0 avui", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Activació amb Stripe · 30 dies gratis/i)).toBeVisible();
+    await expect(page.getByText("0 € avui", { exact: true })).toBeVisible();
 
     // Check presence of responsible person inputs
     await expect(page.getByLabel("Nom del responsable")).toBeVisible();

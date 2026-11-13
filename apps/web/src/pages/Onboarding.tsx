@@ -23,6 +23,43 @@ const LOCALE_OPTIONS = [
   { value: "en-GB", label: "English" },
 ];
 
+const COUNTRY_OPTIONS = [
+  { value: "ES", label: "Espanya (EUR €)" },
+  { value: "MX", label: "Mèxic (MXN $)" },
+  { value: "CO", label: "Colòmbia (USD $)" },
+  { value: "CL", label: "Xile (USD $)" },
+  { value: "PE", label: "Perú (USD $)" },
+  { value: "AR", label: "Argentina (USD $)" },
+  { value: "CR", label: "Costa Rica (USD $)" },
+  { value: "EC", label: "Equador (USD $)" },
+  { value: "DO", label: "Rep. Dominicana (USD $)" },
+  { value: "UY", label: "Uruguai (USD $)" },
+  { value: "US", label: "Estats Units / Internacional (USD $)" },
+];
+
+function taxLabelForCountry(code: string): { label: string; placeholder: string } {
+  switch (code) {
+    case "MX":
+      return { label: "RFC de la clínica (opcional)", placeholder: "XAXX010101000" };
+    case "CO":
+      return { label: "NIT / Cédula tributària (opcional)", placeholder: "900123456-1" };
+    case "PE":
+      return { label: "RUC de la clínica (opcional)", placeholder: "20123456789" };
+    case "CL":
+      return { label: "RUT de la clínica (opcional)", placeholder: "76123456-7" };
+    case "AR":
+      return { label: "CUIT de la clínica (opcional)", placeholder: "30712345678" };
+    default:
+      return { label: "NIF / CIF de la clínica (opcional)", placeholder: "B12345678" };
+  }
+}
+
+function defaultCurrencyForCountry(code: string): string {
+  if (code === "ES") return "EUR";
+  if (code === "MX") return "MXN";
+  return "USD";
+}
+
 export function OnboardingPage() {
   const { sdk, me, onboarding } = useSession();
   const [params] = useSearchParams();
@@ -34,6 +71,16 @@ export function OnboardingPage() {
   const [subdomainTouched, setSubdomainTouched] = useState(() => Boolean(params.get("subdomain")));
   const [customSubdomain, setCustomSubdomain] = useState(() => params.get("subdomain") ?? "");
   const [cabinetsCount, setCabinetsCount] = useState(1);
+  const [country, setCountry] = useState(() => {
+    const raw = (params.get("country") ?? params.get("country_code") ?? "").toUpperCase();
+    return raw && raw.length === 2 ? raw : "ES";
+  });
+  const [currency, setCurrency] = useState(() => {
+    const raw = (params.get("currency") ?? "").toUpperCase();
+    if (raw === "EUR" || raw === "MXN" || raw === "USD") return raw;
+    return defaultCurrencyForCountry(country);
+  });
+  const [taxId, setTaxId] = useState("");
   const [locale, setLocale] = useState(() => {
     const lang = params.get("lang");
     if (lang === "es") return "es-ES";
@@ -78,6 +125,9 @@ export function OnboardingPage() {
         password,
         cabinets_count: cabinetsCount,
         locale,
+        country_code: country,
+        currency,
+        tax_id: taxId.trim() || undefined,
         plan_key: "base",
       });
       window.location.href = res.checkout_url;
@@ -197,6 +247,37 @@ export function OnboardingPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  label="País de la clínica"
+                  options={COUNTRY_OPTIONS}
+                  value={country}
+                  onChange={(val) => {
+                    setCountry(val);
+                    setCurrency(defaultCurrencyForCountry(val));
+                  }}
+                  placeholder=""
+                />
+                <Select
+                  label="Divisa de subscripció"
+                  options={[
+                    { value: "EUR", label: "EUR (€)" },
+                    { value: "MXN", label: "MXN ($)" },
+                    { value: "USD", label: "USD ($)" },
+                  ]}
+                  value={currency}
+                  onChange={setCurrency}
+                  placeholder=""
+                />
+              </div>
+
+              <Input
+                label={taxLabelForCountry(country).label}
+                value={taxId}
+                onChange={(e) => setTaxId(e.target.value.toUpperCase())}
+                placeholder={taxLabelForCountry(country).placeholder}
+              />
+
               <Select
                 label="Idioma principal"
                 options={LOCALE_OPTIONS}
@@ -248,13 +329,15 @@ export function OnboardingPage() {
                 <div className="flex items-center justify-between gap-2 text-sm font-semibold text-slate-900">
                   <span className="inline-flex items-center gap-1.5">
                     <ShieldCheck className="h-4 w-4 text-brand-600" />
-                    Activació amb Stripe · 30 dies gratis
+                    Activació amb Stripe · 30 dies gratis ({currency})
                   </span>
-                  <span className="tabular-nums">$0 avui</span>
+                  <span className="tabular-nums">
+                    {currency === "EUR" ? "0 € avui" : currency === "MXN" ? "$0 MXN avui" : "$0 avui"}
+                  </span>
                 </div>
                 <p className="mt-1.5 leading-relaxed">
                   Al següent pas introduiràs la targeta a Stripe Checkout per activar els 30 dies de prova del Pla Base
-                  Essencial. No es cobra res fins al dia 31 ($18.50 USD/mes).
+                  Essencial. No es cobra res fins al dia 31 ({currency === "EUR" ? "49 €/mes" : currency === "MXN" ? "$999 MXN/mes" : "$49 USD/mes"}). Cancel·lació en un clic.
                 </p>
               </div>
 

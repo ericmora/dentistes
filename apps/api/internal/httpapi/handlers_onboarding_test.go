@@ -124,3 +124,86 @@ func TestStripeInvoicesAndCancel(t *testing.T) {
 		t.Fatalf("expected canceled subscription, got %#v, err=%v", canceled, err)
 	}
 }
+
+func TestValidateOnboardingRequestMultiCurrency(t *testing.T) {
+	// MX with explicit MXN and Tax ID
+	in, errMsg := validateOnboardingRequest(onboardingRequest{
+		ClinicName:  "Dental Satélite",
+		FullName:    "Dr. Roberto Gómez",
+		Email:       "roberto@satelite.mx",
+		Password:    "password-secreta-10",
+		CountryCode: "MX",
+		Currency:    "MXN",
+		TaxID:       "GOMR800101ABC",
+	})
+	if errMsg != "" {
+		t.Fatalf("unexpected validation error: %s", errMsg)
+	}
+	if in.CountryCode != "MX" || in.Currency != "MXN" || in.TaxID != "GOMR800101ABC" {
+		t.Fatalf("unexpected validated fields: %#v", in)
+	}
+
+	// Invalid currency rejected
+	_, errMsgInvalidCurr := validateOnboardingRequest(onboardingRequest{
+		ClinicName: "Dental London",
+		FullName:   "Dr. John Doe",
+		Email:      "john@london.co.uk",
+		Password:   "password-secreta-10",
+		Currency:   "GBP",
+	})
+	if errMsgInvalidCurr != "currency must be EUR, MXN or USD" {
+		t.Fatalf("expected currency validation error, got: %s", errMsgInvalidCurr)
+	}
+
+	// Automatic resolution from locale
+	inMx, _ := validateOnboardingRequest(onboardingRequest{
+		ClinicName: "Dental Monterrey",
+		FullName:   "Dra. Maria López",
+		Email:      "maria@monterrey.mx",
+		Password:   "password-secreta-10",
+		Locale:     "es-mx",
+	})
+	if inMx.CountryCode != "MX" || inMx.Currency != "MXN" {
+		t.Fatalf("expected MX/MXN for es-mx locale, got country=%s, curr=%s", inMx.CountryCode, inMx.Currency)
+	}
+
+	inCo, _ := validateOnboardingRequest(onboardingRequest{
+		ClinicName: "Dental Bogotá",
+		FullName:   "Dr. Carlos Ruiz",
+		Email:      "carlos@bogota.co",
+		Password:   "password-secreta-10",
+		Locale:     "es-co",
+	})
+	if inCo.CountryCode != "CO" || inCo.Currency != "USD" {
+		t.Fatalf("expected CO/USD for es-co locale, got country=%s, curr=%s", inCo.CountryCode, inCo.Currency)
+	}
+}
+
+func TestDetectCountryFromRequest(t *testing.T) {
+	// 1. Query param takes highest precedence
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/public/fiscal-capabilities?country_code=mx", nil)
+	req1.Header.Set("CF-IPCountry", "ES")
+	if c := detectCountryFromRequest(req1); c != "MX" {
+		t.Fatalf("expected MX from query param, got %s", c)
+	}
+
+	// 2. CF-IPCountry header
+	req2 := httptest.NewRequest(http.MethodGet, "/v1/public/fiscal-capabilities", nil)
+	req2.Header.Set("CF-IPCountry", "CO")
+	if c := detectCountryFromRequest(req2); c != "CO" {
+		t.Fatalf("expected CO from CF-IPCountry, got %s", c)
+	}
+
+	// 3. X-Vercel-IP-Country header
+	req3 := httptest.NewRequest(http.MethodGet, "/v1/public/fiscal-capabilities", nil)
+	req3.Header.Set("X-Vercel-IP-Country", "PE")
+	if c := detectCountryFromRequest(req3); c != "PE" {
+		t.Fatalf("expected PE from X-Vercel-IP-Country, got %s", c)
+	}
+
+	// 4. Default fallback
+	req4 := httptest.NewRequest(http.MethodGet, "/v1/public/fiscal-capabilities", nil)
+	if c := detectCountryFromRequest(req4); c != "ES" {
+		t.Fatalf("expected fallback ES, got %s", c)
+	}
+}

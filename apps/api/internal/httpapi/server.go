@@ -67,9 +67,11 @@ func (s *Server) Router() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
 	})
 
-	r.Route("/v1", func(r chi.Router) {
+	v1Handler := func(r chi.Router) {
 		r.Get("/public/plans", s.handlePublicPlans)
 		r.Get("/public/tenant", s.handlePublicTenant)
+		r.Get("/public/fiscal-configs", s.handlePublicFiscalConfigs)
+		r.Get("/public/fiscal-capabilities", s.handlePublicFiscalCapabilities)
 		r.With(s.rateLimit).Post("/public/signup", s.handleSignup)
 		r.With(s.rateLimit).Post("/public/onboarding", s.handleOnboarding)
 		r.With(s.rateLimit).Post("/public/leads", s.handleCreateLead)
@@ -85,6 +87,8 @@ func (s *Server) Router() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.tenantTx)
 				r.Get("/me", s.handleMe)
+				r.Get("/tenant/fiscal-capabilities", s.handleTenantFiscalCapabilities)
+				r.With(s.requirePermission("settings:manage")).Post("/tenant/fiscal-capabilities/waitlist", s.handleTenantJoinFiscalWaitlist)
 				r.Get("/billing/subscription", s.handleSubscription)
 				r.With(s.requirePermission("billing:manage")).Get("/billing/invoices", s.handleListInvoices)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/checkout", s.handleCheckout)
@@ -164,7 +168,10 @@ func (s *Server) Router() http.Handler {
 				r.Patch("/leads/{id}", s.handleAdminUpdateLeadStatus)
 			})
 		})
-	})
+	}
+
+	r.Route("/v1", v1Handler)
+	r.Route("/api/v1", v1Handler)
 
 	return r
 }

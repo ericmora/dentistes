@@ -2,6 +2,31 @@
 
 Registro de cambios ingeridos desde la carpeta de Drive `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` y su estabilización en el repositorio.
 
+## 2026-11-12 (Arquitectura Multidivisa, Geolocalització i Compliment Fiscal a LATAM)
+
+- **Ingesta de Documents de Drive:**
+  - `Producte/Especificació d'Arquitectura_ Geolocalització, Multidivisa i Passarel·la de Pagaments amb Stripe.md` (RQ-029).
+  - `Producte/Especificacions de Facturació Electrònica i Compliment Fiscal a LATAM.md` (RQ-030).
+  - `Producte/Anàlisi Exhaustiva i Matriu de Compliment Fiscal a LATAM.md` (RQ-031).
+  - Arxivament a Drive de: `Producte/Disseny Landing Page - Software Dental.md` (RQ-021 consolidat) i `Producte/Estratègia d'Inversió en Màrqueting Progressiva.md` (RQ-024 consolidat).
+- **Base de Dades i Migracions:**
+  - Nova migració [`0009_multi_currency_and_latam_fiscal.sql`](../apps/api/migrations/0009_multi_currency_and_latam_fiscal.sql):
+    - Ampliació de `tenants` amb `billing_country_code` (ISO-2), `billing_currency` (`EUR`, `MXN`, `USD`) i `tax_id` (NIF/RFC/RUC/NIT).
+    - Nova taula `regional_fiscal_configs` amb el catàleg de compliment fiscal per país (Espanya, Colòmbia, Mèxic, Perú, Xile, Argentina, etc.).
+    - Nova taula `tenant_feature_flags` per a overrides per clínica i control de desplegament (`ACTIVE_DIRECT`, `ACTIVE_PARTNER`, `COMING_SOON`, `INTERNAL_ONLY`).
+- **Backend Go (`apps/api`):**
+  - Mòdul `internal/fiscal` amb `FiscalFlagResolver`, catàleg regional i gestor de llista d'espera.
+  - Endpoints `GET /v1/tenant/fiscal-capabilities` (i `/api/v1/tenant/fiscal-capabilities`) i `POST /v1/tenant/fiscal-capabilities/waitlist`.
+  - Actualitzat l'onboarding (`POST /v1/public/onboarding` i `signup`) amb suport multidivisa i selecció de preu Stripe fix per divisa.
+- **SDK (`@dentistes/sdk`):**
+  - Ampliats tipus d'onboarding (`country_code`, `currency`, `tax_id`).
+  - Afegit mòdul `sdk.fiscal.getCapabilities()` i `sdk.fiscal.joinWaitlist()`.
+- **Frontend (`apps/web` i `apps/marketing`):**
+  - Onboarding adaptat amb selectors de país, divisa i identificador fiscal localitzat.
+  - Suport de geolocalització a la landing comercial (`CF-IPCountry` / `X-Vercel-IP-Country`) i selector manual de divisa (`2mes4_region_override`) mantenint SEO i metadades.
+  - Indicador de capacitats fiscals i avís de llista d'espera amb mode de rebut intern per a països en `COMING_SOON`.
+
+
 ## 2026-11-12 (Webhooks Stripe complets — 11 esdeveniments i estat `PAUSED`)
 
 - **Migració DB:** [`0008_subscription_paused_status.sql`](../apps/api/migrations/0008_subscription_paused_status.sql) amplia el `CHECK` de `subscriptions.status` amb `'PAUSED'`.

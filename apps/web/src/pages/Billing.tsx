@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, ExternalLink, RefreshCw, XCircle } from "lucide-react";
+import { Download, ExternalLink, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import {
   Alert,
   Badge,
@@ -12,7 +12,7 @@ import {
   formatMoney,
   useToast,
 } from "@dentistes/ui";
-import type { Entitlements, Plan, StripeInvoice, Subscription } from "@dentistes/sdk";
+import type { Entitlements, FiscalCapabilitiesResponse, Plan, StripeInvoice, Subscription } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 
 export function BillingPage({ embedded = false }: { embedded?: boolean }) {
@@ -22,25 +22,42 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
   const [entitlements, setEntitlements] = useState<Entitlements | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [invoices, setInvoices] = useState<StripeInvoice[]>([]);
+  const [fiscalCaps, setFiscalCaps] = useState<FiscalCapabilitiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     try {
-      const [billing, catalog, inv] = await Promise.all([
+      const [billing, catalog, inv, caps] = await Promise.all([
         sdk.billing.subscription(),
         sdk.plans(),
         sdk.billing.invoices().catch(() => ({ invoices: [] as StripeInvoice[] })),
+        sdk.fiscal.getCapabilities().catch(() => null),
       ]);
       setSubscription(billing.subscription);
       setEntitlements(billing.entitlements);
       setPlans(catalog.plans);
       setInvoices(inv.invoices);
+      setFiscalCaps(caps);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la facturación");
     }
   }, [sdk]);
+
+  async function joinFiscalWaitlist() {
+    setBusy("waitlist");
+    setError(null);
+    try {
+      const updated = await sdk.fiscal.joinWaitlist("fiscal.electronic_invoicing", "Sol·licitud des de panell");
+      setFiscalCaps(updated);
+      notify({ tone: "success", title: "Sol·licitud registrada", description: "T'avisarem tan bon punt activem el connector tributari." });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No s'ha pogut registrar la sol·licitud");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     void loadAll();
@@ -211,6 +228,67 @@ export function BillingPage({ embedded = false }: { embedded?: boolean }) {
           );
         })}
       </div>
+
+      {fiscalCaps ? (
+        <Card
+          title="Compliment Fiscal i Facturació Regional"
+          description={`Jurisdicció: ${fiscalCaps.country_code} · Divisa clínica: ${fiscalCaps.currency}`}
+        >
+          <div className="space-y-4 text-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium text-slate-500">Autoritat Tributària / Normativa</p>
+                <p className="mt-1 font-semibold text-slate-900">
+                  {fiscalCaps.localization.fiscal_authority} ({fiscalCaps.localization.document_label})
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-medium text-slate-500">
+                  {fiscalCaps.localization.tax_id_label} de la clínica
+                </p>
+                <p className="mt-1 font-semibold text-slate-900">
+                  {me?.active_tenant.tax_id || "No registrat (opcional a l'onboarding)"}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-brand-600" />
+                  <span className="font-semibold text-slate-900">Mòdul de Facturació Electrònica</span>
+                  {fiscalCaps.features.electronic_invoicing.enabled ? (
+                    <Badge tone="success">Actiu ({fiscalCaps.features.electronic_invoicing.status})</Badge>
+                  ) : fiscalCaps.features.electronic_invoicing.status === "COMING_SOON" ? (
+                    <Badge tone="warning">En Integració (Properament)</Badge>
+                  ) : (
+                    <Badge tone="neutral">Rebuts Interns</Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600">
+                  {fiscalCaps.features.electronic_invoicing.ui_notice ||
+                    "Connexió directa i emissió fiscal homologada per a tractaments dentals."}
+                </p>
+              </div>
+
+              {fiscalCaps.features.electronic_invoicing.status === "COMING_SOON" ? (
+                fiscalCaps.features.electronic_invoicing.waitlist_joined ? (
+                  <Badge tone="info">Sol·licitud registrada a la llista d'espera</Badge>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    loading={busy === "waitlist"}
+                    onClick={() => void joinFiscalWaitlist()}
+                  >
+                    Sol·licitar activació prioritària ({fiscalCaps.localization.fiscal_authority})
+                  </Button>
+                )
+              ) : null}
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <PermissionGate me={me} permission="billing:manage">
         <Card title="Facturas de Stripe" description="Histórico de cobros y descarga en PDF">
