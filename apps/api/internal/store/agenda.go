@@ -87,6 +87,17 @@ func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, co
 	return &c, nil
 }
 
+func (s *Store) DeleteCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID string) error {
+	cmd, err := tx.Exec(ctx, `update cabinets set is_active = false where id = $1 and tenant_id = $2`, cabinetID, tenantID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) ListDoctors(ctx context.Context, tx pgx.Tx) ([]Doctor, error) {
 	rows, err := tx.Query(ctx, `select u.id, u.full_name, m.role
 		from memberships m

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Building2, Plus } from "lucide-react";
+import { AlertTriangle, Building2, Plus, Trash2 } from "lucide-react";
 import {
   Alert,
   Button,
@@ -25,6 +25,7 @@ export function ClinicAdminPage() {
   const [cabinetColor, setCabinetColor] = useState("#0D9488");
   const [confirmSubdomain, setConfirmSubdomain] = useState("");
   const [cancelAccountOpen, setCancelAccountOpen] = useState(false);
+  const [cabinetToDelete, setCabinetToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const cabinetsQuery = useQuery({
     queryKey: ["cabinets"],
@@ -43,6 +44,22 @@ export function ClinicAdminPage() {
       notify({
         tone: "danger",
         title: "No se pudo crear el gabinete",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const deleteCabinetMutation = useMutation({
+    mutationFn: (id: string) => sdk.deleteCabinet(id),
+    onSuccess: async () => {
+      setCabinetToDelete(null);
+      notify({ tone: "success", title: "Gabinete eliminado con éxito" });
+      await queryClient.invalidateQueries({ queryKey: ["cabinets"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo eliminar el gabinete",
         description: err instanceof Error ? err.message : undefined,
       });
     },
@@ -102,12 +119,22 @@ export function ClinicAdminPage() {
                   <Card title="Gabinetes activos" description="Boxes disponibles en la agenda">
                     <ul className="space-y-2">
                       {(cabinetsQuery.data?.cabinets ?? []).map((cab) => (
-                        <li key={cab.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-sm">
+                        <li key={cab.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
                           <span className="flex items-center gap-2 font-medium text-slate-900">
                             <span className="h-3 w-3 rounded-full" style={{ backgroundColor: cab.color_code }} />
                             {cab.name}
                           </span>
-                          <Building2 className="h-4 w-4 text-slate-400" />
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-critical"
+                              title="Eliminar gabinete (desactivación lógica)"
+                              onClick={() => setCabinetToDelete({ id: cab.id, name: cab.name })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -184,6 +211,17 @@ export function ClinicAdminPage() {
                 ]
               : []),
           ]}
+        />
+
+        <ConfirmDialog
+          open={Boolean(cabinetToDelete)}
+          onClose={() => setCabinetToDelete(null)}
+          onConfirm={() => cabinetToDelete && deleteCabinetMutation.mutate(cabinetToDelete.id)}
+          loading={deleteCabinetMutation.isPending}
+          danger
+          title={`¿Eliminar gabinete "${cabinetToDelete?.name}"?`}
+          description="El gabinete se desactivará mediante un eliminado lógico y dejará de aparecer en la agenda, pero conservará el historial de todas las citas pasadas asociadas."
+          confirmLabel="Sí, eliminar gabinete"
         />
 
         <ConfirmDialog

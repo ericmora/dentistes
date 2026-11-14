@@ -1894,18 +1894,67 @@ export interface AppointmentCardData {
   highRisk?: boolean;
 }
 
+const TIMELINE_SLOT_HEIGHT = 68;
+
+function parseTimelineMinutes(hhmmStr: string): number {
+  if (!hhmmStr) return 0;
+  const parts = hhmmStr.split(":");
+  const h = Number(parts[0]) || 0;
+  const m = Number(parts[1]) || 0;
+  return h * 60 + m;
+}
+
+function getTimelineDurationMinutes(start: string, end: string): number {
+  const s = parseTimelineMinutes(start);
+  const e = parseTimelineMinutes(end);
+  return Math.max(10, e - s);
+}
+
 export function AppointmentCard({
   appointment,
+  durationMinutes,
   onClick,
   draggable,
   onDragStart,
 }: {
   appointment: AppointmentCardData;
+  durationMinutes?: number;
   onClick?: () => void;
   draggable?: boolean;
   onDragStart?: () => void;
 }) {
   const meta = APPOINTMENT_STATUS_META[appointment.status];
+  const dur = durationMinutes ?? getTimelineDurationMinutes(appointment.startTime, appointment.endTime);
+  const isCompact = dur < 30;
+
+  if (isCompact) {
+    return (
+      <button
+        type="button"
+        draggable={draggable}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", appointment.id);
+          e.dataTransfer.effectAllowed = "move";
+          onDragStart?.();
+        }}
+        onClick={onClick}
+        title={`${appointment.patientName} · ${appointment.treatmentType} (${appointment.startTime}–${appointment.endTime})`}
+        className={cn(
+          "w-full h-full rounded-md border border-slate-200 border-l-4 bg-white px-2 py-0.5 text-left shadow-2xs transition hover:shadow flex items-center justify-between gap-1 overflow-hidden",
+          meta.border,
+        )}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="truncate text-xs font-bold text-slate-900">{appointment.patientName}</p>
+          <span className="truncate text-[10px] text-slate-500 hidden sm:inline">· {appointment.treatmentType}</span>
+        </div>
+        <span className="shrink-0 text-[10px] font-medium text-slate-500 tabular-nums">
+          {appointment.startTime}–{appointment.endTime}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -1917,17 +1966,19 @@ export function AppointmentCard({
       }}
       onClick={onClick}
       className={cn(
-        "w-full rounded-lg border border-slate-200 border-l-4 bg-white p-2.5 text-left shadow-sm transition hover:shadow",
+        "w-full h-full rounded-lg border border-slate-200 border-l-4 bg-white p-2 text-left shadow-sm transition hover:shadow flex flex-col justify-between overflow-hidden",
         meta.border,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="truncate text-sm font-semibold text-slate-900">{appointment.patientName}</p>
-        {appointment.highRisk ? <AlertTriangle className="h-4 w-4 shrink-0 text-critical" aria-label="Alerta médica" /> : null}
+      <div>
+        <div className="flex items-start justify-between gap-1">
+          <p className="truncate text-sm font-semibold text-slate-900">{appointment.patientName}</p>
+          {appointment.highRisk ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-critical" aria-label="Alerta médica" /> : null}
+        </div>
+        <p className="truncate text-xs text-slate-600 mt-0.5">{appointment.treatmentType}</p>
       </div>
-      <p className="mt-0.5 truncate text-xs text-slate-600">{appointment.treatmentType}</p>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500">
-        <span className="inline-flex items-center gap-1 tabular-nums">
+      <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500 pt-1">
+        <span className="inline-flex items-center gap-1 tabular-nums font-medium">
           <Clock className="h-3 w-3" />
           {appointment.startTime}–{appointment.endTime}
         </span>
@@ -1964,6 +2015,7 @@ export function MultiCabinetTimeline({
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
       <div className="min-w-[680px]">
+        {/* Header row with Cabinet names */}
         <div
           className="grid border-b border-slate-200 bg-slate-50"
           style={{ gridTemplateColumns: `80px repeat(${Math.max(1, cabinets.length)}, minmax(180px, 1fr))` }}
@@ -1976,59 +2028,104 @@ export function MultiCabinetTimeline({
             </div>
           ))}
         </div>
-        {slots.map((slot) => (
-          <div
-            key={slot}
-            className="grid border-b border-slate-100 last:border-b-0"
-            style={{ gridTemplateColumns: `80px repeat(${Math.max(1, cabinets.length)}, minmax(180px, 1fr))` }}
-          >
-            <div className="px-3 py-3 text-xs font-medium tabular-nums text-slate-500">{slot}</div>
-            {cabinets.map((cab) => {
-              const items = (appointmentsByCabinet[cab.id] ?? []).filter((a) => a.startTime === slot);
-              const cellKey = `${cab.id}-${slot}`;
-              const isDropHover = hoverTarget === cellKey;
-              return (
-                <div
-                  key={cellKey}
-                  onClick={() => {
-                    if (items.length === 0) onSelectSlot?.(cab.id, slot);
-                  }}
-                  onDragOver={(e) => {
-                    if (!onMoveAppointment) return;
-                    e.preventDefault();
-                    if (hoverTarget !== cellKey) setHoverTarget(cellKey);
-                  }}
-                  onDragLeave={() => {
-                    if (hoverTarget === cellKey) setHoverTarget(null);
-                  }}
-                  onDrop={(e) => {
-                    if (!onMoveAppointment) return;
-                    e.preventDefault();
-                    const id = e.dataTransfer.getData("text/plain") || draggedId;
-                    setHoverTarget(null);
-                    setDraggedId(null);
-                    if (id) onMoveAppointment(id, cab.id, slot);
-                  }}
-                  className={cn(
-                    "min-h-[60px] space-y-1 border-l border-slate-100 p-1.5 transition-colors",
-                    items.length === 0 && onSelectSlot && "cursor-pointer hover:bg-brand-50/40",
-                    isDropHover && "bg-brand-100/60 ring-2 ring-inset ring-brand-400",
-                  )}
-                >
-                  {items.map((item) => (
-                    <AppointmentCard
-                      key={item.id}
-                      appointment={item}
-                      draggable={Boolean(onMoveAppointment)}
-                      onDragStart={() => setDraggedId(item.id)}
-                      onClick={() => onSelectAppointment?.(item)}
-                    />
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+
+        {/* 30-min Slot Rows */}
+        {slots.map((slot) => {
+          const slotStart = parseTimelineMinutes(slot);
+          const slotEnd = slotStart + 30;
+
+          return (
+            <div
+              key={slot}
+              className="grid border-b border-slate-100 last:border-b-0 h-[68px]"
+              style={{ gridTemplateColumns: `80px repeat(${Math.max(1, cabinets.length)}, minmax(180px, 1fr))` }}
+            >
+              <div className="px-3 py-3 text-xs font-medium tabular-nums text-slate-500 select-none">{slot}</div>
+              {cabinets.map((cab) => {
+                const cabAppts = appointmentsByCabinet[cab.id] ?? [];
+
+                // Appointments starting in this 30-min slot
+                const starting = cabAppts.filter((a) => {
+                  const s = parseTimelineMinutes(a.startTime);
+                  return s >= slotStart && s < slotEnd;
+                });
+
+                // Appointments covering this 30-min slot from an earlier start
+                const isCoveredFromAbove = cabAppts.some((a) => {
+                  const s = parseTimelineMinutes(a.startTime);
+                  const e = parseTimelineMinutes(a.endTime);
+                  return s < slotStart && e > slotStart;
+                });
+
+                const cellKey = `${cab.id}-${slot}`;
+                const isDropHover = hoverTarget === cellKey;
+                const isEmpty = starting.length === 0 && !isCoveredFromAbove;
+
+                return (
+                  <div
+                    key={cellKey}
+                    onClick={() => {
+                      if (isEmpty) onSelectSlot?.(cab.id, slot);
+                    }}
+                    onDragOver={(e) => {
+                      if (!onMoveAppointment) return;
+                      e.preventDefault();
+                      if (hoverTarget !== cellKey) setHoverTarget(cellKey);
+                    }}
+                    onDragLeave={() => {
+                      if (hoverTarget === cellKey) setHoverTarget(null);
+                    }}
+                    onDrop={(e) => {
+                      if (!onMoveAppointment) return;
+                      e.preventDefault();
+                      const id = e.dataTransfer.getData("text/plain") || draggedId;
+                      setHoverTarget(null);
+                      setDraggedId(null);
+                      if (id) onMoveAppointment(id, cab.id, slot);
+                    }}
+                    className={cn(
+                      "relative h-[68px] border-l border-slate-100 p-1 transition-colors",
+                      isEmpty && onSelectSlot && "cursor-pointer hover:bg-brand-50/40",
+                      isCoveredFromAbove && "bg-slate-50/20",
+                      isDropHover && "bg-brand-100/60 ring-2 ring-inset ring-brand-400",
+                    )}
+                  >
+                    {/* Render starting appointments with proportional height spanning across slots */}
+                    {starting.map((item) => {
+                      const durMin = getTimelineDurationMinutes(item.startTime, item.endTime);
+                      const minOffset = Math.max(0, parseTimelineMinutes(item.startTime) - slotStart);
+                      const topPx = 3 + Math.round((minOffset / 30) * (TIMELINE_SLOT_HEIGHT - 6));
+                      const slotFraction = durMin / 30;
+                      const heightPx = Math.max(28, Math.round(slotFraction * TIMELINE_SLOT_HEIGHT - 6));
+
+                      return (
+                        <div
+                          key={item.id}
+                          style={{
+                            position: "absolute",
+                            top: `${topPx}px`,
+                            left: "4px",
+                            right: "4px",
+                            height: `${heightPx}px`,
+                            zIndex: 10,
+                          }}
+                        >
+                          <AppointmentCard
+                            appointment={item}
+                            durationMinutes={durMin}
+                            draggable={Boolean(onMoveAppointment)}
+                            onDragStart={() => setDraggedId(item.id)}
+                            onClick={() => onSelectAppointment?.(item)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

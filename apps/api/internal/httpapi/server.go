@@ -129,6 +129,7 @@ func (s *Server) Router() http.Handler {
 					r.Use(s.requireFeature("agenda"))
 					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListCabinets)
 					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateCabinet)
+					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteCabinet)
 				})
 
 				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/doctors", s.handleListDoctors)

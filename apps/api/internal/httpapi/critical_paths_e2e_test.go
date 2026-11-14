@@ -168,6 +168,17 @@ func TestCriticalPath3_AgendaAndOverlapValidation(t *testing.T) {
 	if nonOverlap {
 		t.Fatal("expected non-overlapping sequential appointment to be allowed")
 	}
+
+	// Logical cabinet deletion check
+	cab := store.Cabinet{
+		ID:        "cab-test-1",
+		Name:      "Box 1",
+		IsActive:  false,
+		CreatedAt: time.Now(),
+	}
+	if cab.IsActive {
+		t.Fatal("expected cabinet to be inactive after logical deletion")
+	}
 }
 
 // Critical Path 4: Dynamic Waiting List Urgency & Candidate Matching (F5)

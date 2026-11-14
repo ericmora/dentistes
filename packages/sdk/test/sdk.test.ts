@@ -224,6 +224,9 @@ describe("Dentistes SDK Unit Tests", () => {
   test("DentistesClient agenda and waiting list APIs", async () => {
     const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
+      if (init?.method === "DELETE" && url.includes("/v1/cabinets/")) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
       if (url.includes("/v1/cabinets")) {
         return new Response(JSON.stringify({ cabinets: [{ id: "cab-1", name: "Gabinet 1" }] }), { status: 200 });
       }
@@ -256,6 +259,9 @@ describe("Dentistes SDK Unit Tests", () => {
 
     const cabs = await client.listCabinets();
     assert.equal(cabs.cabinets.length, 1);
+
+    const delCab = await client.deleteCabinet("cab-1");
+    assert.equal(delCab.ok, true);
 
     const docs = await client.listDoctors();
     assert.equal(docs.doctors.length, 1);

@@ -764,6 +764,10 @@ export class DentistesClient {
     return this.request("/v1/cabinets", { method: "POST", body: input });
   }
 
+  deleteCabinet(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/cabinets/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
   listDoctors(): Promise<{ doctors: Doctor[] }> {
     return this.request("/v1/doctors");
   }

@@ -47,6 +47,25 @@ func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"cabinet": cab})
 }
 
+func (s *Server) handleDeleteCabinet(w http.ResponseWriter, r *http.Request) {
+	cabinetID := chi.URLParam(r, "id")
+	if cabinetID == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "cabinet id is required", nil)
+		return
+	}
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	if err := s.store.DeleteCabinet(r.Context(), tx, claims.TenantID, cabinetID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "cabinet not found", nil)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not delete cabinet", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleListDoctors(w http.ResponseWriter, r *http.Request) {
 	tx := txFrom(r.Context())
 	doctors, err := s.store.ListDoctors(r.Context(), tx)
