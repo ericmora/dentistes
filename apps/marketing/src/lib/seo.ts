@@ -240,6 +240,35 @@ function faqPage(lang: Lang, items = COPY[lang].faq.items): JsonLd {
   };
 }
 
+function spotVideoObject(lang: Lang): JsonLd {
+  const titles: Record<Lang, string> = {
+    es: "Dentistes en 10 segundos — Solución integral para clínicas dentales",
+    ca: "Dentistes en 10 segons — Solució integral per a clíniques dentals",
+    en: "Dentistes in 10 seconds — All-in-one dental practice software",
+  };
+  const descriptions: Record<Lang, string> = {
+    es: "Llegó el momento de simplificarlo todo. Descubre Dentistes, la solución integral: optimiza tu agenda, historial y odontograma.",
+    ca: "Ha arribat el moment de simplificar-ho tot. Descobreix Dentistes, la solució integral: optimitza la teva agenda, historial i odontograma.",
+    en: "It's time to simplify everything. Discover Dentistes, the all-in-one solution: optimize your schedule, clinical records, and odontogram.",
+  };
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "@id": `${ORIGIN}/#spot-video`,
+    name: titles[lang],
+    description: descriptions[lang],
+    thumbnailUrl: [absoluteUrl("/videos/dentistes-spot-poster.webp")],
+    uploadDate: "2026-11-13T00:00:00Z",
+    duration: "PT10S",
+    contentUrl: absoluteUrl("/videos/dentistes-spot.mp4"),
+    inLanguage: "es",
+    transcript:
+      "Llegó el momento de simplificarlo todo. Descubre Dentistes, la solución integral. Optimiza tu agenda, historial y odontograma.",
+    publisher: { "@id": `${ORIGIN}/#organization` },
+  };
+}
+
 function breadcrumbs(lang: Lang, items: { name: string; path: string }[]): JsonLd {
   return {
     "@context": "https://schema.org",
@@ -317,6 +346,7 @@ export function getRouteMeta(page: Page): RouteMeta {
         organization(page.lang),
         website(page.lang),
         softwareApplication(page.lang),
+        spotVideoObject(page.lang),
         faqPage(page.lang),
       ],
     };
@@ -388,12 +418,13 @@ export function getRouteMeta(page: Page): RouteMeta {
       canonical: absoluteUrl(path),
       title: `${landing.metaTitle[page.lang]}`,
       description: landing.metaDescription[page.lang],
-      robots: "index,follow,max-image-preview:large",
+      robots: "index,follow,max-image-preview:large,max-video-preview:-1",
       ogType: "website",
       jsonLd: [
         organization(page.lang),
         website(page.lang),
         softwareApplication(page.lang),
+        spotVideoObject(page.lang),
         breadcrumbs(page.lang, [
           { name: HOME_LABEL[page.lang], path: homePath(page.lang) },
           { name: landing.keyword[page.lang], path },

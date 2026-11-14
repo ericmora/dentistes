@@ -121,6 +121,84 @@ describe("Agenda UI Components", () => {
     const martaCard = screen.getByText("Marta Rius").closest("div[style*='position: absolute']");
     expect(martaCard).toHaveStyle({ height: "130px" }); // 2 slots * 68 - 6
   });
+
+  it("detects and renders available idle gaps inside 30-min slots and allows 1-click scheduling in gap", () => {
+    const handleSelectSlot = vi.fn();
+    const cabinets = [{ id: "cab-1", name: "Box 1", colorCode: "#0D9488" }];
+    const slots = ["09:00", "09:30"];
+    const appointmentsByCabinet = {
+      "cab-1": [
+        {
+          id: "appt-20m",
+          patientName: "Carles Soler",
+          doctorName: "Dr. Gómez",
+          treatmentType: "Revisión rápida",
+          startTime: "09:00",
+          endTime: "09:20", // 20 min -> leaves 09:20 to 09:30 free (10 min gap)
+          status: "CONFIRMED" as const,
+        },
+      ],
+    };
+
+    render(
+      <MultiCabinetTimeline
+        cabinets={cabinets}
+        slots={slots}
+        appointmentsByCabinet={appointmentsByCabinet}
+        onSelectSlot={handleSelectSlot}
+      />,
+    );
+
+    expect(screen.getByText("Carles Soler")).toBeInTheDocument();
+    // The 10-minute gap button should be rendered
+    const gapButton = screen.getByText("Encajar 09:20");
+    expect(gapButton).toBeInTheDocument();
+    expect(screen.getByText("10m")).toBeInTheDocument();
+
+    fireEvent.click(gapButton);
+    expect(handleSelectSlot).toHaveBeenCalledWith("cab-1", "09:20", 10);
+  });
+
+  it("renders forced overbooking appointments (sobrecitas) with Sobrecita badge and side-by-side layout", () => {
+    const cabinets = [{ id: "cab-1", name: "Box 1", colorCode: "#0D9488" }];
+    const slots = ["09:00"];
+    const appointmentsByCabinet = {
+      "cab-1": [
+        {
+          id: "appt-regular",
+          patientName: "Laura Puig",
+          doctorName: "Dr. Gómez",
+          treatmentType: "Higiene dental",
+          startTime: "09:00",
+          endTime: "09:30",
+          status: "CONFIRMED" as const,
+        },
+        {
+          id: "appt-forced",
+          patientName: "Marc Valls",
+          doctorName: "Dr. Gómez",
+          treatmentType: "Urgencia dolor",
+          startTime: "09:00",
+          endTime: "09:20",
+          status: "CONFIRMED" as const,
+          isForced: true,
+          notes: "Dolor agudo en pieza 46",
+        },
+      ],
+    };
+
+    render(
+      <MultiCabinetTimeline
+        cabinets={cabinets}
+        slots={slots}
+        appointmentsByCabinet={appointmentsByCabinet}
+      />,
+    );
+
+    expect(screen.getByText("Laura Puig")).toBeInTheDocument();
+    expect(screen.getByText("Marc Valls")).toBeInTheDocument();
+    expect(screen.getByText("Sobrecita")).toBeInTheDocument();
+  });
 });
 
 describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {
