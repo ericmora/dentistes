@@ -38,6 +38,8 @@ type Appointment struct {
 	TreatmentType      string    `json:"treatment_type"`
 	Status             string    `json:"status"`
 	CancellationReason *string   `json:"cancellation_reason,omitempty"`
+	IsForced           bool      `json:"is_forced"`
+	Notes              *string   `json:"notes,omitempty"`
 	Version            int       `json:"version"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -51,6 +53,8 @@ type UpsertAppointmentInput struct {
 	EndTime       time.Time
 	TreatmentType string
 	Status        string
+	IsForced      bool
+	Notes         string
 }
 
 func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) {
@@ -124,6 +128,7 @@ const appointmentSelect = `select a.id, a.patient_id, p.last_name || ', ' || p.f
 		coalesce((p.medical_alerts->>'high_risk')::boolean, false),
 		a.doctor_id, u.full_name, a.cabinet_id, c.name,
 		a.start_time, a.end_time, a.treatment_type, a.status, a.cancellation_reason,
+		coalesce(a.is_forced, false), a.notes,
 		a.version, a.created_at, a.updated_at
 	from appointments a
 	join patients p on p.id = a.patient_id
@@ -136,6 +141,7 @@ func scanAppointment(row pgx.Row) (*Appointment, error) {
 		&a.ID, &a.PatientID, &a.PatientName, &a.PatientHighRisk,
 		&a.DoctorID, &a.DoctorName, &a.CabinetID, &a.CabinetName,
 		&a.StartTime, &a.EndTime, &a.TreatmentType, &a.Status, &a.CancellationReason,
+		&a.IsForced, &a.Notes,
 		&a.Version, &a.CreatedAt, &a.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -165,6 +171,7 @@ func (s *Store) ListAppointments(ctx context.Context, tx pgx.Tx, start, end time
 			&a.ID, &a.PatientID, &a.PatientName, &a.PatientHighRisk,
 			&a.DoctorID, &a.DoctorName, &a.CabinetID, &a.CabinetName,
 			&a.StartTime, &a.EndTime, &a.TreatmentType, &a.Status, &a.CancellationReason,
+			&a.IsForced, &a.Notes,
 			&a.Version, &a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -191,23 +198,25 @@ func (s *Store) hasAppointmentOverlap(ctx context.Context, tx pgx.Tx, cabinetID 
 }
 
 func (s *Store) CreateAppointment(ctx context.Context, tx pgx.Tx, tenantID string, in UpsertAppointmentInput) (*Appointment, error) {
-	overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.StartTime, in.EndTime, "")
-	if err != nil {
-		return nil, err
-	}
-	if overlap {
-		return nil, ErrOverlap
+	if !in.IsForced {
+		overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.StartTime, in.EndTime, "")
+		if err != nil {
+			return nil, err
+		}
+		if overlap {
+			return nil, ErrOverlap
+		}
 	}
 	status := in.Status
 	if status == "" {
 		status = "SCHEDULED"
 	}
 	var id string
-	err = tx.QueryRow(ctx, `insert into appointments
-			(tenant_id, patient_id, doctor_id, cabinet_id, start_time, end_time, treatment_type, status)
-		values ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8)
+	err := tx.QueryRow(ctx, `insert into appointments
+			(tenant_id, patient_id, doctor_id, cabinet_id, start_time, end_time, treatment_type, status, is_forced, notes)
+		values ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, nullif($10, ''))
 		returning id`,
-		tenantID, in.PatientID, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType, status).
+		tenantID, in.PatientID, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType, status, in.IsForced, in.Notes).
 		Scan(&id)
 	if err != nil {
 		return nil, err
@@ -228,12 +237,14 @@ func (s *Store) UpdateAppointment(ctx context.Context, tx pgx.Tx, id string, in 
 		return nil, ErrVersionConflict
 	}
 
-	overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.StartTime, in.EndTime, id)
-	if err != nil {
-		return nil, err
-	}
-	if overlap {
-		return nil, ErrOverlap
+	if !in.IsForced {
+		overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.StartTime, in.EndTime, id)
+		if err != nil {
+			return nil, err
+		}
+		if overlap {
+			return nil, ErrOverlap
+		}
 	}
 
 	_, err = tx.Exec(ctx, `update appointments
@@ -242,9 +253,11 @@ func (s *Store) UpdateAppointment(ctx context.Context, tx pgx.Tx, id string, in 
 			start_time = $4,
 			end_time = $5,
 			treatment_type = $6,
+			is_forced = $7,
+			notes = nullif($8, ''),
 			version = version + 1
 		where id = $1`,
-		id, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType)
+		id, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType, in.IsForced, in.Notes)
 	if err != nil {
 		return nil, err
 	}

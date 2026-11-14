@@ -156,4 +156,207 @@ test.describe("Frontend Critical Paths E2E", () => {
     // Success toast notification
     await expect(page.getByText("Paciente creado")).toBeVisible();
   });
+
+  test("Single-page Agenda unfolds inline navigation options and jumps to unified Patient Clinical Cockpit (Odontogram + History without scroll)", async ({ page }) => {
+    const apptStart = new Date();
+    apptStart.setHours(10, 0, 0, 0);
+    const apptEnd = new Date();
+    apptEnd.setHours(11, 0, 0, 0);
+
+    await page.route("**/v1/auth/refresh", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          access_token: "mock_jwt_token",
+          token_type: "Bearer",
+          expires_in: 3600,
+          user: { id: "usr-1", email: "dr@clinica.com", full_name: "Dr. Jordi Martí", is_platform_admin: false },
+          active_tenant: { id: "ten-1", name: "Clínica Dental Barcelona", subdomain: "bcn", status: "ACTIVE" },
+          memberships: [{ tenant_id: "ten-1", tenant_name: "Clínica Dental Barcelona", subdomain: "bcn", role: "OWNER", tenant_status: "ACTIVE" }],
+        }),
+      });
+    });
+
+    await page.route("**/v1/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          user: { id: "usr-1", email: "dr@clinica.com", full_name: "Dr. Jordi Martí", is_platform_admin: false },
+          active_tenant: { id: "ten-1", name: "Clínica Dental Barcelona", subdomain: "bcn", status: "ACTIVE" },
+          memberships: [{ tenant_id: "ten-1", tenant_name: "Clínica Dental Barcelona", subdomain: "bcn", role: "OWNER", tenant_status: "ACTIVE" }],
+          role: "OWNER",
+          permissions: ["*"],
+          features: { agenda: true, patients: true, odontogram: true, clinical_history: true },
+          feature_catalog: [],
+          entitlements: { tenant_id: "ten-1", plan_key: "pro", subscription_status: "ACTIVE", features: { agenda: true, patients: true, odontogram: true, clinical_history: true } },
+          billing: { tenant_id: "ten-1", plan_key: "pro", status: "ACTIVE", cancel_at_period_end: false },
+        }),
+      });
+    });
+
+    await page.route("**/v1/cabinets*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          cabinets: [
+            { id: "cab-1", name: "Box 1 Cirugía", color_code: "#0D9488" },
+            { id: "cab-2", name: "Box 2 General", color_code: "#2563EB" },
+          ],
+        }),
+      });
+    });
+
+    await page.route("**/v1/doctors*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          doctors: [
+            { id: "doc-1", full_name: "Dr. Jordi Martí", role: "DENTIST" },
+          ],
+        }),
+      });
+    });
+
+    await page.route("**/v1/treatments*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ treatments: [] }),
+      });
+    });
+
+    await page.route("**/v1/appointments*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          appointments: [
+            {
+              id: "appt-1",
+              patient_id: "pat-1",
+              patient_name: "Marta Rius",
+              patient_high_risk: true,
+              doctor_id: "doc-1",
+              doctor_name: "Dr. Jordi Martí",
+              cabinet_id: "cab-1",
+              cabinet_name: "Box 1 Cirugía",
+              treatment_type: "Endodoncia Multirradicular",
+              start_time: apptStart.toISOString(),
+              end_time: apptEnd.toISOString(),
+              status: "CONFIRMED",
+              version: 1,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.route("**/v1/patients**", async (route) => {
+      const url = route.request().url();
+      if (url.includes("clinical-records") || url.includes("/records")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            records: [
+              {
+                id: "rec-1",
+                patient_id: "pat-1",
+                doctor_id: "doc-1",
+                doctor_name: "Dr. Jordi Martí",
+                entry_type: "PROCEDURE",
+                content: "[Pieza 16] Apertura cameral y conductometría",
+                created_at: new Date().toISOString(),
+              },
+            ],
+          }),
+        });
+      } else if (url.includes("/odontograms")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            odontograms: [
+              {
+                id: "odo-1",
+                patient_id: "pat-1",
+                type: "CURRENT",
+                version: 2,
+                updated_at: new Date().toISOString(),
+                teeth_data: {
+                  "16": {
+                    tooth_number: 16,
+                    general_status: "endodontics",
+                    surfaces: { occlusal: "caries", mesial: "healthy", distal: "healthy", vestibular: "healthy", lingual: "healthy" },
+                  },
+                },
+              },
+            ],
+          }),
+        });
+      } else if (url.includes("/invoices")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ invoices: [] }),
+        });
+      } else if (url.includes("/pat-1")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            patient: {
+              id: "pat-1",
+              first_name: "Marta",
+              last_name: "Rius",
+              birth_date: "1988-05-14",
+              phone: "600112233",
+              email: "marta@example.com",
+              whatsapp_opt_in: true,
+              high_risk: true,
+              medical_alerts: {
+                high_risk: true,
+                requires_antibiotic_prophylaxis: true,
+                allergies: [{ name: "Penicilina" }],
+              },
+            },
+          }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            patients: [
+              { id: "pat-1", first_name: "Marta", last_name: "Rius", birth_date: "1988-05-14", phone: "600112233", high_risk: true },
+            ],
+            total: 1,
+          }),
+        });
+      }
+    });
+
+    // 1. Go to single-page Agenda
+    await page.goto("/agenda");
+    await expect(page.locator("span", { hasText: "Box 1 Cirugía" }).first()).toBeVisible();
+    await expect(page.getByText("Marta Rius").first()).toBeVisible();
+
+    // 2. Click on the appointment to unfold inline contextual navigation options inside the Agenda
+    await page.getByText("Marta Rius").first().click();
+    const openChartBtn = page.getByRole("link", { name: /Abrir ficha clínica/i }).first();
+    await expect(openChartBtn).toBeVisible();
+
+    // 3. Navigate directly from Agenda into the Patient Chart
+    await openChartBtn.click();
+    await expect(page).toHaveURL(/\/patients\/pat-1/);
+
+    // 4. Verify the FIRST view immediately shows BOTH Odontogram and Clinical History without switching tabs or scrolling
+    await expect(page.getByRole("button", { name: /Guardar odontograma/i })).toBeVisible();
+    await expect(page.getByText("[Pieza 16] Apertura cameral y conductometría")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Firmar y guardar/i })).toBeVisible();
+  });
 });

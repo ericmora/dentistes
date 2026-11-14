@@ -116,6 +116,17 @@ func (s *Server) Router() http.Handler {
 						r.With(s.requirePermission("clinical:read")).Get("/{id}/odontograms", s.handleListOdontograms)
 						r.With(s.requirePermission("clinical:write")).Put("/{id}/odontograms/{type}", s.handleUpsertOdontogram)
 					})
+
+					r.Group(func(r chi.Router) {
+						r.Use(s.requireFeature("billing_pdf"))
+						r.With(s.requirePermission("billing:read")).Get("/{id}/invoices", s.handleListPatientInvoices)
+						r.With(s.requirePermission("billing:write")).Post("/{id}/invoices", s.handleCreatePatientInvoice)
+					})
+				})
+
+				r.Route("/invoices", func(r chi.Router) {
+					r.Use(s.requireFeature("billing_pdf"))
+					r.With(s.requirePermission("billing:write")).Post("/{id}/payments", s.handleRecordInvoicePayment)
 				})
 
 				r.Route("/users", func(r chi.Router) {

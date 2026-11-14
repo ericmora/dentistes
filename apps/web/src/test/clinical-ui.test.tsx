@@ -1,7 +1,15 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
-import { AppointmentCard, MultiCabinetTimeline, ToothAnatomicalViewer, ToothDetailHistoryPanel } from "@dentistes/ui";
+import {
+  AppointmentCard,
+  ClinicalHistoryTimeline,
+  CriticalAlertBanner,
+  MultiCabinetTimeline,
+  OdontogramGrid,
+  ToothAnatomicalViewer,
+  ToothDetailHistoryPanel,
+} from "@dentistes/ui";
 
 describe("Agenda UI Components", () => {
   it("renders AppointmentCard with patient, doctor, and treatment info", () => {
@@ -84,6 +92,35 @@ describe("Agenda UI Components", () => {
       expect(handleSelectSlot).toHaveBeenCalledWith("cab-1", "10:30");
     }
   });
+
+  it("supports compact single-page mode in MultiCabinetTimeline with reduced slotHeight", () => {
+    const cabinets = [{ id: "cab-1", name: "Box 1", colorCode: "#0D9488" }];
+    const slots = ["09:00", "09:30", "10:00"];
+    const appointmentsByCabinet = {
+      "cab-1": [
+        {
+          id: "appt-60m",
+          patientName: "Marta Rius",
+          doctorName: "Dr. Gómez",
+          treatmentType: "Cirugía Implante",
+          startTime: "09:00",
+          endTime: "10:00",
+          status: "CONFIRMED" as const,
+        },
+      ],
+    };
+
+    render(
+      <MultiCabinetTimeline
+        cabinets={cabinets}
+        slots={slots}
+        appointmentsByCabinet={appointmentsByCabinet}
+      />,
+    );
+
+    const martaCard = screen.getByText("Marta Rius").closest("div[style*='position: absolute']");
+    expect(martaCard).toHaveStyle({ height: "130px" }); // 2 slots * 68 - 6
+  });
 });
 
 describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {
@@ -156,5 +193,61 @@ describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {
     expect(screen.getByText("Historial de la pieza 21")).toBeInTheDocument();
     expect(screen.getByText("Obturación oclusal con composite fotopolimerizable")).toBeInTheDocument();
     expect(screen.getByText("Visor Anatómico Multi-Ángulo")).toBeInTheDocument();
+  });
+
+  it("renders OdontogramGrid in compact single-screen mode with single-row tool bar", () => {
+    const handleSelectTooth = vi.fn();
+    render(
+      <OdontogramGrid
+        teeth={{}}
+        selectedTooth={16}
+        onSelectTooth={handleSelectTooth}
+        historyCounts={{ 16: 2 }}
+      />,
+    );
+
+    // Both arches are rendered in compact mode
+    expect(screen.getByText("18")).toBeInTheDocument();
+    expect(screen.getByText("16")).toBeInTheDocument();
+    expect(screen.getByText("48")).toBeInTheDocument();
+  });
+
+  it("renders compact CriticalAlertBanner and interactive tooth chips in ClinicalHistoryTimeline", () => {
+    const handleSelectTooth = vi.fn();
+
+    render(
+      <div>
+        <CriticalAlertBanner
+          compact={true}
+          alerts={{
+            high_risk: true,
+            requires_antibiotic_prophylaxis: true,
+            allergies: [{ name: "Penicilina" }],
+          }}
+        />
+        <ClinicalHistoryTimeline
+          compact={true}
+          selectedTooth={16}
+          onSelectTooth={handleSelectTooth}
+          entries={[
+            {
+              id: "e-1",
+              entryType: "PROCEDURE",
+              content: "[Pieza 16] Obturación MOD con composite",
+              doctorName: "Dr. Martí",
+              createdAt: "13/11/2026",
+            },
+          ]}
+        />
+      </div>,
+    );
+
+    expect(screen.getByText(/Alergias: Penicilina/i)).toBeInTheDocument();
+    expect(screen.getByText(/Profilaxis ATB/i)).toBeInTheDocument();
+
+    const toothChip = screen.getByRole("button", { name: "Pieza 16" });
+    expect(toothChip).toBeInTheDocument();
+    fireEvent.click(toothChip);
+    expect(handleSelectTooth).toHaveBeenCalledWith(16);
   });
 });

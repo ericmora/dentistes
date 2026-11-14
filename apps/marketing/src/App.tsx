@@ -6,6 +6,7 @@ import { getRouteMeta, parsePath, useSeo, type Page } from "./lib/seo";
 import { useSmoothScroll } from "./lib/motion";
 import { BlogIndex } from "./pages/BlogIndex";
 import { BlogPost } from "./pages/BlogPost";
+import { CampaignLanding } from "./pages/CampaignLanding";
 import { Landing } from "./pages/Landing";
 import { Legal } from "./pages/Legal";
 import { NotFound } from "./pages/NotFound";
@@ -31,6 +32,7 @@ export function App({ page }: { page?: Page }) {
       <Header lang={current.lang} copy={copy} page={current} />
       <main id="contingut">
         {current.kind === "home" ? <Landing lang={current.lang} copy={copy} /> : null}
+        {current.kind === "landing" ? <CampaignLanding landing={current.landing} lang={current.lang} copy={copy} /> : null}
         {current.kind === "blog" ? <BlogIndex lang={current.lang} copy={copy} /> : null}
         {current.kind === "post" ? <BlogPost post={current.post} lang={current.lang} copy={copy} /> : null}
         {current.kind === "legal" ? <Legal doc={current.doc} lang={current.lang} copy={copy} /> : null}

@@ -475,4 +475,92 @@ describe("Dentistes SDK Unit Tests", () => {
     const del = await client.deleteTreatment("trt_2");
     assert.equal(del.ok, true);
   });
+
+  test("DentistesClient patient invoices and payments APIs", async () => {
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.includes("/v1/patients/pat_1/invoices") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            invoices: [
+              {
+                id: "inv_1",
+                patient_id: "pat_1",
+                series: "FAC",
+                invoice_number: 101,
+                total_amount: 150.0,
+                paid_amount: 0.0,
+                status: "ISSUED",
+                verification_hash: "hash123",
+                items: [{ id: "1", description: "Obturación", quantity: 1, unit_price_cents: 6000, tax_rate_percent: 0 }],
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/v1/patients/pat_1/invoices") && method === "POST") {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            invoice: {
+              id: "inv_2",
+              patient_id: "pat_1",
+              series: body.series || "FAC",
+              invoice_number: 102,
+              total_amount: 60.0,
+              paid_amount: 0.0,
+              status: "ISSUED",
+              verification_hash: "hash456",
+              items: body.items,
+            },
+          }),
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/v1/invoices/inv_2/payments") && method === "POST") {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            payment: {
+              id: "pay_1",
+              invoice_id: "inv_2",
+              amount: body.amount,
+              payment_method: body.payment_method,
+              created_at: new Date().toISOString(),
+            },
+          }),
+          { status: 201 }
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "auth-token",
+      fetch: mockFetch,
+    });
+
+    const list = await client.listPatientInvoices("pat_1");
+    assert.equal(list.invoices.length, 1);
+    assert.equal(list.invoices[0].invoice_number, 101);
+
+    const created = await client.createPatientInvoice("pat_1", {
+      items: [{ id: "item_1", description: "Empaste pieza 16", tooth_number: "16", quantity: 1, unit_price_cents: 6000, tax_rate_percent: 0 }],
+    });
+    assert.equal(created.invoice.invoice_number, 102);
+
+    const payment = await client.recordInvoicePayment("inv_2", {
+      amount: 60.0,
+      payment_method: "CARD",
+    });
+    assert.equal(payment.payment.amount, 60.0);
+    assert.equal(payment.payment.payment_method, "CARD");
+  });
 });

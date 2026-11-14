@@ -18,7 +18,11 @@ export type IconName =
   | "alert"
   | "globe"
   | "quote"
-  | "plus";
+  | "plus"
+  | "play"
+  | "pause"
+  | "volume"
+  | "mute";
 
 const paths: Record<IconName, ReactNode> = {
   arrow: <path d="M5 12h14m-5-5 5 5-5 5" />,
@@ -76,6 +80,25 @@ const paths: Record<IconName, ReactNode> = {
   ),
   quote: <path d="M9 7H5v5h4v5H5m14-10h-4v5h4v5h-4" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  play: <path d="m7 5 12 7-12 7V5Z" fill="currentColor" />,
+  pause: (
+    <>
+      <rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" />
+      <rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" />
+    </>
+  ),
+  volume: (
+    <>
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+    </>
+  ),
+  mute: (
+    <>
+      <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+      <path d="m21 9-6 6M15 9l6 6" />
+    </>
+  ),
 };
 
 export function Icon({

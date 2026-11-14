@@ -1,10 +1,17 @@
 import type { Copy } from "../content/copy";
+import { LANDINGS, landingPath } from "../content/landings";
 import type { Lang } from "../content/languages";
 import { APP, signupUrl } from "../content/site";
 import { blogFeedPath, blogPath, homePath, legalPath, type Page } from "../lib/seo";
 import { Icon } from "./Icon";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Logo } from "./Logo";
+
+const SOLUTIONS_TITLE: Record<Lang, string> = {
+  ca: "Solucions",
+  es: "Soluciones",
+  en: "Solutions",
+};
 
 export function Footer({
   lang,
@@ -25,6 +32,13 @@ export function Footer({
         { label: copy.nav.pricing, href: `${home}#pricing` },
         { label: copy.nav.security, href: `${home}#security` },
       ],
+    },
+    {
+      title: SOLUTIONS_TITLE[lang],
+      links: LANDINGS.map((landing) => ({
+        label: landing.keyword[lang],
+        href: landingPath(lang, landing),
+      })),
     },
     {
       title: copy.footer.resources,
@@ -48,7 +62,7 @@ export function Footer({
   return (
     <footer className="border-t border-line bg-paper">
       <div className="shell py-14 sm:py-20">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1.4fr_repeat(3,1fr)]">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-[1.2fr_repeat(4,1fr)]">
           <div>
             <Logo />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-pine-600">{copy.footer.tagline}</p>

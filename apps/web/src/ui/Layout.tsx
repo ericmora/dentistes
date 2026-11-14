@@ -92,36 +92,36 @@ export function Layout({ children }: { children: ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50/70 antialiased selection:bg-brand-100 selection:text-brand-900">
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.03)]">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+    <div className="min-h-screen bg-slate-50/80 antialiased selection:bg-brand-100 selection:text-brand-900">
+      {/* Compact Clinical Command Bar Header */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/90 bg-white/95 backdrop-blur-md shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+        <div className="mx-auto flex h-12 max-w-[1600px] items-center justify-between gap-3 px-3 sm:px-5">
           {/* Left: Brand logo & Clinic Pill */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <Link
               to="/"
               className="flex items-center gap-2 rounded-lg transition-transform hover:scale-[1.01] active:scale-[0.99]"
               title="Dentistes — Inicio"
             >
-              <BrandLogo size="md" />
+              <BrandLogo size="sm" />
             </Link>
 
-            <div className="hidden h-5 w-px bg-slate-200 md:block" />
+            <div className="hidden h-4 w-px bg-slate-200 md:block" />
 
-            <div className="hidden items-center gap-2 rounded-full border border-slate-200/90 bg-slate-50/90 px-3 py-1 text-xs font-medium text-slate-700 shadow-2xs md:flex">
-              <Building2 className="h-3.5 w-3.5 text-brand-700 shrink-0" />
-              <span className="max-w-[140px] truncate font-semibold text-slate-800">
+            <div className="hidden items-center gap-1.5 rounded-full border border-slate-200/90 bg-slate-50/90 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 shadow-2xs md:flex">
+              <Building2 className="h-3 w-3 text-brand-700 shrink-0" />
+              <span className="max-w-[150px] truncate font-semibold text-slate-800">
                 {me.active_tenant.name}
               </span>
-              <span className="relative flex h-2 w-2 shrink-0">
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
               </span>
             </div>
           </div>
 
           {/* Center: Desktop Segmented Pill Dock Navigation */}
-          <nav className="hidden items-center rounded-xl border border-slate-200/80 bg-slate-100/70 p-1 md:flex shadow-2xs">
+          <nav className="hidden items-center rounded-lg border border-slate-200/80 bg-slate-100/80 p-0.5 md:flex shadow-2xs">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -131,9 +131,9 @@ export function Layout({ children }: { children: ReactNode }) {
                   end={item.to === "/"}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-150",
+                      "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all duration-150",
                       isActive
-                        ? "bg-white text-brand-950 font-semibold shadow-xs ring-1 ring-slate-900/5"
+                        ? "bg-white text-brand-950 font-semibold shadow-2xs ring-1 ring-slate-900/5"
                         : "text-slate-600 hover:text-slate-900 hover:bg-white/60",
                     )
                   }
@@ -146,9 +146,9 @@ export function Layout({ children }: { children: ReactNode }) {
           </nav>
 
           {/* Right: Quick Action & User Profile Dropdown */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2">
             <Link to="/agenda">
-              <Button size="sm" className="hidden sm:inline-flex items-center gap-1.5 shadow-xs">
+              <Button size="sm" className="hidden sm:inline-flex min-h-[30px] items-center gap-1 px-2.5 py-1 text-xs shadow-2xs">
                 <Plus className="h-3.5 w-3.5" />
                 <span>Nueva cita</span>
               </Button>
@@ -165,20 +165,20 @@ export function Layout({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   aria-label="Menú de usuario"
-                  className="flex items-center gap-2 rounded-full border border-slate-200/90 bg-white p-1 pl-1 pr-2.5 text-left transition hover:border-slate-300 hover:bg-slate-50 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  className="flex items-center gap-1.5 rounded-full border border-slate-200/90 bg-white p-0.5 pl-1 pr-2 text-left transition hover:border-slate-300 hover:bg-slate-50 shadow-2xs focus:outline-none focus:ring-2 focus:ring-brand-500/20"
                 >
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-[#0F3F34] to-teal-600 text-[11px] font-bold text-white shadow-xs">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-[#0F3F34] to-teal-600 text-[10px] font-bold text-white shadow-2xs">
                     {initials}
                   </span>
                   <div className="hidden text-left sm:block">
-                    <p className="max-w-[120px] truncate text-xs font-semibold leading-tight text-slate-800">
+                    <p className="max-w-[110px] truncate text-[11px] font-semibold leading-tight text-slate-800">
                       {me.user.full_name}
                     </p>
-                    <p className="text-[10px] font-medium leading-tight text-brand-700">
+                    <p className="text-[9px] font-medium leading-tight text-brand-700">
                       {roleLabel}
                     </p>
                   </div>
-                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                  <ChevronDown className="h-3 w-3 text-slate-400" />
                 </button>
               }
               items={userMenuItems}
@@ -187,8 +187,8 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      {/* Main Content Viewport */}
-      <main className="mx-auto max-w-7xl px-4 py-8 pb-24 sm:px-6 md:pb-12">{children}</main>
+      {/* Main Content Viewport: High-density wide clinical container */}
+      <main className="mx-auto max-w-[1600px] px-3 py-3 pb-20 sm:px-5 md:pb-4">{children}</main>
 
       {/* Mobile Bottom Navigation Bar */}
       <nav

@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Palette,
   Phone,
+  Plus,
   QrCode,
   ShieldAlert,
   Sparkles,
@@ -44,10 +45,12 @@ export function CriticalAlertBanner({
   alerts,
   summaryText,
   hideDetails = false,
+  compact = false,
 }: {
   alerts?: MedicalAlertsData | null;
   summaryText?: string;
   hideDetails?: boolean;
+  compact?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const allergies = alerts?.allergies ?? [];
@@ -61,6 +64,76 @@ export function CriticalAlertBanner({
     Boolean(summaryText);
 
   if (!hasAlerts) return null;
+
+  if (compact) {
+    return (
+      <div
+        role="region"
+        aria-label="Alertas médicas críticas"
+        className="rounded-lg border border-critical/80 bg-red-50/95 px-3 py-1.5 text-red-950 shadow-2xs"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 rounded bg-critical px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              <ShieldAlert className="h-3 w-3" />
+              Alerta médica
+            </span>
+            <span className="font-semibold text-red-900">
+              {summaryText ||
+                (hideDetails
+                  ? "Paciente con alerta médica crítica."
+                  : [
+                      allergies.length > 0
+                        ? `Alergias: ${allergies.map((a) => (typeof a === "string" ? a : a.name)).join(", ")}`
+                        : null,
+                      conditions.length > 0
+                        ? `Patologías: ${conditions.map((c) => (typeof c === "string" ? c : c.name)).join(", ")}`
+                        : null,
+                      medications.length > 0
+                        ? `Medicación: ${medications.map((m) => (typeof m === "string" ? m : m.name)).join(", ")}`
+                        : null,
+                      alerts?.requires_antibiotic_prophylaxis ? "Profilaxis ATB" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Riesgo clínico alto")}
+            </span>
+          </div>
+          {!hideDetails && (allergies.length > 0 || conditions.length > 0 || medications.length > 0 || alerts?.notes) ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="inline-flex items-center gap-1 rounded border border-red-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-red-800 hover:bg-red-100"
+            >
+              {expanded ? "Ocultar" : "Detalle"}
+              {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            </button>
+          ) : null}
+        </div>
+        {expanded && !hideDetails ? (
+          <div className="mt-1.5 grid gap-2 border-t border-red-200/80 pt-1.5 text-[11px] sm:grid-cols-3">
+            {allergies.length > 0 ? (
+              <div>
+                <span className="font-bold text-red-800">Alergias: </span>
+                {allergies.map((a) => (typeof a === "string" ? a : a.name)).join(", ")}
+              </div>
+            ) : null}
+            {conditions.length > 0 ? (
+              <div>
+                <span className="font-bold text-red-800">Antecedentes: </span>
+                {conditions.map((c) => (typeof c === "string" ? c : c.name)).join(", ")}
+              </div>
+            ) : null}
+            {medications.length > 0 ? (
+              <div>
+                <span className="font-bold text-red-800">Medicación: </span>
+                {medications.map((m) => (typeof m === "string" ? m : m.name)).join(", ")}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -249,6 +322,7 @@ export function ToothSurfaceRenderer({
   tooth,
   selected,
   isUpper = true,
+  compact = false,
   historyCount,
   onSelectSurface,
   onSelectTooth,
@@ -256,6 +330,7 @@ export function ToothSurfaceRenderer({
   tooth: ToothState;
   selected?: boolean;
   isUpper?: boolean;
+  compact?: boolean;
   historyCount?: number;
   onSelectSurface?: (toothNumber: number, surface: ToothSurfaceName) => void;
   onSelectTooth?: (toothNumber: number) => void;
@@ -282,9 +357,10 @@ export function ToothSurfaceRenderer({
     <div
       onClick={() => onSelectTooth?.(tooth.tooth_number)}
       className={cn(
-        "group flex flex-col items-center rounded-xl border p-1.5 transition-all select-none cursor-pointer",
+        "group flex flex-col items-center border transition-all select-none cursor-pointer",
+        compact ? "rounded-lg p-0.5 sm:p-1" : "rounded-xl p-1.5",
         selected
-          ? "border-brand-600 bg-brand-50/80 ring-2 ring-brand-400 shadow-sm"
+          ? "border-brand-600 bg-brand-50/90 ring-2 ring-brand-500 shadow-xs"
           : "border-slate-200/90 bg-white hover:border-brand-400 hover:bg-slate-50/80 shadow-2xs",
         isMissing && "opacity-50",
       )}
@@ -298,8 +374,9 @@ export function ToothSurfaceRenderer({
             onSelectTooth?.(tooth.tooth_number);
           }}
           className={cn(
-            "mb-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular-nums transition",
-            selected ? "bg-brand-600 text-white shadow-xs" : "text-slate-700 hover:bg-slate-100",
+            "flex items-center justify-center gap-0.5 rounded font-bold tabular-nums transition",
+            compact ? "mb-0.5 px-1 py-0 text-[10px]" : "mb-1 rounded-md px-1.5 py-0.5 text-[11px] gap-1",
+            selected ? "bg-brand-600 text-white shadow-2xs" : "text-slate-700 hover:bg-slate-100",
           )}
           title={`${tooth.tooth_number} · ${info.name}`}
         >
@@ -307,7 +384,8 @@ export function ToothSurfaceRenderer({
           {typeof historyCount === "number" && historyCount > 0 ? (
             <span
               className={cn(
-                "flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-extrabold",
+                "flex items-center justify-center rounded-full font-extrabold",
+                compact ? "h-3 w-3 text-[8px]" : "h-3.5 w-3.5 text-[9px]",
                 selected ? "bg-white text-brand-700" : "bg-brand-600 text-white",
               )}
               title={`${historyCount} evoluciones registradas para esta pieza`}
@@ -321,7 +399,10 @@ export function ToothSurfaceRenderer({
       {/* SVG Canvas (60 x 78): Crown Surface + Anatomical Roots */}
       <svg
         viewBox="0 0 60 78"
-        className="h-14 w-11 sm:h-16 sm:w-12 touch-manipulation transition-transform group-hover:scale-[1.02]"
+        className={cn(
+          "touch-manipulation transition-transform group-hover:scale-[1.02]",
+          compact ? "h-10 w-8 sm:h-11 sm:w-9 xl:h-12 xl:w-9" : "h-14 w-11 sm:h-16 sm:w-12",
+        )}
         role="img"
         aria-label={`Pieza ${tooth.tooth_number} - ${info.name}`}
       >
@@ -668,8 +749,9 @@ export function ToothSurfaceRenderer({
             onSelectTooth?.(tooth.tooth_number);
           }}
           className={cn(
-            "mt-1 flex items-center justify-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular-nums transition",
-            selected ? "bg-brand-600 text-white shadow-xs" : "text-slate-700 hover:bg-slate-100",
+            "flex items-center justify-center gap-0.5 rounded font-bold tabular-nums transition",
+            compact ? "mt-0.5 px-1 py-0 text-[10px]" : "mt-1 rounded-md px-1.5 py-0.5 text-[11px] gap-1",
+            selected ? "bg-brand-600 text-white shadow-2xs" : "text-slate-700 hover:bg-slate-100",
           )}
           title={`${tooth.tooth_number} · ${info.name}`}
         >
@@ -677,7 +759,8 @@ export function ToothSurfaceRenderer({
           {typeof historyCount === "number" && historyCount > 0 ? (
             <span
               className={cn(
-                "flex h-3.5 w-3.5 items-center justify-center rounded-full text-[9px] font-extrabold",
+                "flex items-center justify-center rounded-full font-extrabold",
+                compact ? "h-3 w-3 text-[8px]" : "h-3.5 w-3.5 text-[9px]",
                 selected ? "bg-white text-brand-700" : "bg-brand-600 text-white",
               )}
               title={`${historyCount} evoluciones registradas para esta pieza`}
@@ -728,6 +811,7 @@ export function OdontogramGrid({
   selectedTooth,
   onSelectTooth,
   historyCounts,
+  compact = false,
 }: {
   teeth: Record<number, ToothState>;
   dentition?: "adult" | "child";
@@ -739,25 +823,26 @@ export function OdontogramGrid({
   selectedTooth?: number;
   onSelectTooth?: (toothNumber: number) => void;
   historyCounts?: Record<number, number>;
+  compact?: boolean;
 }) {
   const upperRight = dentition === "adult" ? ADULT_UPPER_RIGHT : CHILD_UPPER_RIGHT;
   const upperLeft = dentition === "adult" ? ADULT_UPPER_LEFT : CHILD_UPPER_LEFT;
   const lowerRight = dentition === "adult" ? ADULT_LOWER_RIGHT : CHILD_LOWER_RIGHT;
   const lowerLeft = dentition === "adult" ? ADULT_LOWER_LEFT : CHILD_LOWER_LEFT;
 
-  const surfaceTools: Array<{ key: OdontogramActiveTool; label: string; dot: string }> = [
-    { key: "caries", label: "Caries / Patología", dot: "bg-red-600" },
-    { key: "restored", label: "Obturación / Empaste", dot: "bg-blue-600" },
-    { key: "planned", label: "Tratamiento planificado", dot: "bg-emerald-600" },
-    { key: "healthy", label: "Superficie sana", dot: "border border-slate-300 bg-white" },
+  const surfaceTools: Array<{ key: OdontogramActiveTool; label: string; shortLabel: string; dot: string }> = [
+    { key: "caries", label: "Caries / Patología", shortLabel: "Caries", dot: "bg-red-600" },
+    { key: "restored", label: "Obturación / Empaste", shortLabel: "Obturado", dot: "bg-blue-600" },
+    { key: "planned", label: "Tratamiento planificado", shortLabel: "Planificado", dot: "bg-emerald-600" },
+    { key: "healthy", label: "Superficie sana", shortLabel: "Sano", dot: "border border-slate-300 bg-white" },
   ];
 
-  const generalTools: Array<{ key: OdontogramActiveTool; label: string; badge: string; status: NonNullable<ToothState["general_status"]> }> = [
-    { key: "endodontics", label: "Endodoncia", badge: "border-red-500 text-red-700 bg-red-50", status: "endodontics" },
-    { key: "crown", label: "Corona / Funda", badge: "border-amber-500 text-amber-700 bg-amber-50", status: "crown" },
-    { key: "implant", label: "Implante", badge: "border-slate-700 text-slate-800 bg-slate-100", status: "implant" },
-    { key: "general_missing", label: "Pieza ausente", badge: "border-slate-500 text-slate-700 bg-slate-50", status: "missing" },
-    { key: "general_present", label: "Diente normal", badge: "border-slate-300 text-slate-600 bg-white", status: "present" },
+  const generalTools: Array<{ key: OdontogramActiveTool; label: string; shortLabel: string; badge: string; status: NonNullable<ToothState["general_status"]> }> = [
+    { key: "endodontics", label: "Endodoncia", shortLabel: "Endo", badge: "border-red-500 text-red-700 bg-red-50", status: "endodontics" },
+    { key: "crown", label: "Corona / Funda", shortLabel: "Corona", badge: "border-amber-500 text-amber-700 bg-amber-50", status: "crown" },
+    { key: "implant", label: "Implante", shortLabel: "Implante", badge: "border-slate-700 text-slate-800 bg-slate-100", status: "implant" },
+    { key: "general_missing", label: "Pieza ausente", shortLabel: "Ausente", badge: "border-slate-500 text-slate-700 bg-slate-50", status: "missing" },
+    { key: "general_present", label: "Diente normal", shortLabel: "Normal", badge: "border-slate-300 text-slate-600 bg-white", status: "present" },
   ];
 
   function handleToothClick(num: number) {
@@ -771,13 +856,11 @@ export function OdontogramGrid({
   function handleSurfaceClick(toothNum: number, surface: ToothSurfaceName) {
     onSelectTooth?.(toothNum);
     const state = teeth[toothNum] ?? emptyTooth(toothNum);
-    // If active tool is a surface tool
     if (activeTool === "caries" || activeTool === "restored" || activeTool === "planned" || activeTool === "healthy") {
       const current = state.surfaces[surface];
       const next = current === activeTool ? "healthy" : activeTool;
       onToggleSurface?.(toothNum, surface, next);
     } else {
-      // If a general tool is selected, clicking any surface applies that general status to the tooth
       const tool = generalTools.find((g) => g.key === activeTool);
       if (tool && onSetGeneralStatus) {
         onSetGeneralStatus(toothNum, tool.status);
@@ -786,6 +869,159 @@ export function OdontogramGrid({
   }
 
   const activeToolMeta = surfaceTools.find((t) => t.key === activeTool) ?? generalTools.find((g) => g.key === activeTool);
+
+  if (compact) {
+    return (
+      <div className="space-y-2">
+        {/* Ultra-Compact Single-Row Clinical Tool Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-lg border border-slate-200 bg-slate-50/90 px-2.5 py-1.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className="mr-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Cara:</span>
+            {surfaceTools.map((tool) => (
+              <button
+                key={tool.key}
+                type="button"
+                onClick={() => onToolChange?.(tool.key)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition",
+                  activeTool === tool.key
+                    ? "border-brand-600 bg-brand-600 text-white font-semibold shadow-2xs"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100",
+                )}
+                title={tool.label}
+              >
+                <span className={cn("h-2 w-2 rounded-full ring-1 ring-white/40", tool.dot)} />
+                {tool.shortLabel}
+              </button>
+            ))}
+
+            <span className="mx-1 h-4 w-px bg-slate-200" />
+            <span className="mr-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Pieza:</span>
+            {generalTools.map((tool) => (
+              <button
+                key={tool.key}
+                type="button"
+                onClick={() => {
+                  onToolChange?.(tool.key);
+                  if (selectedTooth && onSetGeneralStatus) {
+                    onSetGeneralStatus(selectedTooth, tool.status);
+                  }
+                }}
+                className={cn(
+                  "inline-flex items-center rounded-md border px-2 py-1 text-[11px] font-medium transition",
+                  activeTool === tool.key
+                    ? "border-brand-600 bg-brand-600 text-white font-semibold shadow-2xs"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100",
+                )}
+                title={tool.label}
+              >
+                {tool.shortLabel}
+              </button>
+            ))}
+          </div>
+
+          <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
+            {(["adult", "child"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => onDentitionChange?.(mode)}
+                className={cn(
+                  "rounded px-2 py-0.5 text-[11px] font-medium transition",
+                  dentition === mode ? "bg-brand-600 text-white font-semibold" : "text-slate-600 hover:text-slate-900",
+                )}
+              >
+                {mode === "adult" ? "Adulto (32)" : "Infantil (20)"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Compact Anatomical Arches */}
+        <div className="space-y-1.5 overflow-x-auto">
+          {/* Upper Arch */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+              <span>Superior · C1 (Der.)</span>
+              <span className="text-slate-400">Maxilar ↑</span>
+              <span>C2 (Izq.)</span>
+            </div>
+            <div className="flex items-center justify-center gap-0.5 sm:gap-1">
+              <div className="flex gap-0.5 sm:gap-1">
+                {upperRight.map((num) => (
+                  <ToothSurfaceRenderer
+                    key={num}
+                    tooth={teeth[num] ?? emptyTooth(num)}
+                    selected={selectedTooth === num}
+                    isUpper={true}
+                    compact={true}
+                    historyCount={historyCounts?.[num]}
+                    onSelectTooth={handleToothClick}
+                    onSelectSurface={handleSurfaceClick}
+                  />
+                ))}
+              </div>
+              <div className="mx-0.5 h-14 w-0.5 rounded bg-brand-400/70" title="Línea media" />
+              <div className="flex gap-0.5 sm:gap-1">
+                {upperLeft.map((num) => (
+                  <ToothSurfaceRenderer
+                    key={num}
+                    tooth={teeth[num] ?? emptyTooth(num)}
+                    selected={selectedTooth === num}
+                    isUpper={true}
+                    compact={true}
+                    historyCount={historyCounts?.[num]}
+                    onSelectTooth={handleToothClick}
+                    onSelectSurface={handleSurfaceClick}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Lower Arch */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2">
+            <div className="flex items-center justify-center gap-0.5 sm:gap-1">
+              <div className="flex gap-0.5 sm:gap-1">
+                {lowerRight.map((num) => (
+                  <ToothSurfaceRenderer
+                    key={num}
+                    tooth={teeth[num] ?? emptyTooth(num)}
+                    selected={selectedTooth === num}
+                    isUpper={false}
+                    compact={true}
+                    historyCount={historyCounts?.[num]}
+                    onSelectTooth={handleToothClick}
+                    onSelectSurface={handleSurfaceClick}
+                  />
+                ))}
+              </div>
+              <div className="mx-0.5 h-14 w-0.5 rounded bg-brand-400/70" title="Línea media" />
+              <div className="flex gap-0.5 sm:gap-1">
+                {lowerLeft.map((num) => (
+                  <ToothSurfaceRenderer
+                    key={num}
+                    tooth={teeth[num] ?? emptyTooth(num)}
+                    selected={selectedTooth === num}
+                    isUpper={false}
+                    compact={true}
+                    historyCount={historyCounts?.[num]}
+                    onSelectTooth={handleToothClick}
+                    onSelectSurface={handleSurfaceClick}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-[10px] font-semibold text-slate-500">
+              <span>Inferior · C4 (Der.)</span>
+              <span className="text-slate-400">Mandíbula ↓</span>
+              <span>C3 (Izq.)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -1892,6 +2128,8 @@ export interface AppointmentCardData {
   endTime: string;
   status: AppointmentStatus;
   highRisk?: boolean;
+  isForced?: boolean;
+  notes?: string;
 }
 
 const TIMELINE_SLOT_HEIGHT = 68;
@@ -1904,6 +2142,12 @@ function parseTimelineMinutes(hhmmStr: string): number {
   return h * 60 + m;
 }
 
+function formatTimelineHHMM(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 function getTimelineDurationMinutes(start: string, end: string): number {
   const s = parseTimelineMinutes(start);
   const e = parseTimelineMinutes(end);
@@ -1913,19 +2157,23 @@ function getTimelineDurationMinutes(start: string, end: string): number {
 export function AppointmentCard({
   appointment,
   durationMinutes,
+  compactMode = false,
+  selected = false,
   onClick,
   draggable,
   onDragStart,
 }: {
   appointment: AppointmentCardData;
   durationMinutes?: number;
+  compactMode?: boolean;
+  selected?: boolean;
   onClick?: () => void;
   draggable?: boolean;
   onDragStart?: () => void;
 }) {
   const meta = APPOINTMENT_STATUS_META[appointment.status];
   const dur = durationMinutes ?? getTimelineDurationMinutes(appointment.startTime, appointment.endTime);
-  const isCompact = dur < 30;
+  const isCompact = dur < 30 || compactMode;
 
   if (isCompact) {
     return (
@@ -1938,19 +2186,35 @@ export function AppointmentCard({
           onDragStart?.();
         }}
         onClick={onClick}
-        title={`${appointment.patientName} · ${appointment.treatmentType} (${appointment.startTime}–${appointment.endTime})`}
+        title={`${appointment.patientName} · ${appointment.treatmentType} (${appointment.startTime}–${appointment.endTime}) · ${meta.label}${appointment.isForced ? " [SOBRECITA]" : ""}${appointment.notes ? ` · ${appointment.notes}` : ""}`}
         className={cn(
-          "w-full h-full rounded-md border border-slate-200 border-l-4 bg-white px-2 py-0.5 text-left shadow-2xs transition hover:shadow flex items-center justify-between gap-1 overflow-hidden",
-          meta.border,
+          "w-full h-full rounded-md border border-slate-200 border-l-4 bg-white px-2 py-0.5 text-left shadow-2xs transition hover:shadow flex items-center justify-between gap-1.5 overflow-hidden",
+          appointment.isForced ? "border-amber-400 bg-amber-50/70" : meta.border,
+          selected && "ring-2 ring-brand-600 border-brand-500 bg-brand-50/90 shadow-xs",
         )}
       >
         <div className="flex items-center gap-1.5 min-w-0">
+          {appointment.highRisk ? (
+            <AlertTriangle className="h-3 w-3 shrink-0 text-critical" aria-label="Alerta médica" />
+          ) : null}
           <p className="truncate text-xs font-bold text-slate-900">{appointment.patientName}</p>
-          <span className="truncate text-[10px] text-slate-500 hidden sm:inline">· {appointment.treatmentType}</span>
+          <span className="truncate text-[11px] font-medium text-slate-600 hidden sm:inline">
+            · {appointment.treatmentType}
+          </span>
         </div>
-        <span className="shrink-0 text-[10px] font-medium text-slate-500 tabular-nums">
-          {appointment.startTime}–{appointment.endTime}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {appointment.isForced ? (
+            <Badge tone="warning" className="px-1 py-0 text-[9px] bg-amber-100 text-amber-800 border-amber-300">
+              Sobrecita
+            </Badge>
+          ) : null}
+          <Badge tone={meta.tone} className="px-1.5 py-0 text-[10px]">
+            {meta.label}
+          </Badge>
+          <span className="text-[10px] font-medium text-slate-500 tabular-nums">
+            {appointment.startTime}–{appointment.endTime}
+          </span>
+        </div>
       </button>
     );
   }
@@ -1965,17 +2229,29 @@ export function AppointmentCard({
         onDragStart?.();
       }}
       onClick={onClick}
+      title={`${appointment.patientName} · ${appointment.treatmentType} (${appointment.startTime}–${appointment.endTime})${appointment.isForced ? " [SOBRECITA]" : ""}${appointment.notes ? ` · ${appointment.notes}` : ""}`}
       className={cn(
         "w-full h-full rounded-lg border border-slate-200 border-l-4 bg-white p-2 text-left shadow-sm transition hover:shadow flex flex-col justify-between overflow-hidden",
-        meta.border,
+        appointment.isForced ? "border-amber-400 bg-amber-50/50" : meta.border,
+        selected && "ring-2 ring-brand-600 border-brand-500 bg-brand-50/90",
       )}
     >
       <div>
         <div className="flex items-start justify-between gap-1">
           <p className="truncate text-sm font-semibold text-slate-900">{appointment.patientName}</p>
-          {appointment.highRisk ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-critical" aria-label="Alerta médica" /> : null}
+          <div className="flex items-center gap-1 shrink-0">
+            {appointment.isForced ? (
+              <Badge tone="warning" className="px-1.5 py-0 text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                Sobrecita
+              </Badge>
+            ) : null}
+            {appointment.highRisk ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-critical" aria-label="Alerta médica" /> : null}
+          </div>
         </div>
         <p className="truncate text-xs text-slate-600 mt-0.5">{appointment.treatmentType}</p>
+        {appointment.notes ? (
+          <p className="truncate text-[10px] italic text-slate-500 mt-0.5">{appointment.notes}</p>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500 pt-1">
         <span className="inline-flex items-center gap-1 tabular-nums font-medium">
@@ -1997,6 +2273,9 @@ export interface CabinetColumn {
 export function MultiCabinetTimeline({
   cabinets,
   slots,
+  slotHeight = TIMELINE_SLOT_HEIGHT,
+  selectedAppointmentId,
+  selectedSlot,
   appointmentsByCabinet,
   onSelectAppointment,
   onSelectSlot,
@@ -2004,43 +2283,81 @@ export function MultiCabinetTimeline({
 }: {
   cabinets: CabinetColumn[];
   slots: string[];
+  slotHeight?: number;
+  selectedAppointmentId?: string;
+  selectedSlot?: { cabinetId: string; slot: string } | null;
   appointmentsByCabinet: Record<string, AppointmentCardData[]>;
   onSelectAppointment?: (appointment: AppointmentCardData) => void;
-  onSelectSlot?: (cabinetId: string, slot: string) => void;
+  onSelectSlot?: (cabinetId: string, slot: string, suggestedDuration?: number) => void;
   onMoveAppointment?: (appointmentId: string, targetCabinetId: string, targetSlot: string) => void;
 }) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [hoverTarget, setHoverTarget] = useState<string | null>(null);
+  const isCompactTimeline = slotHeight < 50;
+  const pad = isCompactTimeline ? 4 : 6;
+  const minCardHeight = isCompactTimeline ? 18 : 28;
+  const timeColWidth = isCompactTimeline ? "64px" : "80px";
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <div className="min-w-[680px]">
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+      <div className="min-w-[560px]">
         {/* Header row with Cabinet names */}
         <div
-          className="grid border-b border-slate-200 bg-slate-50"
-          style={{ gridTemplateColumns: `80px repeat(${Math.max(1, cabinets.length)}, minmax(180px, 1fr))` }}
+          className="grid border-b border-slate-200 bg-slate-50/90 sticky top-0 z-20"
+          style={{ gridTemplateColumns: `${timeColWidth} repeat(${Math.max(1, cabinets.length)}, minmax(160px, 1fr))` }}
         >
-          <div className="px-3 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Hora</div>
-          {cabinets.map((cab) => (
-            <div key={cab.id} className="flex items-center gap-2 border-l border-slate-200 px-3 py-3 text-sm font-semibold text-slate-800">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: cab.colorCode ?? "#0D9488" }} />
-              {cab.name}
-            </div>
-          ))}
+          <div className={cn("font-semibold uppercase tracking-wide text-slate-500", isCompactTimeline ? "px-2.5 py-2 text-[11px]" : "px-3 py-3 text-xs")}>
+            Hora
+          </div>
+          {cabinets.map((cab) => {
+            const count = (appointmentsByCabinet[cab.id] ?? []).length;
+            return (
+              <div
+                key={cab.id}
+                className={cn(
+                  "flex items-center justify-between gap-2 border-l border-slate-200 font-semibold text-slate-800",
+                  isCompactTimeline ? "px-2.5 py-2 text-xs" : "px-3 py-3 text-sm",
+                )}
+              >
+                <span className="flex items-center gap-1.5 truncate">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cab.colorCode ?? "#0D9488" }} />
+                  <span className="truncate">{cab.name}</span>
+                </span>
+                <span className="rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-slate-600">
+                  {count}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* 30-min Slot Rows */}
         {slots.map((slot) => {
           const slotStart = parseTimelineMinutes(slot);
           const slotEnd = slotStart + 30;
+          const isHourMark = slot.endsWith(":00");
 
           return (
             <div
               key={slot}
-              className="grid border-b border-slate-100 last:border-b-0 h-[68px]"
-              style={{ gridTemplateColumns: `80px repeat(${Math.max(1, cabinets.length)}, minmax(180px, 1fr))` }}
+              className={cn(
+                "grid border-b last:border-b-0",
+                isHourMark ? "border-slate-100" : "border-slate-200/70",
+              )}
+              style={{
+                height: `${slotHeight}px`,
+                gridTemplateColumns: `${timeColWidth} repeat(${Math.max(1, cabinets.length)}, minmax(160px, 1fr))`,
+              }}
             >
-              <div className="px-3 py-3 text-xs font-medium tabular-nums text-slate-500 select-none">{slot}</div>
+              <div
+                className={cn(
+                  "tabular-nums select-none flex items-center",
+                  isCompactTimeline ? "px-2.5 text-[11px]" : "px-3 py-3 text-xs",
+                  isHourMark ? "font-semibold text-slate-700" : "font-normal text-slate-400",
+                )}
+              >
+                {slot}
+              </div>
               {cabinets.map((cab) => {
                 const cabAppts = appointmentsByCabinet[cab.id] ?? [];
 
@@ -2059,7 +2376,40 @@ export function MultiCabinetTimeline({
 
                 const cellKey = `${cab.id}-${slot}`;
                 const isDropHover = hoverTarget === cellKey;
+                const isSlotSelected = selectedSlot?.cabinetId === cab.id && selectedSlot?.slot === slot;
                 const isEmpty = starting.length === 0 && !isCoveredFromAbove;
+
+                // Compute gaps of >= 5 minutes in this slot [slotStart, slotEnd)
+                const isMinOccupied = (m: number) => {
+                  return cabAppts.some((a) => {
+                    const s = parseTimelineMinutes(a.startTime);
+                    const e = parseTimelineMinutes(a.endTime);
+                    return s <= m && e > m;
+                  });
+                };
+
+                const gaps: Array<{ start: number; duration: number }> = [];
+                let currentGapStart: number | null = null;
+                for (let m = slotStart; m < slotEnd; m++) {
+                  const occupied = isMinOccupied(m);
+                  if (!occupied && currentGapStart === null) {
+                    currentGapStart = m;
+                  } else if (occupied && currentGapStart !== null) {
+                    const dur = m - currentGapStart;
+                    if (dur >= 5) {
+                      gaps.push({ start: currentGapStart, duration: dur });
+                    }
+                    currentGapStart = null;
+                  }
+                }
+                if (currentGapStart !== null) {
+                  const dur = slotEnd - currentGapStart;
+                  if (dur >= 5) {
+                    gaps.push({ start: currentGapStart, duration: dur });
+                  }
+                }
+
+                const isConcurrent = starting.length > 1;
 
                 return (
                   <div
@@ -2083,20 +2433,67 @@ export function MultiCabinetTimeline({
                       setDraggedId(null);
                       if (id) onMoveAppointment(id, cab.id, slot);
                     }}
+                    style={{ height: `${slotHeight}px` }}
                     className={cn(
-                      "relative h-[68px] border-l border-slate-100 p-1 transition-colors",
-                      isEmpty && onSelectSlot && "cursor-pointer hover:bg-brand-50/40",
+                      "group/slot relative border-l border-slate-100 p-0.5 transition-colors",
+                      isEmpty && onSelectSlot && "cursor-pointer hover:bg-brand-50/50",
+                      isSlotSelected && "bg-brand-50 ring-2 ring-inset ring-brand-500",
                       isCoveredFromAbove && "bg-slate-50/20",
                       isDropHover && "bg-brand-100/60 ring-2 ring-inset ring-brand-400",
                     )}
                   >
+                    {isEmpty && onSelectSlot ? (
+                      <span className="pointer-events-none hidden group-hover/slot:inline-flex items-center gap-1 pl-1.5 text-[10px] font-medium text-brand-700">
+                        + Cita {slot}
+                      </span>
+                    ) : null}
+
+                    {/* Render available gaps inside partially filled slots to optimize idle time */}
+                    {!isEmpty && gaps.map((gap) => {
+                      const gapSlotStr = formatTimelineHHMM(gap.start);
+                      const minOffset = gap.start - slotStart;
+                      const topPx = Math.round(pad / 2) + Math.round((minOffset / 30) * (slotHeight - pad));
+                      const heightPx = Math.max(18, Math.round((gap.duration / 30) * (slotHeight - pad)));
+                      return (
+                        <button
+                          key={gapSlotStr}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectSlot?.(cab.id, gapSlotStr, gap.duration);
+                          }}
+                          style={{
+                            position: "absolute",
+                            top: `${topPx}px`,
+                            left: "3px",
+                            right: "3px",
+                            height: `${heightPx}px`,
+                            zIndex: 15,
+                          }}
+                          className="group/gap flex items-center justify-between rounded border border-dashed border-emerald-400 bg-emerald-50/90 px-1.5 py-0.5 text-left shadow-2xs hover:bg-emerald-100 hover:border-emerald-600 transition-colors"
+                          title={`Hueco disponible de ${gap.duration} min (${gapSlotStr}–${formatTimelineHHMM(gap.start + gap.duration)}). Clic para encajar cita.`}
+                        >
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-800">
+                            <Plus className="h-3 w-3 shrink-0 text-emerald-600" />
+                            <span className="truncate">Encajar {gapSlotStr}</span>
+                          </span>
+                          <span className="rounded bg-emerald-200/80 px-1 text-[9px] font-bold text-emerald-900 tabular-nums">
+                            {gap.duration}m
+                          </span>
+                        </button>
+                      );
+                    })}
+
                     {/* Render starting appointments with proportional height spanning across slots */}
-                    {starting.map((item) => {
+                    {starting.map((item, idx) => {
                       const durMin = getTimelineDurationMinutes(item.startTime, item.endTime);
                       const minOffset = Math.max(0, parseTimelineMinutes(item.startTime) - slotStart);
-                      const topPx = 3 + Math.round((minOffset / 30) * (TIMELINE_SLOT_HEIGHT - 6));
+                      const topPx = Math.round(pad / 2) + Math.round((minOffset / 30) * (slotHeight - pad));
                       const slotFraction = durMin / 30;
-                      const heightPx = Math.max(28, Math.round(slotFraction * TIMELINE_SLOT_HEIGHT - 6));
+                      const heightPx = Math.max(minCardHeight, Math.round(slotFraction * slotHeight - pad));
+
+                      const widthPct = isConcurrent ? Math.floor(100 / starting.length) : 100;
+                      const leftPct = isConcurrent ? idx * widthPct : 0;
 
                       return (
                         <div
@@ -2104,15 +2501,17 @@ export function MultiCabinetTimeline({
                           style={{
                             position: "absolute",
                             top: `${topPx}px`,
-                            left: "4px",
-                            right: "4px",
+                            left: isConcurrent ? `calc(${leftPct}% + 2px)` : "3px",
+                            width: isConcurrent ? `calc(${widthPct}% - 4px)` : "calc(100% - 6px)",
                             height: `${heightPx}px`,
-                            zIndex: 10,
+                            zIndex: selectedAppointmentId === item.id ? 25 : 10 + idx,
                           }}
                         >
                           <AppointmentCard
                             appointment={item}
                             durationMinutes={durMin}
+                            compactMode={isCompactTimeline}
+                            selected={selectedAppointmentId === item.id}
                             draggable={Boolean(onMoveAppointment)}
                             onDragStart={() => setDraggedId(item.id)}
                             onClick={() => onSelectAppointment?.(item)}
@@ -2195,7 +2594,17 @@ export interface ClinicalTimelineEntry {
   amendsEntryId?: string;
 }
 
-export function ClinicalHistoryTimeline({ entries }: { entries: ClinicalTimelineEntry[] }) {
+export function ClinicalHistoryTimeline({
+  entries,
+  compact = false,
+  selectedTooth,
+  onSelectTooth,
+}: {
+  entries: ClinicalTimelineEntry[];
+  compact?: boolean;
+  selectedTooth?: number;
+  onSelectTooth?: (toothNumber: number) => void;
+}) {
   const typeTone: Record<ClinicalTimelineEntry["entryType"], Tone> = {
     NOTE: "neutral",
     DIAGNOSIS: "warning",
@@ -2203,29 +2612,86 @@ export function ClinicalHistoryTimeline({ entries }: { entries: ClinicalTimeline
     PRESCRIPTION: "success",
   };
 
+  const typeLabel: Record<ClinicalTimelineEntry["entryType"], string> = {
+    NOTE: "Nota",
+    DIAGNOSIS: "Diagnóstico",
+    PROCEDURE: "Procedimiento",
+    PRESCRIPTION: "Prescripción",
+  };
+
+  function extractToothNumbers(text: string): number[] {
+    const found = new Set<number>();
+    const matches = text.match(/\b(?:pieza|diente|peça)?\s*#?([1-4][1-8]|[5-8][1-5])\b/gi);
+    if (matches) {
+      for (const m of matches) {
+        const numMatch = m.match(/([1-4][1-8]|[5-8][1-5])/);
+        if (numMatch) found.add(Number(numMatch[1]));
+      }
+    }
+    return Array.from(found);
+  }
+
   return (
-    <ol className="space-y-3">
-      {entries.map((entry) => (
-        <li key={entry.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Badge tone={typeTone[entry.entryType]}>{entry.entryType}</Badge>
-              {entry.amendsEntryId ? <Badge tone="warning">Addenda</Badge> : null}
-              <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                <Lock className="h-3 w-3" />
-                Inmutable
-              </span>
+    <ol className={compact ? "space-y-2" : "space-y-3"}>
+      {entries.map((entry) => {
+        const teethNums = extractToothNumbers(entry.content);
+        const matchesSelected = selectedTooth !== undefined && teethNums.includes(selectedTooth);
+
+        return (
+          <li
+            key={entry.id}
+            className={cn(
+              "rounded-lg border bg-white transition",
+              compact ? "p-2.5 shadow-2xs" : "rounded-xl p-4 shadow-sm",
+              matchesSelected
+                ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-400"
+                : "border-slate-200",
+            )}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge tone={typeTone[entry.entryType]} className={compact ? "px-1.5 py-0 text-[10px]" : undefined}>
+                  {compact ? typeLabel[entry.entryType] : entry.entryType}
+                </Badge>
+                {teethNums.map((tNum) => (
+                  <button
+                    key={tNum}
+                    type="button"
+                    onClick={() => onSelectTooth?.(tNum)}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition",
+                      selectedTooth === tNum
+                        ? "bg-brand-600 text-white"
+                        : "bg-slate-100 text-brand-800 hover:bg-brand-100",
+                    )}
+                    title={`Seleccionar pieza ${tNum} en el odontograma`}
+                  >
+                    Pieza {tNum}
+                  </button>
+                ))}
+                {entry.amendsEntryId ? (
+                  <Badge tone="warning" className={compact ? "px-1.5 py-0 text-[10px]" : undefined}>
+                    Addenda
+                  </Badge>
+                ) : null}
+                <span className="inline-flex items-center gap-0.5 text-[11px] text-slate-400">
+                  <Lock className="h-2.5 w-2.5" />
+                  Inmutable
+                </span>
+              </div>
+              <time className="text-[11px] tabular-nums text-slate-500">{entry.createdAt}</time>
             </div>
-            <time className="text-xs tabular-nums text-slate-500">{entry.createdAt}</time>
-          </div>
-          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-800">{entry.content}</p>
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
-            <UserCheck className="h-3.5 w-3.5" />
-            {entry.doctorName}
-            {entry.licenseNumber ? ` · Col. ${entry.licenseNumber}` : ""}
-          </p>
-        </li>
-      ))}
+            <p className={cn("whitespace-pre-wrap text-slate-800", compact ? "mt-1.5 text-xs leading-relaxed" : "mt-2 text-sm")}>
+              {entry.content}
+            </p>
+            <p className={cn("flex items-center gap-1 text-slate-500", compact ? "mt-1.5 text-[11px]" : "mt-3 text-xs")}>
+              <UserCheck className="h-3 w-3 text-brand-600" />
+              <span>{entry.doctorName}</span>
+              {entry.licenseNumber ? <span>· Col. {entry.licenseNumber}</span> : null}
+            </p>
+          </li>
+        );
+      })}
     </ol>
   );
 }

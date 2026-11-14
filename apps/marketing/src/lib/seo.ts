@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { COPY } from "../content/copy";
+import { LANDINGS, getLandingBySlug, landingPath, type CampaignLandingData } from "../content/landings";
 import { DEFAULT_LANG, LANGS, type Lang } from "../content/languages";
 import { POSTS, getPostBySlug, postPath, type Post } from "../content/posts";
 import { REGION_DATA, SITE } from "../content/site";
@@ -11,6 +12,7 @@ export type LegalDoc = "privacy" | "terms" | "cookies";
 export type Page =
   | { kind: "home"; lang: Lang }
   | { kind: "blog"; lang: Lang }
+  | { kind: "landing"; lang: Lang; landing: CampaignLandingData }
   | { kind: "post"; lang: Lang; post: Post }
   | { kind: "legal"; lang: Lang; doc: LegalDoc }
   | { kind: "notFound"; lang: Lang };
@@ -89,6 +91,8 @@ export function pageForLang(page: Page, lang: Lang): Page {
       return { kind: "home", lang };
     case "blog":
       return { kind: "blog", lang };
+    case "landing":
+      return { kind: "landing", lang, landing: page.landing };
     case "post":
       return { kind: "post", lang, post: page.post };
     case "legal":
@@ -104,6 +108,8 @@ export function pagePath(page: Page) {
       return homePath(page.lang);
     case "blog":
       return blogPath(page.lang);
+    case "landing":
+      return landingPath(page.lang, page.landing);
     case "post":
       return postPath(page.lang, page.post);
     case "legal":
@@ -142,6 +148,12 @@ export function parsePath(input: string): Page {
       (key) => LEGAL_SLUGS[lang][key] === legal[1],
     );
     if (doc) return { kind: "legal", lang, doc };
+  }
+
+  const candidateSlug = rest.replace(/^\//, "");
+  const campaignLanding = getLandingBySlug(lang, candidateSlug);
+  if (campaignLanding) {
+    return { kind: "landing", lang, landing: campaignLanding };
   }
 
   return { kind: "notFound", lang };
@@ -367,6 +379,30 @@ export function getRouteMeta(page: Page): RouteMeta {
     };
   }
 
+  if (page.kind === "landing") {
+    const landing = page.landing;
+    const path = landingPath(page.lang, landing);
+    return {
+      ...base,
+      path,
+      canonical: absoluteUrl(path),
+      title: `${landing.metaTitle[page.lang]}`,
+      description: landing.metaDescription[page.lang],
+      robots: "index,follow,max-image-preview:large",
+      ogType: "website",
+      jsonLd: [
+        organization(page.lang),
+        website(page.lang),
+        softwareApplication(page.lang),
+        breadcrumbs(page.lang, [
+          { name: HOME_LABEL[page.lang], path: homePath(page.lang) },
+          { name: landing.keyword[page.lang], path },
+        ]),
+        faqPage(page.lang, landing.faq[page.lang]),
+      ],
+    };
+  }
+
   if (page.kind === "legal") {
     const doc = copy.legal[page.doc];
     return {
@@ -544,6 +580,13 @@ export const ROUTES: RouteDefinition[] = LANGS.flatMap(({ id: lang }) => [
     changefreq: "weekly" as const,
     priority: "0.8",
   },
+  ...LANDINGS.map((landing) => ({
+    path: landingPath(lang, landing),
+    page: { kind: "landing", lang, landing } as Page,
+    lastmod: LAST_UPDATED,
+    changefreq: "weekly" as const,
+    priority: "0.9",
+  })),
   ...POSTS.map((post) => ({
     path: postPath(lang, post),
     page: { kind: "post", lang, post } as Page,

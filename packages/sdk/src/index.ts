@@ -206,6 +206,52 @@ export interface Cabinet {
   created_at: string;
 }
 
+export interface PatientInvoiceItem {
+  id: string;
+  description: string;
+  tooth_number?: string;
+  quantity: number;
+  unit_price_cents: number;
+  tax_rate_percent: number;
+}
+
+export interface PatientPayment {
+  id: string;
+  tenant_id?: string;
+  invoice_id: string;
+  amount: number;
+  payment_method: "CASH" | "CARD" | "TRANSFER" | "FINANCING";
+  transaction_reference?: string;
+  created_at: string;
+}
+
+export interface PatientInvoice {
+  id: string;
+  tenant_id?: string;
+  patient_id: string;
+  series: string;
+  invoice_number: number;
+  issue_date: string;
+  due_date?: string;
+  subtotal: number;
+  tax_amount: number;
+  total_amount: number;
+  paid_amount: number;
+  status: "DRAFT" | "ISSUED" | "PAID" | "PARTIAL" | "CANCELLED";
+  verification_hash: string;
+  items: PatientInvoiceItem[];
+  payments?: PatientPayment[];
+  created_at: string;
+}
+
+export interface CreatePatientInvoiceInput {
+  series?: string;
+  issue_date?: string;
+  due_date?: string;
+  status?: "DRAFT" | "ISSUED";
+  items: PatientInvoiceItem[];
+}
+
 export interface Doctor {
   id: string;
   full_name: string;
@@ -236,6 +282,8 @@ export interface Appointment {
   treatment_type: string;
   status: AppointmentStatus;
   cancellation_reason?: string;
+  is_forced?: boolean;
+  notes?: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -770,6 +818,21 @@ export class DentistesClient {
     return this.request(`/v1/patients/${patientId}/odontograms/${type}`, { method: "PUT", body: input });
   }
 
+  listPatientInvoices(patientId: string): Promise<{ invoices: PatientInvoice[] }> {
+    return this.request(`/v1/patients/${encodeURIComponent(patientId)}/invoices`);
+  }
+
+  createPatientInvoice(patientId: string, input: CreatePatientInvoiceInput): Promise<{ invoice: PatientInvoice }> {
+    return this.request(`/v1/patients/${encodeURIComponent(patientId)}/invoices`, { method: "POST", body: input });
+  }
+
+  recordInvoicePayment(
+    invoiceId: string,
+    input: { amount: number; payment_method: string; transaction_reference?: string },
+  ): Promise<{ payment: PatientPayment }> {
+    return this.request(`/v1/invoices/${encodeURIComponent(invoiceId)}/payments`, { method: "POST", body: input });
+  }
+
   listCabinets(): Promise<{ cabinets: Cabinet[] }> {
     return this.request("/v1/cabinets");
   }
@@ -839,6 +902,8 @@ export class DentistesClient {
     start_time: string;
     end_time: string;
     treatment_type: string;
+    is_forced?: boolean;
+    notes?: string;
   }): Promise<{ appointment: Appointment }> {
     return this.request("/v1/appointments", { method: "POST", body: input });
   }
@@ -851,6 +916,8 @@ export class DentistesClient {
       start_time: string;
       end_time: string;
       treatment_type: string;
+      is_forced?: boolean;
+      notes?: string;
       version?: number;
     },
   ): Promise<{ appointment: Appointment }> {

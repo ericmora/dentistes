@@ -10,6 +10,7 @@ import { ProductStack } from "../components/ProductStack";
 import { Receipt } from "../components/Receipt";
 import { Reveal } from "../components/Reveal";
 import { SecurityDiagram } from "../components/SecurityDiagram";
+import { VideoShowcase } from "../components/VideoShowcase";
 import { WhatsAppMockup } from "../components/WhatsAppMockup";
 
 function SectionHead({
@@ -114,6 +115,7 @@ export function Landing({ lang, copy }: { lang: Lang; copy: Copy }) {
                 <p className="mt-5 max-w-lg text-xs leading-relaxed text-pine-500">{copy.problem.footnote}</p>
               </div>
             </div>
+            <VideoShowcase lang={lang} variant="editorial" />
           </Reveal>
         </div>
       </section>

@@ -121,6 +121,8 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		StartTime     string `json:"start_time"`
 		EndTime       string `json:"end_time"`
 		TreatmentType string `json:"treatment_type"`
+		IsForced      bool   `json:"is_forced"`
+		Notes         string `json:"notes"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -151,6 +153,8 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		StartTime:     start,
 		EndTime:       end,
 		TreatmentType: req.TreatmentType,
+		IsForced:      req.IsForced,
+		Notes:         strings.TrimSpace(req.Notes),
 	})
 	if errors.Is(err, store.ErrOverlap) {
 		writeError(w, http.StatusConflict, "APPOINTMENT_OVERLAP", "cabinet already has an appointment in that time range", nil)
@@ -173,6 +177,8 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		StartTime     string `json:"start_time"`
 		EndTime       string `json:"end_time"`
 		TreatmentType string `json:"treatment_type"`
+		IsForced      bool   `json:"is_forced"`
+		Notes         string `json:"notes"`
 		Version       *int   `json:"version"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
@@ -211,6 +217,8 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		StartTime:     start,
 		EndTime:       end,
 		TreatmentType: req.TreatmentType,
+		IsForced:      req.IsForced,
+		Notes:         strings.TrimSpace(req.Notes),
 	}, req.Version)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "appointment not found", nil)
