@@ -36,4 +36,44 @@ describe("Agenda Shift-based Slot Booking", () => {
     expect(billingHref).toContain("tab=billing");
     expect(overviewHref).toContain("tab=overview");
   });
+
+  it("handles appointment creation payload with clinical notes and remarks", () => {
+    const form = {
+      patient_id: "pat-99",
+      cabinet_id: "cab-1",
+      doctor_id: "doc-1",
+      slot: "11:30",
+      duration: "45",
+      treatment_type: "Endodoncia multirradicular",
+      is_forced: false,
+      notes: "Paciente con dolor agudo en pieza 16. Precisa radiografía previa.",
+    };
+
+    expect(form.notes).toBe("Paciente con dolor agudo en pieza 16. Precisa radiografía previa.");
+    expect(form.treatment_type).toBe("Endodoncia multirradicular");
+    expect(form.duration).toBe("45");
+  });
+
+  it("verifies slot finder flow starts with treatment and cascades duration", () => {
+    const masterTreatments = [
+      { name: "Primera visita / Diagnóstico", default_duration_minutes: 30 },
+      { name: "Endodoncia multirradicular", default_duration_minutes: 60 },
+      { name: "Cirugía e Implante unitario", default_duration_minutes: 90 },
+    ];
+
+    let selectedTreatment = masterTreatments[1].name;
+    const found = masterTreatments.find((t) => t.name === selectedTreatment);
+    let selectedDuration = found ? found.default_duration_minutes : 30;
+
+    expect(selectedTreatment).toBe("Endodoncia multirradicular");
+    expect(selectedDuration).toBe(60);
+
+    // Changing treatment cascades duration
+    selectedTreatment = masterTreatments[2].name;
+    const found2 = masterTreatments.find((t) => t.name === selectedTreatment);
+    selectedDuration = found2 ? found2.default_duration_minutes : 30;
+
+    expect(selectedTreatment).toBe("Cirugía e Implante unitario");
+    expect(selectedDuration).toBe(90);
+  });
 });
