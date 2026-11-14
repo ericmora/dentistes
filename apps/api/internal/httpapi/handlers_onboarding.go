@@ -289,6 +289,9 @@ func (s *Server) executeOnboarding(w http.ResponseWriter, r *http.Request, req o
 		if err := s.store.CreateCabinets(r.Context(), tx, tenant.ID, in.CabinetsCount); err != nil {
 			return err
 		}
+		if err := s.store.SeedDefaultTreatments(r.Context(), tx, tenant.ID); err != nil {
+			return err
+		}
 		if err := s.store.UpdateTenantConfig(r.Context(), tx, tenant.ID, string(cfgBytes)); err != nil {
 			return err
 		}

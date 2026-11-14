@@ -2,6 +2,19 @@
 
 Registro de cambios ingeridos desde la carpeta de Drive `17YBDTdXQ_okDgXQX4t-fxURrL8xznSWx` y su estabilización en el repositorio.
 
+## 2026-11-13 (Tarifa Plana Única Global a 18,50 USD/mes i Add-ons Posposats)
+
+- **Estratègia Comercial i Preus:**
+  - Alineació definitiva a **tarifa plana única global de 18,50 $ USD / mes** (o **185 $ USD / any** amb 2 mesos gratuïts) per clínica, amb usuaris, facultatius i pacients il·limitats i 30 dies de prova gratuïta amb Stripe (0 $ avui).
+  - Posposats els mòduls opcionals (add-ons) per a fases posteriors de producte per concentrar l'adopció al Paquet Base Essencial.
+  - Actualitzada la documentació mestra a:
+    - [`docs/REQUIREMENTS.md`](./REQUIREMENTS.md) (RQ-022 i RQ-029).
+    - [`docs/drive/Producte/Estratègia de Preus - Software Dental.md`](./drive/Producte/Estratègia%20de%20Preus%20-%20Software%20Dental.md).
+    - [`docs/drive/Producte/Anàlisi de Competidors - Software Dental.md`](./drive/Producte/Anàlisi%20de%20Competidors%20-%20Software%20Dental.md).
+    - [`docs/drive/Producte/Especificació d'Arquitectura_ Geolocalització, Multidivisa i Passarel·la de Pagaments amb Stripe.md`](./drive/Producte/Especificació%20d'Arquitectura_%20Geolocalització,%20Multidivisa%20i%20Passarel·la%20de%20Pagaments%20amb%20Stripe.md).
+  - Web pública (`apps/marketing/src/content/site.ts`): estandarditzat `REGION_DATA` i preus de landing directament a 18.5 USD.
+
+
 ## 2026-11-12 (Arquitectura Multidivisa, Geolocalització i Compliment Fiscal a LATAM)
 
 - **Ingesta de Documents de Drive:**

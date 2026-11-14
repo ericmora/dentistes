@@ -378,4 +378,101 @@ describe("Dentistes SDK Unit Tests", () => {
     const waitlist = await client.fiscal.joinWaitlist("fiscal.electronic_invoicing", "Prioritat alta");
     assert.equal(waitlist.features.electronic_invoicing.waitlist_joined, true);
   });
+
+  test("DentistesClient treatments catalog APIs", async () => {
+    const calls: Array<{ url: string; method: string; body?: any }> = [];
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(init.body.toString()) : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/v1/treatments") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            treatments: [
+              {
+                id: "trt_1",
+                code: "LIMPIEZA",
+                name: "Limpieza Dental",
+                category: "PREVENCION",
+                category_label: "Diagnóstico y Prevención",
+                default_price: 50,
+                estimated_minutes: 30,
+                color: "#06B6D4",
+                is_active: true,
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v1/treatments") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            treatment: {
+              id: "trt_2",
+              name: body.name,
+              category: body.category,
+              default_price: body.default_price,
+              estimated_minutes: body.estimated_minutes,
+              color: body.color,
+              is_active: true,
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      if (url.includes("/v1/treatments/trt_2") && method === "PUT") {
+        return new Response(
+          JSON.stringify({
+            treatment: {
+              id: "trt_2",
+              name: body.name,
+              category: body.category,
+              default_price: body.default_price,
+              estimated_minutes: body.estimated_minutes,
+              color: body.color,
+              is_active: true,
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v1/treatments/trt_2") && method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "auth-token",
+      fetch: mockFetch,
+    });
+
+    const list = await client.listTreatments({ all: true });
+    assert.equal(list.treatments.length, 1);
+    assert.equal(list.treatments[0].name, "Limpieza Dental");
+
+    const created = await client.createTreatment({
+      name: "Blanqueamiento LED",
+      category: "ESTETICA",
+      default_price: 250,
+      estimated_minutes: 60,
+      color: "#F59E0B",
+    });
+    assert.equal(created.treatment.name, "Blanqueamiento LED");
+    assert.equal(created.treatment.default_price, 250);
+
+    const updated = await client.updateTreatment("trt_2", {
+      name: "Blanqueamiento Dental LED Avanzado",
+      default_price: 280,
+    });
+    assert.equal(updated.treatment.name, "Blanqueamiento Dental LED Avanzado");
+
+    const del = await client.deleteTreatment("trt_2");
+    assert.equal(del.ok, true);
+  });
 });

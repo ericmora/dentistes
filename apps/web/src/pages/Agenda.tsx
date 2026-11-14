@@ -86,6 +86,26 @@ export function AgendaPage() {
     enabled: agendaEnabled,
   });
 
+  const treatmentsQuery = useQuery({
+    queryKey: ["treatments"],
+    queryFn: () => sdk.listTreatments(),
+    enabled: agendaEnabled,
+  });
+
+  const availableTreatments = useMemo(() => {
+    const list = treatmentsQuery.data?.treatments;
+    if (list && list.length > 0) {
+      return list.map((t) => ({
+        id: t.id,
+        name: t.name,
+        category_label: t.category,
+        default_duration_minutes: t.estimated_minutes,
+        color: t.color,
+      }));
+    }
+    return DENTAL_TREATMENTS_MASTER;
+  }, [treatmentsQuery.data?.treatments]);
+
   const doctorsQuery = useQuery({
     queryKey: ["doctors"],
     queryFn: () => sdk.listDoctors(),
@@ -354,12 +374,12 @@ export function AgendaPage() {
               />
             </div>
 
-            {/* Tratamiento de la Lista Maestra */}
+            {/* Tratamiento del Catálogo de la Clínica */}
             <Select
-              label="Tratamiento dental (Lista maestra)"
+              label="Tratamiento dental"
               value={newForm.treatment_type}
               onChange={(v) => {
-                const found = findMasterTreatment(v);
+                const found = availableTreatments.find((t) => t.name === v);
                 setNewForm({
                   ...newForm,
                   treatment_type: v,
@@ -367,7 +387,7 @@ export function AgendaPage() {
                 });
               }}
               placeholder=""
-              options={DENTAL_TREATMENTS_MASTER.map((t) => ({
+              options={availableTreatments.map((t) => ({
                 value: t.name,
                 label: `${t.name} (${t.default_duration_minutes} min)`,
                 hint: t.category_label,

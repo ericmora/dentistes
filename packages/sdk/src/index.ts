@@ -250,6 +250,20 @@ export interface MasterTreatment {
   color: string;
 }
 
+export interface Treatment {
+  id: string;
+  tenant_id?: string;
+  code?: string;
+  name: string;
+  category: string;
+  category_label?: string;
+  default_price: number;
+  estimated_minutes: number;
+  color?: string;
+  is_active: boolean;
+  created_at?: string;
+}
+
 export const DENTAL_TREATMENTS_MASTER: MasterTreatment[] = [
   // Diagnóstico y Prevención
   { code: "REVISION", name: "Revisión y Diagnóstico", category: "PREVENCION", category_label: "Diagnóstico y Prevención", default_duration_minutes: 30, color: "#0EA5E9" },
@@ -766,6 +780,40 @@ export class DentistesClient {
 
   deleteCabinet(id: string): Promise<{ ok: boolean }> {
     return this.request(`/v1/cabinets/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  listTreatments(params: { all?: boolean } = {}): Promise<{ treatments: Treatment[] }> {
+    const q = params.all ? "?all=true" : "";
+    return this.request(`/v1/treatments${q}`);
+  }
+
+  createTreatment(input: {
+    code?: string;
+    name: string;
+    category?: string;
+    default_price?: number;
+    estimated_minutes?: number;
+    color?: string;
+  }): Promise<{ treatment: Treatment }> {
+    return this.request("/v1/treatments", { method: "POST", body: input });
+  }
+
+  updateTreatment(
+    id: string,
+    input: {
+      name?: string;
+      category?: string;
+      default_price?: number;
+      estimated_minutes?: number;
+      color?: string;
+      is_active?: boolean;
+    },
+  ): Promise<{ treatment: Treatment }> {
+    return this.request(`/v1/treatments/${encodeURIComponent(id)}`, { method: "PUT", body: input });
+  }
+
+  deleteTreatment(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/treatments/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   listDoctors(): Promise<{ doctors: Doctor[] }> {

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useMemo, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import {
@@ -35,6 +35,30 @@ export function WaitingListPage() {
   });
 
   const enabled = Boolean(me?.features?.waiting_list);
+
+  const treatmentsQuery = useQuery({
+    queryKey: ["treatments"],
+    queryFn: () => sdk.listTreatments(),
+    enabled,
+  });
+
+  const availableTreatments = useMemo(() => {
+    const list = treatmentsQuery.data?.treatments;
+    if (list && list.length > 0) {
+      return list.map((t) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        default_duration_minutes: t.estimated_minutes,
+      }));
+    }
+    return DENTAL_TREATMENTS_MASTER.map((t) => ({
+      id: t.code,
+      name: t.name,
+      category: t.category,
+      default_duration_minutes: t.default_duration_minutes,
+    }));
+  }, [treatmentsQuery.data?.treatments]);
 
   const listQuery = useQuery({
     queryKey: ["waiting-list", statusFilter],
@@ -171,10 +195,10 @@ export function WaitingListPage() {
               }))}
             />
             <Select
-              label="Tratamiento dental (catálogo maestro)"
+              label="Tratamiento dental"
               value={form.treatment_type}
               onChange={(v) => {
-                const found = findMasterTreatment(v);
+                const found = availableTreatments.find((t) => t.name === v);
                 setForm((prev) => ({
                   ...prev,
                   treatment_type: v,
@@ -182,7 +206,7 @@ export function WaitingListPage() {
                 }));
               }}
               placeholder="Seleccionar tratamiento..."
-              options={DENTAL_TREATMENTS_MASTER.map((t) => ({
+              options={availableTreatments.map((t) => ({
                 value: t.name,
                 label: `${t.name} (${t.category} · ${t.default_duration_minutes} min)`,
               }))}

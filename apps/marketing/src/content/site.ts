@@ -31,30 +31,12 @@ export function signupUrl(params?: Record<string, string | undefined>) {
 
 export const REGION_DATA = [
   {
-    id: "eur",
-    countryCode: "ES",
-    label: "Espanya / Europa (EUR €)",
-    currency: "EUR",
-    monthly: 49,
-    yearly: 470,
-    addons: { whatsapp: 20, signature: 10, pack: 39 },
-  },
-  {
-    id: "mxn",
-    countryCode: "MX",
-    label: "Mèxic (MXN $)",
-    currency: "MXN",
-    monthly: 999,
-    yearly: 9590,
-    addons: { whatsapp: 399, signature: 199, pack: 799 },
-  },
-  {
     id: "usd",
     countryCode: "US",
-    label: "Llatinoamèrica / Internacional (USD $)",
+    label: "Tarifa plana global (USD $)",
     currency: "USD",
-    monthly: 49,
-    yearly: 470,
+    monthly: 18.5,
+    yearly: 185,
     addons: { whatsapp: 20, signature: 10, pack: 39 },
   },
 ] as const;
@@ -66,21 +48,8 @@ export type RegionId = RegionData["id"];
 
 export const REGION_OVERRIDE_KEY = "2mes4_region_override";
 
-export function getPreferredRegion(lang?: Lang): RegionData {
-  if (typeof window !== "undefined") {
-    try {
-      const stored = localStorage.getItem(REGION_OVERRIDE_KEY);
-      if (stored) {
-        const found = REGION_DATA.find((r) => r.id === stored || r.currency === stored);
-        if (found) return found;
-      }
-    } catch {
-      // ignore
-    }
-  }
-  if (lang === "ca") return REGION_DATA[0]; // EUR
-  if (lang === "es") return REGION_DATA[2]; // USD default for es / LATAM
-  return REGION_DATA[2]; // USD default
+export function getPreferredRegion(_lang?: Lang): RegionData {
+  return REGION_DATA[0];
 }
 
 export function setPreferredRegion(id: RegionId) {

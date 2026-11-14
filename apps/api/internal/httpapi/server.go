@@ -132,6 +132,13 @@ func (s *Server) Router() http.Handler {
 					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteCabinet)
 				})
 
+				r.Route("/treatments", func(r chi.Router) {
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListTreatments)
+					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateTreatment)
+					r.With(s.requirePermission("settings:manage")).Put("/{id}", s.handleUpdateTreatment)
+					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteTreatment)
+				})
+
 				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/doctors", s.handleListDoctors)
 
 				r.Route("/appointments", func(r chi.Router) {
