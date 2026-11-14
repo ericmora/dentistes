@@ -146,11 +146,35 @@ func (s *Server) handleListAppointments(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleFindAvailableSlots(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	cabinetID := q.Get("cabinet_id")
+	doctorID := q.Get("doctor_id")
+	category := q.Get("category")
+	treatmentType := q.Get("treatment_type")
 	shift := q.Get("shift")
 	durStr := q.Get("duration")
 	daysStr := q.Get("days")
 	limitStr := q.Get("limit")
 	startStr := q.Get("start_date")
+
+	tx := txFrom(r.Context())
+	claims := claimsFrom(r.Context())
+
+	// If treatment_type is provided, lookup default category and duration if not set
+	if treatmentType != "" && (category == "" || durStr == "") {
+		treatments, err := s.store.ListTreatments(r.Context(), tx, claims.TenantID, false)
+		if err == nil {
+			for _, t := range treatments {
+				if strings.EqualFold(t.Name, treatmentType) {
+					if category == "" {
+						category = t.Category
+					}
+					if durStr == "" && t.EstimatedMinutes > 0 {
+						durStr = strconv.Itoa(t.EstimatedMinutes)
+					}
+					break
+				}
+			}
+		}
+	}
 
 	duration := 30
 	if durStr != "" {
@@ -181,14 +205,15 @@ func (s *Server) handleFindAvailableSlots(w http.ResponseWriter, r *http.Request
 	}
 	startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.UTC)
 
-	tx := txFrom(r.Context())
 	slots, err := s.store.FindAvailableSlots(r.Context(), tx, store.AvailableSlotSearchFilter{
-		CabinetID:       cabinetID,
-		DurationMinutes: duration,
-		Shift:           shift,
-		StartDate:       startDate,
-		Days:            days,
-		Limit:           limit,
+		CabinetID:         cabinetID,
+		DoctorID:          doctorID,
+		TreatmentCategory: category,
+		DurationMinutes:   duration,
+		Shift:             shift,
+		StartDate:         startDate,
+		Days:              days,
+		Limit:             limit,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
@@ -412,4 +437,184 @@ func (s *Server) handleAppointmentStream(w http.ResponseWriter, r *http.Request)
 			flusher.Flush()
 		}
 	}
+}
+
+// Service Shifts Handlers
+
+func (s *Server) handleListShifts(w http.ResponseWriter, r *http.Request) {
+	tx := txFrom(r.Context())
+	shifts, err := s.store.ListShifts(r.Context(), tx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"shifts": shifts})
+}
+
+func (s *Server) handleCreateShift(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	var req struct {
+		Name       string   `json:"name"`
+		CabinetID  string   `json:"cabinet_id"`
+		DayOfWeek  int      `json:"day_of_week"`
+		StartTime  string   `json:"start_time"`
+		EndTime    string   `json:"end_time"`
+		DoctorIDs  []string `json:"doctor_ids"`
+		Categories []string `json:"categories"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.CabinetID) == "" || req.DayOfWeek < 1 || req.DayOfWeek > 7 || req.StartTime == "" || req.EndTime == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "name, cabinet_id, day_of_week (1-7), start_time and end_time are required", nil)
+		return
+	}
+	tx := txFrom(r.Context())
+	shift, err := s.store.CreateShift(r.Context(), tx, claims.TenantID, strings.TrimSpace(req.Name), strings.TrimSpace(req.CabinetID), req.DayOfWeek, req.StartTime, req.EndTime, req.DoctorIDs, req.Categories)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusCreated, shift)
+}
+
+func (s *Server) handleUpdateShift(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	shiftID := chi.URLParam(r, "id")
+	var req struct {
+		Name       string   `json:"name"`
+		CabinetID  string   `json:"cabinet_id"`
+		DayOfWeek  int      `json:"day_of_week"`
+		StartTime  string   `json:"start_time"`
+		EndTime    string   `json:"end_time"`
+		DoctorIDs  []string `json:"doctor_ids"`
+		Categories []string `json:"categories"`
+		IsActive   bool     `json:"is_active"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	tx := txFrom(r.Context())
+	shift, err := s.store.UpdateShift(r.Context(), tx, claims.TenantID, shiftID, strings.TrimSpace(req.Name), strings.TrimSpace(req.CabinetID), req.DayOfWeek, req.StartTime, req.EndTime, req.DoctorIDs, req.Categories, req.IsActive)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, shift)
+}
+
+func (s *Server) handleDeleteShift(w http.ResponseWriter, r *http.Request) {
+	shiftID := chi.URLParam(r, "id")
+	tx := txFrom(r.Context())
+	if err := s.store.DeleteShift(r.Context(), tx, shiftID); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// Shift Overrides Handlers
+
+func (s *Server) handleListShiftOverrides(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	tx := txFrom(r.Context())
+	overrides, err := s.store.ListShiftOverrides(r.Context(), tx, q.Get("start_date"), q.Get("end_date"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"overrides": overrides})
+}
+
+func (s *Server) handleCreateShiftOverride(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	var req struct {
+		OverrideDate    string   `json:"override_date"`
+		ShiftID         *string  `json:"shift_id"`
+		IsCancelled     bool     `json:"is_cancelled"`
+		CustomStartTime string   `json:"custom_start_time"`
+		CustomEndTime   string   `json:"custom_end_time"`
+		CustomDoctorIDs []string `json:"custom_doctor_ids"`
+		Notes           string   `json:"notes"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	if strings.TrimSpace(req.OverrideDate) == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "override_date is required", nil)
+		return
+	}
+	tx := txFrom(r.Context())
+	ov, err := s.store.CreateShiftOverride(r.Context(), tx, claims.TenantID, req.OverrideDate, req.ShiftID, req.IsCancelled, req.CustomStartTime, req.CustomEndTime, req.CustomDoctorIDs, req.Notes)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusCreated, ov)
+}
+
+func (s *Server) handleDeleteShiftOverride(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tx := txFrom(r.Context())
+	if err := s.store.DeleteShiftOverride(r.Context(), tx, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// Holidays Handlers
+
+func (s *Server) handleListHolidays(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	year := 0
+	if yStr := q.Get("year"); yStr != "" {
+		year, _ = strconv.Atoi(yStr)
+	}
+	tx := txFrom(r.Context())
+	holidays, err := s.store.ListHolidays(r.Context(), tx, year)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"holidays": holidays})
+}
+
+func (s *Server) handleCreateHoliday(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	var req struct {
+		Date      string `json:"date"`
+		Name      string `json:"name"`
+		IsFullDay bool   `json:"is_full_day"`
+		StartTime string `json:"start_time"`
+		EndTime   string `json:"end_time"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	if strings.TrimSpace(req.Date) == "" || strings.TrimSpace(req.Name) == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "date and name are required", nil)
+		return
+	}
+	tx := txFrom(r.Context())
+	holiday, err := s.store.CreateHoliday(r.Context(), tx, claims.TenantID, req.Date, strings.TrimSpace(req.Name), req.IsFullDay, req.StartTime, req.EndTime)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusCreated, holiday)
+}
+
+func (s *Server) handleDeleteHoliday(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tx := txFrom(r.Context())
+	if err := s.store.DeleteHoliday(r.Context(), tx, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

@@ -144,6 +144,24 @@ func (s *Server) Router() http.Handler {
 					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteCabinet)
 				})
 
+				r.Route("/shifts", func(r chi.Router) {
+					r.Use(s.requireFeature("agenda"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListShifts)
+					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateShift)
+					r.With(s.requirePermission("settings:manage")).Put("/{id}", s.handleUpdateShift)
+					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteShift)
+					r.With(s.requirePermission("appointments:read")).Get("/overrides", s.handleListShiftOverrides)
+					r.With(s.requirePermission("settings:manage")).Post("/overrides", s.handleCreateShiftOverride)
+					r.With(s.requirePermission("settings:manage")).Delete("/overrides/{id}", s.handleDeleteShiftOverride)
+				})
+
+				r.Route("/holidays", func(r chi.Router) {
+					r.Use(s.requireFeature("agenda"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListHolidays)
+					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateHoliday)
+					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteHoliday)
+				})
+
 				r.Route("/treatments", func(r chi.Router) {
 					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListTreatments)
 					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateTreatment)

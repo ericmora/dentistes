@@ -10,15 +10,19 @@ import {
   Clock,
   FileText,
   Filter,
+  Mail,
   Maximize2,
   Minimize2,
   Moon,
+  Phone,
   Plus,
   Radio,
+  Receipt,
   Search,
   Sparkles,
   Stethoscope,
   Sun,
+  User,
   UserCheck,
   Users,
   X,
@@ -122,6 +126,7 @@ export function AgendaPage() {
   // Next Available Slots Finder State
   const [finderOpen, setFinderOpen] = useState(false);
   const [finderCabinet, setFinderCabinet] = useState("");
+  const [finderDoctor, setFinderDoctor] = useState("");
   const [finderTreatment, setFinderTreatment] = useState(DENTAL_TREATMENTS_MASTER[0].name);
   const [finderDuration, setFinderDuration] = useState<number>(DENTAL_TREATMENTS_MASTER[0].default_duration_minutes);
   const [finderShift, setFinderShift] = useState<"all" | "morning" | "afternoon">("all");
@@ -143,10 +148,12 @@ export function AgendaPage() {
   const { connected } = useAppointmentStream(agendaEnabled);
 
   const availableSlotsQuery = useQuery({
-    queryKey: ["available-slots", finderCabinet, finderDuration, finderShift, finderStartDate],
+    queryKey: ["available-slots", finderCabinet, finderDoctor, finderTreatment, finderDuration, finderShift, finderStartDate],
     queryFn: () =>
       sdk.findAvailableSlots({
         cabinet_id: finderCabinet || undefined,
+        doctor_id: finderDoctor || undefined,
+        treatment_type: finderTreatment || undefined,
         duration: finderDuration,
         shift: finderShift,
         start_date: finderStartDate,
@@ -163,17 +170,17 @@ export function AgendaPage() {
     }
     setFinderOpen(false);
     openNewAt(slot.cabinet_id, slot.start_time, slot.duration_minutes);
-    if (finderTreatment) {
-      setNewForm((prev) => ({
-        ...prev,
-        treatment_type: finderTreatment,
-        duration: String(slot.duration_minutes),
-      }));
-    }
+    setNewForm((prev) => ({
+      ...prev,
+      treatment_type: finderTreatment || prev.treatment_type,
+      duration: String(slot.duration_minutes),
+      cabinet_id: slot.cabinet_id || prev.cabinet_id,
+      doctor_id: slot.doctor_id || prev.doctor_id,
+    }));
     notify({
       tone: "info",
       title: "Hueco reservado en formulario",
-      description: `${slot.formatted_date} a las ${slot.start_time} (${slot.duration_minutes} min)`,
+      description: `${slot.formatted_date} a las ${slot.start_time} (${slot.duration_minutes} min)${slot.doctor_name ? ` · ${slot.doctor_name}` : ""}`,
     });
   }
 
@@ -223,6 +230,13 @@ export function AgendaPage() {
     queryFn: () => sdk.listAppointments({ start: dayStart, end: dayEnd, doctor_id: doctorFilter || undefined }),
     enabled: agendaEnabled,
   });
+
+  const selectedPatientQuery = useQuery({
+    queryKey: ["patient-preview", selectedAppt?.patient_id],
+    queryFn: () => sdk.getPatient(selectedAppt!.patient_id),
+    enabled: Boolean(selectedAppt?.patient_id),
+  });
+  const selectedPatient = selectedPatientQuery.data?.patient;
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -583,70 +597,111 @@ export function AgendaPage() {
                   </button>
                 </div>
 
-                {/* Primary Clinical Navigation: 1-Click to Unified Odontogram + History Chart */}
-                <div className="rounded-xl border border-brand-200/80 bg-brand-50/50 p-3 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
-                      <Stethoscope className="h-3.5 w-3.5 text-brand-700" />
-                      <span>Dr(a). {selectedAppt.doctor_name}</span>
+                {/* Informative Doctor & Cabinet Context (Read-only, without actions) */}
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 p-2.5 text-xs">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gabinete</span>
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 truncate">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-slate-300"
+                        style={{ backgroundColor: selectedCabinet?.color_code ?? "#0D9488" }}
+                      />
+                      <span className="truncate">{selectedCabinet?.name ?? selectedAppt.cabinet_name}</span>
                     </div>
-                    {selectedAppt.patient_high_risk ? (
-                      <Badge tone="danger" className="inline-flex items-center gap-1">
-                        <AlertTriangle className="h-3 w-3" />
-                        Riesgo alto
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Doctor asignado</span>
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 truncate">
+                      <Stethoscope className="h-3.5 w-3.5 shrink-0 text-brand-600" />
+                      <span className="truncate">Dr(a). {selectedAppt.doctor_name || "Sin asignar"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Patient Preview Card & 3 Direct Clinical/Administrative Links */}
+                <div className="rounded-xl border border-brand-200/80 bg-brand-50/40 p-3 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-900 truncate">{selectedAppt.patient_name}</span>
+                        {selectedAppt.patient_high_risk || selectedPatient?.medical_alerts?.high_risk ? (
+                          <Badge tone="danger" className="text-[10px] px-1.5 py-0 inline-flex items-center gap-0.5 shrink-0">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            Riesgo
+                          </Badge>
+                        ) : null}
+                      </div>
+
+                      {/* Contact Preview */}
+                      {selectedPatient ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-slate-600">
+                          {selectedPatient.phone ? (
+                            <span className="inline-flex items-center gap-1 tabular-nums font-medium">
+                              <Phone className="h-3 w-3 text-slate-400" />
+                              {selectedPatient.phone}
+                            </span>
+                          ) : null}
+                          {selectedPatient.birth_date ? (
+                            <span className="text-slate-500">
+                              Nac: {selectedPatient.birth_date}
+                            </span>
+                          ) : null}
+                          {selectedPatient.email ? (
+                            <span className="inline-flex items-center gap-1 truncate max-w-[170px] text-slate-500">
+                              <Mail className="h-3 w-3 text-slate-400 shrink-0" />
+                              <span className="truncate">{selectedPatient.email}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : selectedPatientQuery.isLoading ? (
+                        <Skeleton className="h-3.5 w-28 mt-1" />
+                      ) : null}
+                    </div>
+
+                    {selectedPatient?.whatsapp_opt_in ? (
+                      <Badge tone="success" className="text-[10px] px-1.5 py-0 shrink-0">
+                        WhatsApp OK
                       </Badge>
                     ) : null}
                   </div>
 
-                  <Link
-                    to={`/patients/${selectedAppt.patient_id}`}
-                    className="flex w-full items-center justify-between rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-brand-700"
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5" />
-                      Abrir ficha clínica (Odontograma + Historia)
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-
-                {/* Quick Navigation & Filtering Inside Agenda */}
-                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2.5 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Gabinete:</span>
-                    <span className="font-semibold text-slate-900 flex items-center gap-1.5">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: selectedCabinet?.color_code ?? "#0D9488" }}
-                      />
-                      {selectedCabinet?.name ?? selectedAppt.cabinet_name}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {selectedCabinet ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="min-h-[30px] px-2 text-[11px]"
-                        onClick={() =>
-                          setCabinetFilter(cabinetFilter === selectedCabinet.id ? "" : selectedCabinet.id)
-                        }
-                      >
-                        <Filter className="h-3 w-3" />
-                        {cabinetFilter === selectedCabinet.id ? "Ver todos gab." : "Solo este gab."}
-                      </Button>
-                    ) : null}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="min-h-[30px] px-2 text-[11px]"
-                      onClick={() =>
-                        setDoctorFilter(doctorFilter === selectedAppt.doctor_id ? "" : selectedAppt.doctor_id)
-                      }
+                  {/* 3 Direct Navigation Links: Ficha Clínica, Presupuestos, Datos del Paciente */}
+                  <div className="space-y-1.5 pt-1">
+                    {/* Link 1: Ficha clínica (Odontograma + Historia) */}
+                    <Link
+                      to={`/patients/${selectedAppt.patient_id}?tab=clinical`}
+                      className="flex w-full items-center justify-between rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-brand-700 transition"
+                      title="Ir a la ficha clínica (Odontograma interactivo e historia clínica)"
                     >
-                      <UserCheck className="h-3 w-3" />
-                      {doctorFilter === selectedAppt.doctor_id ? "Todos doctores" : "Solo este Dr."}
-                    </Button>
+                      <span className="inline-flex items-center gap-2">
+                        <Stethoscope className="h-3.5 w-3.5" />
+                        <span>Abrir ficha clínica (Odontograma + Historia)</span>
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {/* Link 2: Presupuestos */}
+                      <Link
+                        to={`/patients/${selectedAppt.patient_id}?tab=billing`}
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-brand-300 hover:text-brand-900 transition"
+                        title="Ver presupuestos, facturas y cobros del paciente"
+                      >
+                        <Receipt className="h-3.5 w-3.5 text-amber-600" />
+                        <span>Presupuestos</span>
+                      </Link>
+
+                      {/* Link 3: Datos del paciente */}
+                      <Link
+                        to={`/patients/${selectedAppt.patient_id}?tab=overview`}
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-brand-300 hover:text-brand-900 transition"
+                        title="Ver datos personales, contacto y ficha administrativa"
+                      >
+                        <User className="h-3.5 w-3.5 text-indigo-600" />
+                        <span>Datos paciente</span>
+                      </Link>
+                    </div>
                   </div>
                 </div>
 
@@ -1016,7 +1071,7 @@ export function AgendaPage() {
 
               {/* Filter Controls */}
               <div className="border-b border-slate-100 bg-slate-50/70 p-4 space-y-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {/* Gabinete Filter */}
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-slate-700">Gabinete</label>
@@ -1029,6 +1084,23 @@ export function AgendaPage() {
                       {allCabinets.map((cab) => (
                         <option key={cab.id} value={cab.id}>
                           {cab.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Profesional Filter */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Profesional (opcional)</label>
+                    <select
+                      value={finderDoctor}
+                      onChange={(e) => setFinderDoctor(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-brand-500 focus:outline-none"
+                    >
+                      <option value="">Cualquier profesional ({doctors.length})</option>
+                      {doctors.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.full_name}
                         </option>
                       ))}
                     </select>
@@ -1189,9 +1261,23 @@ export function AgendaPage() {
                                 {slot.shift === "morning" ? "Mañana" : "Tarde"}
                               </span>
                             </div>
-                            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                               <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: slot.cabinet_color || "#0D9488" }} />
-                              <span className="truncate font-medium text-slate-700">{slot.cabinet_name}</span>
+                              <span className="truncate font-semibold text-slate-800">{slot.cabinet_name}</span>
+                              {slot.doctor_name && (
+                                <>
+                                  <span>·</span>
+                                  <span className="font-semibold text-teal-800 bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
+                                    {slot.doctor_name}
+                                  </span>
+                                </>
+                              )}
+                              {slot.shift_name && (
+                                <>
+                                  <span>·</span>
+                                  <span className="truncate text-slate-500 italic">{slot.shift_name}</span>
+                                </>
+                              )}
                               <span>·</span>
                               <span className="truncate">{slot.formatted_date}</span>
                             </div>

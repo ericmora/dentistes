@@ -312,10 +312,50 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface ClinicHoliday {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  is_full_day: boolean;
+  start_time?: string;
+  end_time?: string;
+  created_at: string;
+}
+
+export interface ServiceShift {
+  id: string;
+  name: string;
+  cabinet_id: string;
+  cabinet_name?: string;
+  day_of_week: number; // 1 = Monday .. 7 = Sunday
+  start_time: string; // "09:00"
+  end_time: string; // "14:00"
+  doctor_ids: string[];
+  categories: string[];
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ShiftOverride {
+  id: string;
+  override_date: string;
+  shift_id?: string;
+  is_cancelled: boolean;
+  custom_start_time?: string;
+  custom_end_time?: string;
+  custom_doctor_ids?: string[];
+  notes?: string;
+  created_at: string;
+}
+
 export interface AvailableSlot {
   cabinet_id: string;
   cabinet_name: string;
   cabinet_color?: string;
+  doctor_id?: string;
+  doctor_name?: string;
+  shift_id?: string;
+  shift_name?: string;
   date: string;
   start_time: string;
   end_time: string;
@@ -326,6 +366,9 @@ export interface AvailableSlot {
 
 export interface FindAvailableSlotsParams {
   cabinet_id?: string;
+  doctor_id?: string;
+  treatment_type?: string;
+  category?: string;
   duration?: number;
   shift?: "morning" | "afternoon" | "all";
   start_date?: string;
@@ -957,6 +1000,9 @@ export class DentistesClient {
   findAvailableSlots(params: FindAvailableSlotsParams = {}): Promise<{ slots: AvailableSlot[] }> {
     const query = new URLSearchParams();
     if (params.cabinet_id) query.set("cabinet_id", params.cabinet_id);
+    if (params.doctor_id) query.set("doctor_id", params.doctor_id);
+    if (params.treatment_type) query.set("treatment_type", params.treatment_type);
+    if (params.category) query.set("category", params.category);
     if (typeof params.duration === "number") query.set("duration", String(params.duration));
     if (params.shift) query.set("shift", params.shift);
     if (params.start_date) query.set("start_date", params.start_date);
@@ -964,6 +1010,99 @@ export class DentistesClient {
     if (typeof params.limit === "number") query.set("limit", String(params.limit));
     const suffix = query.toString() ? `?${query}` : "";
     return this.request(`/v1/appointments/available-slots${suffix}`);
+  }
+
+  listShifts(): Promise<{ shifts: ServiceShift[] }> {
+    return this.request("/v1/shifts");
+  }
+
+  createShift(input: {
+    name: string;
+    cabinet_id: string;
+    day_of_week: number;
+    start_time: string;
+    end_time: string;
+    doctor_ids?: string[];
+    categories?: string[];
+  }): Promise<ServiceShift> {
+    return this.request("/v1/shifts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  updateShift(
+    id: string,
+    input: {
+      name: string;
+      cabinet_id: string;
+      day_of_week: number;
+      start_time: string;
+      end_time: string;
+      doctor_ids?: string[];
+      categories?: string[];
+      is_active: boolean;
+    },
+  ): Promise<ServiceShift> {
+    return this.request(`/v1/shifts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteShift(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/shifts/${id}`, { method: "DELETE" });
+  }
+
+  listShiftOverrides(params: { start_date?: string; end_date?: string } = {}): Promise<{ overrides: ShiftOverride[] }> {
+    const query = new URLSearchParams();
+    if (params.start_date) query.set("start_date", params.start_date);
+    if (params.end_date) query.set("end_date", params.end_date);
+    const suffix = query.toString() ? `?${query}` : "";
+    return this.request(`/v1/shifts/overrides${suffix}`);
+  }
+
+  createShiftOverride(input: {
+    override_date: string;
+    shift_id?: string;
+    is_cancelled?: boolean;
+    custom_start_time?: string;
+    custom_end_time?: string;
+    custom_doctor_ids?: string[];
+    notes?: string;
+  }): Promise<ShiftOverride> {
+    return this.request("/v1/shifts/overrides", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteShiftOverride(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/shifts/overrides/${id}`, { method: "DELETE" });
+  }
+
+  listHolidays(year?: number): Promise<{ holidays: ClinicHoliday[] }> {
+    const query = new URLSearchParams();
+    if (typeof year === "number" && year > 0) query.set("year", String(year));
+    const suffix = query.toString() ? `?${query}` : "";
+    return this.request(`/v1/holidays${suffix}`);
+  }
+
+  createHoliday(input: {
+    date: string;
+    name: string;
+    is_full_day?: boolean;
+    start_time?: string;
+    end_time?: string;
+  }): Promise<ClinicHoliday> {
+    return this.request("/v1/holidays", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteHoliday(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/holidays/${id}`, { method: "DELETE" });
   }
 
   createAppointment(input: {

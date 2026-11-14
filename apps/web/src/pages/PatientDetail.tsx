@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -52,12 +52,26 @@ import { useUiStore } from "../lib/store";
 
 export function PatientDetailPage() {
   const { id = "" } = useParams();
+  const [searchParams] = useSearchParams();
   const { sdk, me } = useSession();
   const { notify } = useToast();
   const queryClient = useQueryClient();
 
-  // Default view is the unified single-screen Clinical Cockpit (Odontogram + Clinical History)
-  const [activeTab, setActiveTab] = useState<"clinical" | "overview" | "billing">("clinical");
+  // Tab support with query param: ?tab=clinical | overview | billing
+  const [activeTab, setActiveTab] = useState<"clinical" | "overview" | "billing">(() => {
+    const t = searchParams.get("tab");
+    if (t === "overview" || t === "billing" || t === "clinical") {
+      return t;
+    }
+    return "clinical";
+  });
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "overview" || t === "billing" || t === "clinical") {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
   const [filterBySelectedTooth, setFilterBySelectedTooth] = useState(false);
   const [linkRecordToTooth, setLinkRecordToTooth] = useState(true);
   const [anatomicalModalOpen, setAnatomicalModalOpen] = useState(false);

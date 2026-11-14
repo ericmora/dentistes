@@ -120,4 +120,150 @@ func TestCalculateAvailableSlots(t *testing.T) {
 			t.Fatalf("expected exactly 5 slots with Limit=5, got %d", len(slots))
 		}
 	})
+
+	t.Run("ServiceShifts and Holidays: assigns doctor, filters category and skips holiday", func(t *testing.T) {
+		shifts := []ServiceShift{
+			{
+				ID:         "shift-surgery",
+				Name:       "Cirugía e Implantes Mañanas",
+				CabinetID:  "cab-1",
+				DayOfWeek:  1, // Monday
+				StartTime:  "09:00",
+				EndTime:    "14:00",
+				DoctorIDs:  []string{"doc-1"},
+				Categories: []string{"cirugia", "implantes"},
+				IsActive:   true,
+			},
+			{
+				ID:         "shift-hygiene",
+				Name:       "Higiene Mañanas",
+				CabinetID:  "cab-2",
+				DayOfWeek:  1, // Monday
+				StartTime:  "09:00",
+				EndTime:    "14:00",
+				DoctorIDs:  []string{"doc-2"},
+				Categories: []string{"higiene", "prevencion"},
+				IsActive:   true,
+			},
+		}
+
+		doctorNames := map[string]string{
+			"doc-1": "Dr. Fernando Cirujano",
+			"doc-2": "Hig. Laura García",
+		}
+
+		// Let's test filtering by treatment category "cirugia"
+		slots := CalculateAvailableSlotsWithContext(CalculateSlotsContext{
+			Cabinets:     cabinets,
+			Shifts:       shifts,
+			Overrides:    nil,
+			Holidays:     nil,
+			Appointments: nil,
+			DoctorNames:  doctorNames,
+			Filter: AvailableSlotSearchFilter{
+				TreatmentCategory: "cirugia",
+				DurationMinutes:   45,
+				StartDate:         monday,
+				Days:              1,
+			},
+		})
+
+		if len(slots) == 0 {
+			t.Fatal("expected slots for cirugia in cab-1, got none")
+		}
+		// All slots should be in cab-1 with doc-1
+		for _, s := range slots {
+			if s.CabinetID != "cab-1" {
+				t.Fatalf("expected slot in cab-1, got %s", s.CabinetID)
+			}
+			if s.DoctorID != "doc-1" || s.DoctorName != "Dr. Fernando Cirujano" {
+				t.Fatalf("expected doc-1, got ID=%s Name=%s", s.DoctorID, s.DoctorName)
+			}
+			if s.ShiftName != "Cirugía e Implantes Mañanas" {
+				t.Fatalf("expected shift name match, got %s", s.ShiftName)
+			}
+		}
+
+		// When holiday is configured on that Monday, 0 slots should be returned
+		slotsOnHoliday := CalculateAvailableSlotsWithContext(CalculateSlotsContext{
+			Cabinets:  cabinets,
+			Shifts:    shifts,
+			Overrides: nil,
+			Holidays: []ClinicHoliday{
+				{
+					Date:      "2026-11-16",
+					Name:      "Fiesta Local",
+					IsFullDay: true,
+				},
+			},
+			Appointments: nil,
+			DoctorNames:  doctorNames,
+			Filter: AvailableSlotSearchFilter{
+				TreatmentCategory: "cirugia",
+				DurationMinutes:   45,
+				StartDate:         monday,
+				Days:              1,
+			},
+		})
+		if len(slotsOnHoliday) != 0 {
+			t.Fatalf("expected 0 slots on holiday, got %d", len(slotsOnHoliday))
+		}
+
+		// When shift has a cancellation override for that specific date
+		slotsWithOverride := CalculateAvailableSlotsWithContext(CalculateSlotsContext{
+			Cabinets: cabinets,
+			Shifts:   shifts,
+			Overrides: []ShiftOverride{
+				{
+					OverrideDate: "2026-11-16",
+					ShiftID:      &shifts[0].ID,
+					IsCancelled:  true,
+				},
+			},
+			Holidays:     nil,
+			Appointments: nil,
+			DoctorNames:  doctorNames,
+			Filter: AvailableSlotSearchFilter{
+				TreatmentCategory: "cirugia",
+				DurationMinutes:   45,
+				StartDate:         monday,
+				Days:              1,
+			},
+		})
+		if len(slotsWithOverride) != 0 {
+			t.Fatalf("expected 0 slots when shift cancelled by override, got %d", len(slotsWithOverride))
+		}
+
+		// Doctor overlap test: if doc-1 already has an appointment in another cabinet, they can't be scheduled
+		doc1BusyAppts := []Appointment{
+			{
+				ID:        "app-doc1",
+				DoctorID:  "doc-1",
+				CabinetID: "cab-other",
+				StartTime: monday.Add(9 * time.Hour),  // 09:00
+				EndTime:   monday.Add(10 * time.Hour), // 10:00
+				Status:    "SCHEDULED",
+			},
+		}
+		slotsDoc1Busy := CalculateAvailableSlotsWithContext(CalculateSlotsContext{
+			Cabinets:     cabinets,
+			Shifts:       shifts,
+			Overrides:    nil,
+			Holidays:     nil,
+			Appointments: doc1BusyAppts,
+			DoctorNames:  doctorNames,
+			Filter: AvailableSlotSearchFilter{
+				TreatmentCategory: "cirugia",
+				DurationMinutes:   60,
+				StartDate:         monday,
+				Days:              1,
+			},
+		})
+		if len(slotsDoc1Busy) == 0 {
+			t.Fatal("expected slots starting after 10:00, got none")
+		}
+		if slotsDoc1Busy[0].StartTime != "10:00" {
+			t.Fatalf("expected first slot at 10:00 due to doc-1 overlap at 09:00-10:00, got %s", slotsDoc1Busy[0].StartTime)
+		}
+	})
 }

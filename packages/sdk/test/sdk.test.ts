@@ -236,6 +236,15 @@ describe("Dentistes SDK Unit Tests", () => {
       if (url.includes("/v1/cabinets")) {
         return new Response(JSON.stringify({ cabinets: [{ id: "cab-1", name: "Gabinet 1" }] }), { status: 200 });
       }
+      if (url.includes("/v1/shifts/overrides")) {
+        return new Response(JSON.stringify({ overrides: [{ id: "ov-1", override_date: "2026-11-16", is_cancelled: true }] }), { status: 200 });
+      }
+      if (url.includes("/v1/shifts")) {
+        return new Response(JSON.stringify({ shifts: [{ id: "sh-1", name: "Cirugia", cabinet_id: "cab-1", day_of_week: 1 }] }), { status: 200 });
+      }
+      if (url.includes("/v1/holidays")) {
+        return new Response(JSON.stringify({ holidays: [{ id: "h-1", date: "2026-12-25", name: "Navidad", is_full_day: true }] }), { status: 200 });
+      }
       if (url.includes("/v1/doctors")) {
         return new Response(JSON.stringify({ doctors: [{ id: "doc-1", full_name: "Dr. Martí" }] }), { status: 200 });
       }
@@ -293,6 +302,18 @@ describe("Dentistes SDK Unit Tests", () => {
 
     const waiting = await client.listWaitingList();
     assert.equal(waiting.entries[0].urgency_level, "URGENT");
+
+    const shiftsRes = await client.listShifts();
+    assert.equal(shiftsRes.shifts.length, 1);
+    assert.equal(shiftsRes.shifts[0].name, "Cirugia");
+
+    const overridesRes = await client.listShiftOverrides();
+    assert.equal(overridesRes.overrides.length, 1);
+    assert.equal(overridesRes.overrides[0].is_cancelled, true);
+
+    const holidaysRes = await client.listHolidays();
+    assert.equal(holidaysRes.holidays.length, 1);
+    assert.equal(holidaysRes.holidays[0].name, "Navidad");
 
     const matches = await client.matchWaitingList({ start: "2026-11-16T10:00:00Z", end: "2026-11-16T11:00:00Z" });
     assert.equal(matches.matches[0].match_score, 95);
