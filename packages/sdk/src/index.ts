@@ -312,6 +312,27 @@ export interface Appointment {
   updated_at: string;
 }
 
+export interface AvailableSlot {
+  cabinet_id: string;
+  cabinet_name: string;
+  cabinet_color?: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  shift: "morning" | "afternoon";
+  formatted_date: string;
+}
+
+export interface FindAvailableSlotsParams {
+  cabinet_id?: string;
+  duration?: number;
+  shift?: "morning" | "afternoon" | "all";
+  start_date?: string;
+  days?: number;
+  limit?: number;
+}
+
 export interface MasterTreatment {
   code: string;
   name: string;
@@ -931,6 +952,18 @@ export class DentistesClient {
     if (params.doctor_id) query.set("doctor_id", params.doctor_id);
     const suffix = query.toString() ? `?${query}` : "";
     return this.request(`/v1/appointments${suffix}`);
+  }
+
+  findAvailableSlots(params: FindAvailableSlotsParams = {}): Promise<{ slots: AvailableSlot[] }> {
+    const query = new URLSearchParams();
+    if (params.cabinet_id) query.set("cabinet_id", params.cabinet_id);
+    if (typeof params.duration === "number") query.set("duration", String(params.duration));
+    if (params.shift) query.set("shift", params.shift);
+    if (params.start_date) query.set("start_date", params.start_date);
+    if (typeof params.days === "number") query.set("days", String(params.days));
+    if (typeof params.limit === "number") query.set("limit", String(params.limit));
+    const suffix = query.toString() ? `?${query}` : "";
+    return this.request(`/v1/appointments/available-slots${suffix}`);
   }
 
   createAppointment(input: {

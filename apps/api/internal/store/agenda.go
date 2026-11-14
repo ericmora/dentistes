@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -391,4 +395,306 @@ func (s *Store) UpdateAppointmentStatus(ctx context.Context, tx pgx.Tx, id, stat
 		return nil, ErrNotFound
 	}
 	return s.GetAppointmentByID(ctx, tx, id)
+}
+
+type AvailableSlotSearchFilter struct {
+	CabinetID       string
+	DurationMinutes int
+	Shift           string // "morning", "afternoon", "all"
+	StartDate       time.Time
+	Days            int
+	Limit           int
+}
+
+type AvailableSlot struct {
+	CabinetID       string `json:"cabinet_id"`
+	CabinetName     string `json:"cabinet_name"`
+	CabinetColor    string `json:"cabinet_color"`
+	Date            string `json:"date"`
+	StartTime       string `json:"start_time"`
+	EndTime         string `json:"end_time"`
+	DurationMinutes int    `json:"duration_minutes"`
+	Shift           string `json:"shift"`
+	FormattedDate   string `json:"formatted_date"`
+}
+
+var spanishDayNames = map[time.Weekday]string{
+	time.Monday:    "Lunes",
+	time.Tuesday:   "Martes",
+	time.Wednesday: "Miércoles",
+	time.Thursday:  "Jueves",
+	time.Friday:    "Viernes",
+	time.Saturday:  "Sábado",
+	time.Sunday:    "Domingo",
+}
+
+var spanishMonthNames = map[time.Month]string{
+	time.January:   "enero",
+	time.February:  "febrero",
+	time.March:     "marzo",
+	time.April:     "abril",
+	time.May:       "mayo",
+	time.June:      "junio",
+	time.July:      "julio",
+	time.August:    "agosto",
+	time.September: "septiembre",
+	time.October:   "octubre",
+	time.November:  "noviembre",
+	time.December:  "diciembre",
+}
+
+func parseHHMMToMinutes(hhmm string) int {
+	parts := strings.Split(strings.TrimSpace(hhmm), ":")
+	if len(parts) != 2 {
+		return 0
+	}
+	h, _ := strconv.Atoi(parts[0])
+	m, _ := strconv.Atoi(parts[1])
+	return h*60 + m
+}
+
+func formatMinutesToHHMM(minutes int) string {
+	h := minutes / 60
+	m := minutes % 60
+	return fmt.Sprintf("%02d:%02d", h, m)
+}
+
+func formatSpanishDate(t time.Time) string {
+	dayName := spanishDayNames[t.Weekday()]
+	monthName := spanishMonthNames[t.Month()]
+	return fmt.Sprintf("%s, %d de %s", dayName, t.Day(), monthName)
+}
+
+type timeInterval struct {
+	start int
+	end   int
+}
+
+func CalculateAvailableSlots(cabinets []Cabinet, appointments []Appointment, filter AvailableSlotSearchFilter) []AvailableSlot {
+	if filter.DurationMinutes <= 0 {
+		filter.DurationMinutes = 30
+	}
+	if filter.Days <= 0 {
+		filter.Days = 14
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 30
+	}
+	if filter.StartDate.IsZero() {
+		now := time.Now().UTC()
+		filter.StartDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	}
+
+	results := []AvailableSlot{}
+
+	for d := 0; d < filter.Days; d++ {
+		currentDate := filter.StartDate.AddDate(0, 0, d)
+		dateStr := currentDate.Format("2006-01-02")
+		dow := int(currentDate.Weekday())
+		if dow == 0 {
+			dow = 7 // 1 = Monday .. 7 = Sunday
+		}
+
+		for _, cab := range cabinets {
+			if filter.CabinetID != "" && cab.ID != filter.CabinetID {
+				continue
+			}
+
+			// Find day availability
+			var dayConfig *CabinetDayAvailability
+			for _, av := range cab.Availability {
+				if av.DayOfWeek == dow {
+					dayConfig = &av
+					break
+				}
+			}
+			if dayConfig == nil {
+				defaults := DefaultCabinetAvailability()
+				for _, av := range defaults {
+					if av.DayOfWeek == dow {
+						dayConfig = &av
+						break
+					}
+				}
+			}
+
+			if dayConfig == nil || !dayConfig.IsOpen {
+				continue
+			}
+
+			openStart := parseHHMMToMinutes(dayConfig.StartTime)
+			if openStart == 0 {
+				openStart = 9 * 60 // default 09:00
+			}
+			openEnd := parseHHMMToMinutes(dayConfig.EndTime)
+			if openEnd == 0 {
+				openEnd = 20 * 60 // default 20:00
+			}
+
+			// Determine search window for this shift
+			windowStart := openStart
+			windowEnd := openEnd
+
+			if filter.Shift == "morning" {
+				if windowStart > 14*60 {
+					continue
+				}
+				if windowEnd > 14*60 {
+					windowEnd = 14 * 60
+				}
+			} else if filter.Shift == "afternoon" {
+				if windowEnd < 14*60 {
+					continue
+				}
+				if windowStart < 14*60 {
+					windowStart = 14 * 60
+				}
+			}
+
+			if windowStart >= windowEnd || (windowEnd-windowStart) < filter.DurationMinutes {
+				continue
+			}
+
+			// Gather busy intervals
+			busy := []timeInterval{}
+
+			// 1. Pauses / Breaks
+			if dayConfig.BreakStart != "" && dayConfig.BreakEnd != "" {
+				bStart := parseHHMMToMinutes(dayConfig.BreakStart)
+				bEnd := parseHHMMToMinutes(dayConfig.BreakEnd)
+				if bEnd > bStart {
+					busy = append(busy, timeInterval{start: bStart, end: bEnd})
+				}
+			}
+
+			// 2. Existing appointments for this cabinet on this date
+			for _, a := range appointments {
+				if a.CabinetID != cab.ID || a.Status == "CANCELLED" {
+					continue
+				}
+				aDateStr := a.StartTime.Format("2006-01-02")
+				if aDateStr != dateStr {
+					continue
+				}
+				aStart := a.StartTime.Hour()*60 + a.StartTime.Minute()
+				aEnd := a.EndTime.Hour()*60 + a.EndTime.Minute()
+				if aEnd > aStart {
+					busy = append(busy, timeInterval{start: aStart, end: aEnd})
+				}
+			}
+
+			// Sort busy intervals by start asc
+			sort.Slice(busy, func(i, j int) bool {
+				return busy[i].start < busy[j].start
+			})
+
+			// Merge overlapping busy intervals
+			mergedBusy := []timeInterval{}
+			for _, b := range busy {
+				if len(mergedBusy) == 0 {
+					mergedBusy = append(mergedBusy, b)
+				} else {
+					last := &mergedBusy[len(mergedBusy)-1]
+					if b.start <= last.end {
+						if b.end > last.end {
+							last.end = b.end
+						}
+					} else {
+						mergedBusy = append(mergedBusy, b)
+					}
+				}
+			}
+
+			// Find gaps inside [windowStart, windowEnd]
+			cursor := windowStart
+			for _, b := range mergedBusy {
+				if b.end <= cursor {
+					continue
+				}
+				if b.start > cursor {
+					gapEnd := b.start
+					if gapEnd > windowEnd {
+						gapEnd = windowEnd
+					}
+					if gapEnd-cursor >= filter.DurationMinutes {
+						for t := cursor; t+filter.DurationMinutes <= gapEnd; t += 15 {
+							shiftName := "morning"
+							if t >= 14*60 {
+								shiftName = "afternoon"
+							}
+							results = append(results, AvailableSlot{
+								CabinetID:       cab.ID,
+								CabinetName:     cab.Name,
+								CabinetColor:    cab.ColorCode,
+								Date:            dateStr,
+								StartTime:       formatMinutesToHHMM(t),
+								EndTime:         formatMinutesToHHMM(t + filter.DurationMinutes),
+								DurationMinutes: filter.DurationMinutes,
+								Shift:           shiftName,
+								FormattedDate:   formatSpanishDate(currentDate),
+							})
+							if len(results) >= filter.Limit {
+								return results
+							}
+						}
+					}
+				}
+				if b.end > cursor {
+					cursor = b.end
+				}
+				if cursor >= windowEnd {
+					break
+				}
+			}
+
+			// Residual gap between cursor and windowEnd
+			if cursor < windowEnd && (windowEnd-cursor) >= filter.DurationMinutes {
+				for t := cursor; t+filter.DurationMinutes <= windowEnd; t += 15 {
+					shiftName := "morning"
+					if t >= 14*60 {
+						shiftName = "afternoon"
+					}
+					results = append(results, AvailableSlot{
+						CabinetID:       cab.ID,
+						CabinetName:     cab.Name,
+						CabinetColor:    cab.ColorCode,
+						Date:            dateStr,
+						StartTime:       formatMinutesToHHMM(t),
+						EndTime:         formatMinutesToHHMM(t + filter.DurationMinutes),
+						DurationMinutes: filter.DurationMinutes,
+						Shift:           shiftName,
+						FormattedDate:   formatSpanishDate(currentDate),
+					})
+					if len(results) >= filter.Limit {
+						return results
+					}
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+func (s *Store) FindAvailableSlots(ctx context.Context, tx pgx.Tx, filter AvailableSlotSearchFilter) ([]AvailableSlot, error) {
+	cabinets, err := s.ListCabinets(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	if filter.StartDate.IsZero() {
+		now := time.Now().UTC()
+		filter.StartDate = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	if filter.Days <= 0 {
+		filter.Days = 14
+	}
+
+	endDate := filter.StartDate.AddDate(0, 0, filter.Days+1)
+	appointments, err := s.ListAppointments(ctx, tx, filter.StartDate, endDate, filter.CabinetID, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return CalculateAvailableSlots(cabinets, appointments, filter), nil
 }

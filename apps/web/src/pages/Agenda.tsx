@@ -10,9 +10,15 @@ import {
   Clock,
   FileText,
   Filter,
+  Maximize2,
+  Minimize2,
+  Moon,
   Plus,
   Radio,
+  Search,
+  Sparkles,
   Stethoscope,
+  Sun,
   UserCheck,
   Users,
   X,
@@ -37,6 +43,7 @@ import {
   DENTAL_TREATMENTS_MASTER,
   type Appointment,
   type AppointmentStatus,
+  type AvailableSlot,
   type WaitingCandidateMatch,
 } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
@@ -93,6 +100,33 @@ export function AgendaPage() {
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
   const [matches, setMatches] = useState<WaitingCandidateMatch[]>([]);
 
+  // Timeline Height Toggle: Compact (28px) vs Expanded (68px)
+  const [isTimelineExpanded, setIsTimelineExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("dentistes_agenda_expanded") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleTimelineExpanded() {
+    setIsTimelineExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("dentistes_agenda_expanded", String(next));
+      } catch {}
+      return next;
+    });
+  }
+
+  // Next Available Slots Finder State
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [finderCabinet, setFinderCabinet] = useState("");
+  const [finderTreatment, setFinderTreatment] = useState(DENTAL_TREATMENTS_MASTER[0].name);
+  const [finderDuration, setFinderDuration] = useState<number>(DENTAL_TREATMENTS_MASTER[0].default_duration_minutes);
+  const [finderShift, setFinderShift] = useState<"all" | "morning" | "afternoon">("all");
+  const [finderStartDate, setFinderStartDate] = useState(todayISO());
+
   const defaultTreatment = DENTAL_TREATMENTS_MASTER[0];
   const [newForm, setNewForm] = useState({
     patient_id: "",
@@ -107,6 +141,41 @@ export function AgendaPage() {
 
   const agendaEnabled = Boolean(me?.features?.agenda);
   const { connected } = useAppointmentStream(agendaEnabled);
+
+  const availableSlotsQuery = useQuery({
+    queryKey: ["available-slots", finderCabinet, finderDuration, finderShift, finderStartDate],
+    queryFn: () =>
+      sdk.findAvailableSlots({
+        cabinet_id: finderCabinet || undefined,
+        duration: finderDuration,
+        shift: finderShift,
+        start_date: finderStartDate,
+        days: 21,
+        limit: 30,
+      }),
+    enabled: agendaEnabled && finderOpen,
+  });
+
+  function handleSelectAvailableSlot(slot: AvailableSlot) {
+    setDate(slot.date);
+    if (slot.cabinet_id) {
+      setCabinetFilter(slot.cabinet_id);
+    }
+    setFinderOpen(false);
+    openNewAt(slot.cabinet_id, slot.start_time, slot.duration_minutes);
+    if (finderTreatment) {
+      setNewForm((prev) => ({
+        ...prev,
+        treatment_type: finderTreatment,
+        duration: String(slot.duration_minutes),
+      }));
+    }
+    notify({
+      tone: "info",
+      title: "Hueco reservado en formulario",
+      description: `${slot.formatted_date} a las ${slot.start_time} (${slot.duration_minutes} min)`,
+    });
+  }
 
   const dayStart = useMemo(() => new Date(`${date}T00:00:00`).toISOString(), [date]);
   const dayEnd = useMemo(() => new Date(`${date}T23:59:59`).toISOString(), [date]);
@@ -395,6 +464,42 @@ export function AgendaPage() {
               {connected ? "En vivo" : "Conectando…"}
             </Badge>
 
+            {/* Expand / Compress Timeline Toggle */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleTimelineExpanded}
+              className="min-h-[32px] px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 border-slate-200"
+              title={isTimelineExpanded ? "Comprimir calendario a vista compacta" : "Expandir calendario a vista detallada"}
+            >
+              {isTimelineExpanded ? (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">Comprimir</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="h-3.5 w-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">Expandir</span>
+                </>
+              )}
+            </Button>
+
+            {/* Buscar Hueco Disponible */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFinderStartDate(date);
+                setFinderOpen(true);
+              }}
+              className="min-h-[32px] px-2.5 py-1 text-xs border-brand-200 bg-brand-50/70 text-brand-800 hover:bg-brand-100"
+              title="Buscar siguientes citas disponibles según gabinete, tratamiento y horario"
+            >
+              <Search className="h-3.5 w-3.5 text-brand-600" />
+              <span>Buscar hueco</span>
+            </Button>
+
             <PermissionGate me={me} permission="appointments:write">
               <Button
                 size="sm"
@@ -428,7 +533,7 @@ export function AgendaPage() {
                 }))}
                 dayOfWeek={(new Date(`${date}T12:00:00`).getDay() || 7)}
                 slots={SLOTS}
-                slotHeight={28}
+                slotHeight={isTimelineExpanded ? 68 : 28}
                 selectedAppointmentId={selectedAppt?.id}
                 selectedSlot={createOpen ? { cabinetId: newForm.cabinet_id, slot: newForm.slot } : null}
                 appointmentsByCabinet={appointmentsByCabinet}
@@ -880,6 +985,241 @@ export function AgendaPage() {
             )}
           </aside>
         </div>
+
+        {/* Modal: Buscador de Siguientes Citas / Huecos Disponibles */}
+        {finderOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+            <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+                    <Search className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Buscador de Siguientes Huecos Disponibles
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Encuentra las próximas citas libres por gabinete, tratamiento y franja horaria
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFinderOpen(false)}
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Filter Controls */}
+              <div className="border-b border-slate-100 bg-slate-50/70 p-4 space-y-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Gabinete Filter */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Gabinete</label>
+                    <select
+                      value={finderCabinet}
+                      onChange={(e) => setFinderCabinet(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-brand-500 focus:outline-none"
+                    >
+                      <option value="">Cualquier gabinete ({allCabinets.length})</option>
+                      {allCabinets.map((cab) => (
+                        <option key={cab.id} value={cab.id}>
+                          {cab.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Fecha a partir de */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">A partir de</label>
+                    <input
+                      type="date"
+                      value={finderStartDate}
+                      onChange={(e) => setFinderStartDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {/* Tratamiento / Hueco necesario */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Tratamiento (duración estimada)
+                    </label>
+                    <select
+                      value={finderTreatment}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFinderTreatment(val);
+                        const found = availableTreatments.find((t) => t.name === val);
+                        if (found) {
+                          setFinderDuration(found.default_duration_minutes);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-brand-500 focus:outline-none"
+                    >
+                      {availableTreatments.map((t) => (
+                        <option key={t.name} value={t.name}>
+                          {t.name} ({t.default_duration_minutes} min)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Duración en minutos buttons */}
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Hueco necesario: <span className="text-brand-700 font-bold">{finderDuration} min</span>
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                      {[15, 20, 30, 45, 60, 90, 120].map((dur) => (
+                        <button
+                          key={dur}
+                          type="button"
+                          onClick={() => setFinderDuration(dur)}
+                          className={cn(
+                            "rounded-md border px-2 py-1 text-xs font-medium transition",
+                            finderDuration === dur
+                              ? "border-brand-600 bg-brand-600 text-white font-bold shadow-2xs"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100",
+                          )}
+                        >
+                          {dur}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Franja Horaria (Mañana / Tarde / Todo el día) */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">Franja horaria preferida</label>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => setFinderShift("all")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                        finderShift === "all"
+                          ? "bg-brand-600 text-white font-bold shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900",
+                      )}
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>Cualquier hora</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFinderShift("morning")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                        finderShift === "morning"
+                          ? "bg-amber-500 text-white font-bold shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900",
+                      )}
+                    >
+                      <Sun className="h-3.5 w-3.5" />
+                      <span>Mañanas (09:00–14:00)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFinderShift("afternoon")}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                        finderShift === "afternoon"
+                          ? "bg-indigo-600 text-white font-bold shadow-2xs"
+                          : "text-slate-600 hover:text-slate-900",
+                      )}
+                    >
+                      <Moon className="h-3.5 w-3.5" />
+                      <span>Tardes (14:00–20:00)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Results List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {availableSlotsQuery.isLoading ? (
+                  <div className="space-y-2 py-4">
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                    <Skeleton className="h-12 w-full rounded-lg" />
+                  </div>
+                ) : availableSlotsQuery.isError ? (
+                  <Alert tone="danger">Error al buscar huecos disponibles en la agenda.</Alert>
+                ) : (availableSlotsQuery.data?.slots ?? []).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Clock className="h-8 w-8 text-slate-300 mb-2" />
+                    <p className="text-sm font-semibold text-slate-700">No se han encontrado huecos con estos criterios</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Prueba a ampliar la franja horaria o buscar en otro gabinete.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-500 px-1 pb-1">
+                      <span>Se han encontrado {availableSlotsQuery.data?.slots.length} huecos disponibles</span>
+                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Hueco de {finderDuration} minutos
+                      </span>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {availableSlotsQuery.data?.slots.map((slot, idx) => (
+                        <div
+                          key={`${slot.date}-${slot.cabinet_id}-${slot.start_time}-${idx}`}
+                          className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-2xs hover:border-brand-400 hover:shadow-xs transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-900">{slot.start_time}–{slot.end_time}</span>
+                              <span
+                                className={cn(
+                                  "rounded px-1.5 py-0.2 text-[10px] font-semibold",
+                                  slot.shift === "morning"
+                                    ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                    : "bg-indigo-50 text-indigo-800 border border-indigo-200",
+                                )}
+                              >
+                                {slot.shift === "morning" ? "Mañana" : "Tarde"}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">
+                              <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: slot.cabinet_color || "#0D9488" }} />
+                              <span className="truncate font-medium text-slate-700">{slot.cabinet_name}</span>
+                              <span>·</span>
+                              <span className="truncate">{slot.formatted_date}</span>
+                            </div>
+                          </div>
+
+                          <Button
+                            size="sm"
+                            className="ml-2 shrink-0 text-xs px-2.5 py-1"
+                            onClick={() => handleSelectAvailableSlot(slot)}
+                          >
+                            Reservar →
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end border-t border-slate-200 px-5 py-3">
+                <Button variant="outline" size="sm" onClick={() => setFinderOpen(false)}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </FeatureGate>
   );

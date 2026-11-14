@@ -156,6 +156,7 @@ func (s *Server) Router() http.Handler {
 				r.Route("/appointments", func(r chi.Router) {
 					r.Use(s.requireFeature("agenda"))
 					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListAppointments)
+					r.With(s.requirePermission("appointments:read")).Get("/available-slots", s.handleFindAvailableSlots)
 					r.With(s.requirePermission("appointments:write")).Post("/", s.handleCreateAppointment)
 					r.With(s.requirePermission("appointments:write")).Put("/{id}", s.handleUpdateAppointment)
 					r.With(s.requirePermission("appointments:write")).Patch("/{id}/status", s.handleUpdateAppointmentStatus)

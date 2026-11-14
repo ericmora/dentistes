@@ -9,6 +9,7 @@ import {
   OdontogramGrid,
   ToothAnatomicalViewer,
   ToothDetailHistoryPanel,
+  computeAppointmentLanes,
 } from "@dentistes/ui";
 
 describe("Agenda UI Components", () => {
@@ -380,5 +381,77 @@ describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {
     expect(toothChip).toBeInTheDocument();
     fireEvent.click(toothChip);
     expect(handleSelectTooth).toHaveBeenCalledWith(16);
+  });
+
+  it("computeAppointmentLanes partitions overlapping appointments side by side in narrower horizontal lanes", () => {
+    const appts = [
+      {
+        id: "a1",
+        patientName: "Paciente 1",
+        doctorName: "Dr. Jordi Martí",
+        treatmentType: "Endodoncia",
+        startTime: "09:00",
+        endTime: "10:00",
+        status: "CONFIRMED" as const,
+      },
+      {
+        id: "a2",
+        patientName: "Paciente 2",
+        doctorName: "Dr. Jordi Martí",
+        treatmentType: "Higiene",
+        startTime: "09:30",
+        endTime: "10:00",
+        status: "SCHEDULED" as const,
+      },
+      {
+        id: "a3",
+        patientName: "Paciente 3",
+        doctorName: "Dr. Jordi Martí",
+        treatmentType: "Revisión",
+        startTime: "10:30",
+        endTime: "11:00",
+        status: "SCHEDULED" as const,
+      },
+    ];
+
+    const lanes = computeAppointmentLanes(appts);
+    expect(lanes.get("a1")).toEqual({ lane: 0, totalLanes: 2 });
+    expect(lanes.get("a2")).toEqual({ lane: 1, totalLanes: 2 });
+    expect(lanes.get("a3")).toEqual({ lane: 0, totalLanes: 1 });
+  });
+
+  it("MultiCabinetTimeline renders overlapping appointments in narrower horizontal widths without occlusion", () => {
+    const appts = [
+      {
+        id: "a1",
+        patientName: "Paciente Alpha",
+        doctorName: "Dr. Jordi Martí",
+        treatmentType: "Endodoncia",
+        startTime: "09:00",
+        endTime: "10:00",
+        status: "CONFIRMED" as const,
+      },
+      {
+        id: "a2",
+        patientName: "Paciente Beta",
+        doctorName: "Dr. Jordi Martí",
+        treatmentType: "Obturación",
+        startTime: "09:30",
+        endTime: "10:00",
+        status: "CONFIRMED" as const,
+      },
+    ];
+
+    render(
+      <MultiCabinetTimeline
+        cabinets={[{ id: "cab-1", name: "Gabinete 1" }]}
+        slots={["09:00", "09:30", "10:00"]}
+        appointmentsByCabinet={{ "cab-1": appts }}
+        slotHeight={30}
+      />,
+    );
+
+    expect(screen.getByText("Paciente Alpha")).toBeInTheDocument();
+    expect(screen.getByText("Paciente Beta")).toBeInTheDocument();
   });
 });

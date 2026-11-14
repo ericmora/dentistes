@@ -143,6 +143,60 @@ func (s *Server) handleListAppointments(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"appointments": items})
 }
 
+func (s *Server) handleFindAvailableSlots(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	cabinetID := q.Get("cabinet_id")
+	shift := q.Get("shift")
+	durStr := q.Get("duration")
+	daysStr := q.Get("days")
+	limitStr := q.Get("limit")
+	startStr := q.Get("start_date")
+
+	duration := 30
+	if durStr != "" {
+		if d, err := strconv.Atoi(durStr); err == nil && d > 0 {
+			duration = d
+		}
+	}
+	days := 14
+	if daysStr != "" {
+		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
+			days = d
+		}
+	}
+	limit := 30
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	startDate := time.Now().UTC()
+	if startStr != "" {
+		if parsed, err := time.Parse("2006-01-02", startStr); err == nil {
+			startDate = parsed
+		} else if parsedRFC, err := time.Parse(time.RFC3339, startStr); err == nil {
+			startDate = parsedRFC
+		}
+	}
+	startDate = time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.UTC)
+
+	tx := txFrom(r.Context())
+	slots, err := s.store.FindAvailableSlots(r.Context(), tx, store.AvailableSlotSearchFilter{
+		CabinetID:       cabinetID,
+		DurationMinutes: duration,
+		Shift:           shift,
+		StartDate:       startDate,
+		Days:            days,
+		Limit:           limit,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"slots": slots})
+}
+
 func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		PatientID     string `json:"patient_id"`

@@ -239,6 +239,9 @@ describe("Dentistes SDK Unit Tests", () => {
       if (url.includes("/v1/doctors")) {
         return new Response(JSON.stringify({ doctors: [{ id: "doc-1", full_name: "Dr. Martí" }] }), { status: 200 });
       }
+      if (url.includes("/v1/appointments/available-slots")) {
+        return new Response(JSON.stringify({ slots: [{ cabinet_id: "cab-1", start_time: "10:00", end_time: "11:00", duration_minutes: 60, shift: "morning" }] }), { status: 200 });
+      }
       if (url.includes("/v1/appointments/appt-1/status")) {
         return new Response(JSON.stringify({ appointment: { id: "appt-1", status: "CANCELLED" } }), { status: 200 });
       }
@@ -280,6 +283,10 @@ describe("Dentistes SDK Unit Tests", () => {
 
     const appts = await client.listAppointments({ cabinet_id: "cab-1" });
     assert.equal(appts.appointments[0].treatment_type, "NETEJA");
+
+    const availSlots = await client.findAvailableSlots({ cabinet_id: "cab-1", duration: 60, shift: "morning" });
+    assert.equal(availSlots.slots.length, 1);
+    assert.equal(availSlots.slots[0].start_time, "10:00");
 
     const statusUpdate = await client.updateAppointmentStatus("appt-1", "CANCELLED");
     assert.equal(statusUpdate.appointment.status, "CANCELLED");

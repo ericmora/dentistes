@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -2281,6 +2281,93 @@ export interface CabinetColumn {
   availability?: CabinetDayAvailability[];
 }
 
+export function computeAppointmentLanes(
+  appointments: AppointmentCardData[],
+): Map<string, { lane: number; totalLanes: number }> {
+  const result = new Map<string, { lane: number; totalLanes: number }>();
+  if (!appointments || appointments.length === 0) return result;
+
+  const valid = appointments.filter((a) => a.status !== "CANCELLED");
+  if (valid.length === 0) return result;
+
+  interface ItemInterval {
+    id: string;
+    start: number;
+    end: number;
+  }
+
+  const intervals: ItemInterval[] = valid.map((a) => {
+    const s = parseTimelineMinutes(a.startTime);
+    const e = parseTimelineMinutes(a.endTime);
+    return {
+      id: a.id,
+      start: s,
+      end: Math.max(s + 5, e),
+    };
+  });
+
+  // Sort by start asc, duration desc
+  intervals.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+
+  // Find overlapping clusters (connected components)
+  const clusters: ItemInterval[][] = [];
+  let currentCluster: ItemInterval[] = [];
+  let currentClusterEnd = -1;
+
+  for (const item of intervals) {
+    if (currentCluster.length === 0) {
+      currentCluster.push(item);
+      currentClusterEnd = item.end;
+    } else if (item.start < currentClusterEnd) {
+      currentCluster.push(item);
+      if (item.end > currentClusterEnd) {
+        currentClusterEnd = item.end;
+      }
+    } else {
+      clusters.push(currentCluster);
+      currentCluster = [item];
+      currentClusterEnd = item.end;
+    }
+  }
+  if (currentCluster.length > 0) {
+    clusters.push(currentCluster);
+  }
+
+  // Assign lanes per cluster using interval scheduling
+  for (const cluster of clusters) {
+    if (cluster.length === 1) {
+      result.set(cluster[0].id, { lane: 0, totalLanes: 1 });
+      continue;
+    }
+
+    const laneEndTimes: number[] = [];
+    const itemAssignments: Array<{ id: string; lane: number }> = [];
+
+    for (const item of cluster) {
+      let assignedLane = -1;
+      for (let i = 0; i < laneEndTimes.length; i++) {
+        if (laneEndTimes[i] <= item.start) {
+          assignedLane = i;
+          laneEndTimes[i] = item.end;
+          break;
+        }
+      }
+      if (assignedLane === -1) {
+        assignedLane = laneEndTimes.length;
+        laneEndTimes.push(item.end);
+      }
+      itemAssignments.push({ id: item.id, lane: assignedLane });
+    }
+
+    const totalLanes = laneEndTimes.length;
+    for (const assign of itemAssignments) {
+      result.set(assign.id, { lane: assign.lane, totalLanes });
+    }
+  }
+
+  return result;
+}
+
 export function MultiCabinetTimeline({
   cabinets,
   slots,
@@ -2310,6 +2397,14 @@ export function MultiCabinetTimeline({
   const pad = isCompactTimeline ? 4 : 6;
   const minCardHeight = isCompactTimeline ? 18 : 28;
   const timeColWidth = isCompactTimeline ? "64px" : "80px";
+
+  const cabinetLanesMap = useMemo(() => {
+    const map: Record<string, Map<string, { lane: number; totalLanes: number }>> = {};
+    cabinets.forEach((cab) => {
+      map[cab.id] = computeAppointmentLanes(appointmentsByCabinet[cab.id] ?? []);
+    });
+    return map;
+  }, [cabinets, appointmentsByCabinet]);
 
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
@@ -2508,52 +2603,54 @@ export function MultiCabinetTimeline({
                       </span>
                     ) : null}
 
-                    {/* Render available gaps inside partially filled slots to optimize idle time */}
-                    {!isEmpty && gaps.map((gap) => {
-                      const gapSlotStr = formatTimelineHHMM(gap.start);
-                      const minOffset = gap.start - slotStart;
-                      const topPx = Math.round(pad / 2) + Math.round((minOffset / 30) * (slotHeight - pad));
-                      const heightPx = Math.max(18, Math.round((gap.duration / 30) * (slotHeight - pad)));
-                      return (
-                        <button
-                          key={gapSlotStr}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectSlot?.(cab.id, gapSlotStr, gap.duration);
-                          }}
-                          style={{
-                            position: "absolute",
-                            top: `${topPx}px`,
-                            left: "3px",
-                            right: "3px",
-                            height: `${heightPx}px`,
-                            zIndex: 15,
-                          }}
-                          className="group/gap flex items-center justify-between rounded border border-dashed border-emerald-400 bg-emerald-50/90 px-1.5 py-0.5 text-left shadow-2xs hover:bg-emerald-100 hover:border-emerald-600 transition-colors"
-                          title={`Hueco disponible de ${gap.duration} min (${gapSlotStr}–${formatTimelineHHMM(gap.start + gap.duration)}). Clic para encajar cita.`}
-                        >
-                          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-800">
-                            <Plus className="h-3 w-3 shrink-0 text-emerald-600" />
-                            <span className="truncate">Encajar {gapSlotStr}</span>
-                          </span>
-                          <span className="rounded bg-emerald-200/80 px-1 text-[9px] font-bold text-emerald-900 tabular-nums">
-                            {gap.duration}m
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {/* Render available gaps inside partially filled slots to optimize idle time in background on hover */}
+                    {!isEmpty &&
+                      gaps.map((gap) => {
+                        const gapSlotStr = formatTimelineHHMM(gap.start);
+                        const minOffset = gap.start - slotStart;
+                        const topPx = Math.round(pad / 2) + Math.round((minOffset / 30) * (slotHeight - pad));
+                        const heightPx = Math.max(18, Math.round((gap.duration / 30) * (slotHeight - pad)));
+                        return (
+                          <button
+                            key={gapSlotStr}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectSlot?.(cab.id, gapSlotStr, gap.duration);
+                            }}
+                            style={{
+                              position: "absolute",
+                              top: `${topPx}px`,
+                              left: "3px",
+                              right: "3px",
+                              height: `${heightPx}px`,
+                              zIndex: 2,
+                            }}
+                            className="opacity-0 group-hover/slot:opacity-100 flex items-center justify-between rounded border border-dashed border-emerald-400 bg-emerald-50/90 px-1.5 py-0.5 text-left shadow-2xs hover:bg-emerald-100 hover:border-emerald-600 transition-opacity"
+                            title={`Hueco disponible de ${gap.duration} min (${gapSlotStr}–${formatTimelineHHMM(gap.start + gap.duration)}). Clic para encajar cita.`}
+                          >
+                            <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-800">
+                              <Plus className="h-3 w-3 shrink-0 text-emerald-600" />
+                              <span className="truncate">Encajar {gapSlotStr}</span>
+                            </span>
+                            <span className="rounded bg-emerald-200/80 px-1 text-[9px] font-bold text-emerald-900 tabular-nums">
+                              {gap.duration}m
+                            </span>
+                          </button>
+                        );
+                      })}
 
-                    {/* Render starting appointments with proportional height spanning across slots */}
-                    {starting.map((item, idx) => {
+                    {/* Render starting appointments with horizontal partitioning on overlap */}
+                    {starting.map((item) => {
                       const durMin = getTimelineDurationMinutes(item.startTime, item.endTime);
                       const minOffset = Math.max(0, parseTimelineMinutes(item.startTime) - slotStart);
                       const topPx = Math.round(pad / 2) + Math.round((minOffset / 30) * (slotHeight - pad));
                       const slotFraction = durMin / 30;
                       const heightPx = Math.max(minCardHeight, Math.round(slotFraction * slotHeight - pad));
 
-                      const widthPct = isConcurrent ? Math.floor(100 / starting.length) : 100;
-                      const leftPct = isConcurrent ? idx * widthPct : 0;
+                      const layout = cabinetLanesMap[cab.id]?.get(item.id) ?? { lane: 0, totalLanes: 1 };
+                      const widthPct = 100 / layout.totalLanes;
+                      const leftPct = layout.lane * widthPct;
 
                       return (
                         <div
@@ -2561,10 +2658,10 @@ export function MultiCabinetTimeline({
                           style={{
                             position: "absolute",
                             top: `${topPx}px`,
-                            left: isConcurrent ? `calc(${leftPct}% + 2px)` : "3px",
-                            width: isConcurrent ? `calc(${widthPct}% - 4px)` : "calc(100% - 6px)",
+                            left: layout.totalLanes > 1 ? `calc(${leftPct}% + 2px)` : "3px",
+                            width: layout.totalLanes > 1 ? `calc(${widthPct}% - 4px)` : "calc(100% - 6px)",
                             height: `${heightPx}px`,
-                            zIndex: selectedAppointmentId === item.id ? 25 : 10 + idx,
+                            zIndex: selectedAppointmentId === item.id ? 25 : 10 + layout.lane,
                           }}
                         >
                           <AppointmentCard
