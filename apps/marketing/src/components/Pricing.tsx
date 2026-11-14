@@ -17,33 +17,6 @@ export function Pricing({ copy, lang }: { copy: Copy; lang: Lang }) {
   const period = annual ? copy.pricing.perYear : copy.pricing.perMonth;
   const monthlyEquivalent = annual ? region.yearly / 12 : null;
 
-  const addons = [
-    {
-      id: "whatsapp",
-      name: copy.pricing.addons.whatsapp.name,
-      description: copy.pricing.addons.whatsapp.description,
-      monthly: region.addons.whatsapp,
-    },
-    {
-      id: "signature",
-      name: copy.pricing.addons.signature.name,
-      description: copy.pricing.addons.signature.description,
-      monthly: region.addons.signature,
-    },
-    {
-      id: "pack",
-      name: copy.pricing.addons.pack.name,
-      description: copy.pricing.addons.pack.description,
-      monthly: region.addons.pack,
-      featured: true,
-    },
-  ];
-
-  function addonPrice(amount: number) {
-    const value = annual ? amount * 10 : amount;
-    return `${formatPrice(lang, region.currency, value, decimalsFor(value))}${annual ? copy.pricing.perYear : copy.pricing.perMonth}`;
-  }
-
   return (
     <div>
       <div className="flex flex-col gap-4 border-y border-line py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -141,24 +114,28 @@ export function Pricing({ copy, lang }: { copy: Copy; lang: Lang }) {
             <p className="mono-label">{copy.pricing.addonsTitle}</p>
             <p className="mt-2 text-xs leading-relaxed text-pine-600">{copy.pricing.addonsNote}</p>
           </div>
-          {addons.map((addon) => (
+          {[
+            copy.pricing.addons.whatsapp,
+            copy.pricing.addons.signature,
+            copy.pricing.addons.pack,
+          ].map((item, idx) => (
             <div
-              key={addon.id}
+              key={item.name}
               className={[
                 "flex flex-1 flex-col justify-between border p-4",
-                addon.featured ? "border-mint-400 bg-mint-50" : "border-line bg-white/45",
+                idx === 2 ? "border-mint-400 bg-mint-50" : "border-line bg-white/45",
               ].join(" ")}
             >
               <div>
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-semibold text-ink">{addon.name}</p>
-                  <p className="shrink-0 font-mono text-[11px] tabular text-pine-700">
-                    {addonPrice(addon.monthly)}
-                  </p>
+                  <p className="text-sm font-semibold text-ink">{item.name}</p>
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-pine-700">
+                    {copy.common.included}
+                  </span>
                 </div>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-pine-600">{addon.description}</p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-pine-600">{item.description}</p>
               </div>
-              {addon.featured ? (
+              {idx === 2 ? (
                 <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.1em] text-pine-600">
                   {copy.pricing.packNote}
                 </p>

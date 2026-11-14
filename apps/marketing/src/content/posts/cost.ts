@@ -81,17 +81,15 @@ export const cost: Post = {
       { type: "h2", text: "Ejemplo con tres personas", id: "ejemplo" },
       {
         type: "p",
-        text: "Imagina una clínica con recepción, dos dentistas y un higienista a tiempo parcial. Cuatro personas acceden al sistema. Comparamos un modelo por usuario de 75 $ USD/mes con una cuota plana de 18,50 $ USD/mes, añadiendo WhatsApp y firma digital en ambos casos.",
+        text: "Imagina una clínica con recepción, dos dentistas y un higienista a tiempo parcial. Cuatro personas acceden al sistema. Comparamos un modelo por usuario de 75 $ USD/mes con una cuota plana de 18,50 $ USD/mes por clínica.",
       },
       {
         type: "table",
         head: ["Concepto", "Por usuario", "Cuota plana"],
         rows: [
           ["4 usuarios × 75 $", "300 $/mes", "—"],
-          ["Cuota por clínica", "—", "18,50 $/mes"],
-          ["WhatsApp", "20 $/mes", "20 $/mes"],
-          ["Firma digital", "10 $/mes", "10 $/mes"],
-          ["Total mensual", "330 $/mes", "48,50 $/mes"],
+          ["Cuota por clínica (equipo ilimitado)", "—", "18,50 $/mes"],
+          ["Total mensual", "300 $/mes", "18,50 $/mes"],
         ],
       },
       {
@@ -167,17 +165,15 @@ export const cost: Post = {
       { type: "h2", text: "Example with three people", id: "example" },
       {
         type: "p",
-        text: "Imagine a clinic with reception, two dentists and a part-time hygienist. Four people access the system. We compare a per-user model at $75 USD/month with a flat fee of $18.50 USD/month, adding WhatsApp and digital signature in both cases.",
+        text: "Imagine a clinic with reception, two dentists and a part-time hygienist. Four people access the system. We compare a per-user model at $75 USD/month with a flat fee of $18.50 USD/month per clinic.",
       },
       {
         type: "table",
         head: ["Item", "Per user", "Flat fee"],
         rows: [
           ["4 users × $75", "$300/month", "—"],
-          ["Fee per clinic", "—", "$18.50/month"],
-          ["WhatsApp", "$20/month", "$20/month"],
-          ["Digital signature", "$10/month", "$10/month"],
-          ["Monthly total", "$330/month", "$48.50/month"],
+          ["Fee per clinic (unlimited team)", "—", "$18.50/month"],
+          ["Monthly total", "$300/month", "$18.50/month"],
         ],
       },
       {
@@ -253,17 +249,15 @@ export const cost: Post = {
       { type: "h2", text: "Exemple amb tres persones", id: "exemple" },
       {
         type: "p",
-        text: "Imagina una clínica amb recepció, dos dentistes i un higienista a temps parcial. Quatre persones accedeixen al sistema. Comparem un model per usuari de 75 $ USD/mes amb una quota plana de 18,50 $ USD/mes, afegint WhatsApp i signatura digital en tots dos casos.",
+        text: "Imagina una clínica amb recepció, dos dentistes i un higienista a temps parcial. Quatre persones accedeixen al sistema. Comparem un model per usuari de 75 $ USD/mes amb una quota plana de 18,50 $ USD/mes per clínica.",
       },
       {
         type: "table",
         head: ["Concepte", "Per usuari", "Quota plana"],
         rows: [
           ["4 usuaris × 75 $", "300 $/mes", "—"],
-          ["Quota per clínica", "—", "18,50 $/mes"],
-          ["WhatsApp", "20 $/mes", "20 $/mes"],
-          ["Signatura digital", "10 $/mes", "10 $/mes"],
-          ["Total mensual", "330 $/mes", "48,50 $/mes"],
+          ["Quota per clínica (equip il·limitat)", "—", "18,50 $/mes"],
+          ["Total mensual", "300 $/mes", "18,50 $/mes"],
         ],
       },
       {

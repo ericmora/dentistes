@@ -199,6 +199,59 @@ describe("Agenda UI Components", () => {
     expect(screen.getByText("Marc Valls")).toBeInTheDocument();
     expect(screen.getByText("Sobrecita")).toBeInTheDocument();
   });
+
+  it("blocks slots when cabinet is closed, outside working hours, or in scheduled pause", () => {
+    const cabinets = [
+      {
+        id: "cab-cirugia",
+        name: "Box Cirugía",
+        colorCode: "#0D9488",
+        availability: [
+          {
+            day_of_week: 1, // Lunes
+            day_name: "Lunes",
+            is_open: true,
+            start_time: "10:00",
+            end_time: "18:00",
+            break_start: "14:00",
+            break_end: "15:00",
+          },
+          {
+            day_of_week: 7, // Domingo
+            day_name: "Domingo",
+            is_open: false,
+            start_time: "09:00",
+            end_time: "14:00",
+          },
+        ],
+      },
+    ];
+
+    // Day 1 (Lunes): 09:00 is outside hours, 14:00 is in break, 10:00 is open
+    const { rerender } = render(
+      <MultiCabinetTimeline
+        cabinets={cabinets}
+        slots={["09:00", "10:00", "14:00"]}
+        dayOfWeek={1}
+        appointmentsByCabinet={{ "cab-cirugia": [] }}
+      />,
+    );
+
+    expect(screen.getByText("Fuera de horario")).toBeInTheDocument();
+    expect(screen.getByText("Pausa (14:00–15:00)")).toBeInTheDocument();
+
+    // Day 7 (Domingo): closed all day
+    rerender(
+      <MultiCabinetTimeline
+        cabinets={cabinets}
+        slots={["10:00"]}
+        dayOfWeek={7}
+        appointmentsByCabinet={{ "cab-cirugia": [] }}
+      />,
+    );
+
+    expect(screen.getByText("Cerrado hoy")).toBeInTheDocument();
+  });
 });
 
 describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {

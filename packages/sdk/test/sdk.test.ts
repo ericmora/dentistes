@@ -224,6 +224,12 @@ describe("Dentistes SDK Unit Tests", () => {
   test("DentistesClient agenda and waiting list APIs", async () => {
     const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
+      if (init?.method === "PUT" && url.includes("/v1/cabinets/cab-1")) {
+        return new Response(JSON.stringify({ cabinet: { id: "cab-1", name: "Gabinet 1 Cirurgia" } }), { status: 200 });
+      }
+      if (init?.method === "POST" && url.includes("/v1/cabinets")) {
+        return new Response(JSON.stringify({ cabinet: { id: "cab-2", name: "Gabinet 2" } }), { status: 201 });
+      }
       if (init?.method === "DELETE" && url.includes("/v1/cabinets/")) {
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
@@ -259,6 +265,12 @@ describe("Dentistes SDK Unit Tests", () => {
 
     const cabs = await client.listCabinets();
     assert.equal(cabs.cabinets.length, 1);
+
+    const createdCab = await client.createCabinet({ name: "Gabinet 2", color_code: "#0EA5E9" });
+    assert.equal(createdCab.cabinet.name, "Gabinet 2");
+
+    const updatedCab = await client.updateCabinet("cab-1", { name: "Gabinet 1 Cirurgia" });
+    assert.equal(updatedCab.cabinet.name, "Gabinet 1 Cirurgia");
 
     const delCab = await client.deleteCabinet("cab-1");
     assert.equal(delCab.ok, true);

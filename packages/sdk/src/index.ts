@@ -198,11 +198,34 @@ export interface Odontogram {
   updated_at: string;
 }
 
+export interface CabinetDayAvailability {
+  day_of_week: number; // 1 = Lunes .. 7 = Domingo
+  day_name?: string;
+  is_open: boolean;
+  start_time: string; // "09:00"
+  end_time: string;   // "20:00"
+  break_start?: string; // "14:00"
+  break_end?: string;   // "15:00"
+}
+
+export function defaultCabinetAvailability(): CabinetDayAvailability[] {
+  return [
+    { day_of_week: 1, day_name: "Lunes", is_open: true, start_time: "09:00", end_time: "20:00", break_start: "14:00", break_end: "15:00" },
+    { day_of_week: 2, day_name: "Martes", is_open: true, start_time: "09:00", end_time: "20:00", break_start: "14:00", break_end: "15:00" },
+    { day_of_week: 3, day_name: "Miércoles", is_open: true, start_time: "09:00", end_time: "20:00", break_start: "14:00", break_end: "15:00" },
+    { day_of_week: 4, day_name: "Jueves", is_open: true, start_time: "09:00", end_time: "20:00", break_start: "14:00", break_end: "15:00" },
+    { day_of_week: 5, day_name: "Viernes", is_open: true, start_time: "09:00", end_time: "20:00", break_start: "14:00", break_end: "15:00" },
+    { day_of_week: 6, day_name: "Sábado", is_open: true, start_time: "09:00", end_time: "14:00" },
+    { day_of_week: 7, day_name: "Domingo", is_open: false, start_time: "09:00", end_time: "14:00" },
+  ];
+}
+
 export interface Cabinet {
   id: string;
   name: string;
   color_code: string;
   is_active: boolean;
+  availability?: CabinetDayAvailability[];
   created_at: string;
 }
 
@@ -837,8 +860,23 @@ export class DentistesClient {
     return this.request("/v1/cabinets");
   }
 
-  createCabinet(input: { name: string; color_code?: string }): Promise<{ cabinet: Cabinet }> {
+  createCabinet(input: {
+    name: string;
+    color_code?: string;
+    availability?: CabinetDayAvailability[];
+  }): Promise<{ cabinet: Cabinet }> {
     return this.request("/v1/cabinets", { method: "POST", body: input });
+  }
+
+  updateCabinet(
+    id: string,
+    input: {
+      name?: string;
+      color_code?: string;
+      availability?: CabinetDayAvailability[];
+    }
+  ): Promise<{ cabinet: Cabinet }> {
+    return this.request(`/v1/cabinets/${encodeURIComponent(id)}`, { method: "PUT", body: input });
   }
 
   deleteCabinet(id: string): Promise<{ ok: boolean }> {

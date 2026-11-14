@@ -25,8 +25,9 @@ func (s *Server) handleListCabinets(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name      string `json:"name"`
-		ColorCode string `json:"color_code"`
+		Name         string                         `json:"name"`
+		ColorCode    string                         `json:"color_code"`
+		Availability []store.CabinetDayAvailability `json:"availability"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -39,12 +40,41 @@ func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := claimsFrom(r.Context())
 	tx := txFrom(r.Context())
-	cab, err := s.store.CreateCabinet(r.Context(), tx, claims.TenantID, req.Name, strings.TrimSpace(req.ColorCode))
+	cab, err := s.store.CreateCabinet(r.Context(), tx, claims.TenantID, req.Name, strings.TrimSpace(req.ColorCode), req.Availability)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not create cabinet", nil)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"cabinet": cab})
+}
+
+func (s *Server) handleUpdateCabinet(w http.ResponseWriter, r *http.Request) {
+	cabinetID := chi.URLParam(r, "id")
+	if cabinetID == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "cabinet id is required", nil)
+		return
+	}
+	var req struct {
+		Name         string                         `json:"name"`
+		ColorCode    string                         `json:"color_code"`
+		Availability []store.CabinetDayAvailability `json:"availability"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	cab, err := s.store.UpdateCabinet(r.Context(), tx, claims.TenantID, cabinetID, strings.TrimSpace(req.Name), strings.TrimSpace(req.ColorCode), req.Availability)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "cabinet not found", nil)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not update cabinet", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cabinet": cab})
 }
 
 func (s *Server) handleDeleteCabinet(w http.ResponseWriter, r *http.Request) {

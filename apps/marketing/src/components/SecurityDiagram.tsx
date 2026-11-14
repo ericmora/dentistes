@@ -3,9 +3,9 @@ import { Icon } from "./Icon";
 
 export function SecurityDiagram({ copy }: { copy: Copy["security"]["diagram"] }) {
   const nodes = [
-    { icon: "users" as const, label: copy.clinic, sub: "TLS 1.3" },
-    { icon: "lock" as const, label: copy.api, sub: "Auth + roles" },
-    { icon: "database" as const, label: copy.db, sub: "RLS" },
+    { icon: "users" as const, label: copy.clinic, sub: copy.clinicSub },
+    { icon: "lock" as const, label: copy.api, sub: copy.apiSub },
+    { icon: "database" as const, label: copy.db, sub: copy.dbSub },
   ];
 
   return (
@@ -39,7 +39,7 @@ export function SecurityDiagram({ copy }: { copy: Copy["security"]["diagram"] })
         </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
-          {["TLS", "RBAC", "RLS", "Backups", "Audit log"].map((item) => (
+          {copy.badges.map((item) => (
             <span
               key={item}
               className="border border-mint-200/20 px-2 py-1 font-mono text-[8px] uppercase tracking-[0.1em] text-mint-200/70"

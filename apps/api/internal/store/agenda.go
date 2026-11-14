@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -10,12 +11,69 @@ import (
 
 var ErrOverlap = errors.New("appointment overlap")
 
+type CabinetDayAvailability struct {
+	DayOfWeek  int    `json:"day_of_week"` // 1 = Monday .. 7 = Sunday
+	DayName    string `json:"day_name,omitempty"`
+	IsOpen     bool   `json:"is_open"`
+	StartTime  string `json:"start_time"`
+	EndTime    string `json:"end_time"`
+	BreakStart string `json:"break_start,omitempty"`
+	BreakEnd   string `json:"break_end,omitempty"`
+}
+
+func DefaultCabinetAvailability() []CabinetDayAvailability {
+	days := []struct {
+		d int
+		n string
+	}{
+		{1, "Lunes"},
+		{2, "Martes"},
+		{3, "Miércoles"},
+		{4, "Jueves"},
+		{5, "Viernes"},
+		{6, "Sábado"},
+		{7, "Domingo"},
+	}
+	out := make([]CabinetDayAvailability, 7)
+	for i, day := range days {
+		isOpen := day.d <= 5
+		startTime := "09:00"
+		endTime := "20:00"
+		breakStart := "14:00"
+		breakEnd := "15:00"
+		if day.d == 6 {
+			isOpen = true
+			startTime = "09:00"
+			endTime = "14:00"
+			breakStart = ""
+			breakEnd = ""
+		} else if day.d == 7 {
+			isOpen = false
+			startTime = "09:00"
+			endTime = "14:00"
+			breakStart = ""
+			breakEnd = ""
+		}
+		out[i] = CabinetDayAvailability{
+			DayOfWeek:  day.d,
+			DayName:    day.n,
+			IsOpen:     isOpen,
+			StartTime:  startTime,
+			EndTime:    endTime,
+			BreakStart: breakStart,
+			BreakEnd:   breakEnd,
+		}
+	}
+	return out
+}
+
 type Cabinet struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	ColorCode string    `json:"color_code"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name"`
+	ColorCode    string                   `json:"color_code"`
+	IsActive     bool                     `json:"is_active"`
+	Availability []CabinetDayAvailability `json:"availability"`
+	CreatedAt    time.Time                `json:"created_at"`
 }
 
 type Doctor struct {
@@ -58,7 +116,7 @@ type UpsertAppointmentInput struct {
 }
 
 func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) {
-	rows, err := tx.Query(ctx, `select id, name, coalesce(color_code, '#0D9488'), is_active, created_at
+	rows, err := tx.Query(ctx, `select id, name, coalesce(color_code, '#0D9488'), is_active, coalesce(availability, '[]'::jsonb), created_at
 		from cabinets where is_active = true order by created_at, name`)
 	if err != nil {
 		return nil, err
@@ -67,26 +125,81 @@ func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) 
 	out := []Cabinet{}
 	for rows.Next() {
 		var c Cabinet
-		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &c.CreatedAt); err != nil {
+		var availBytes []byte
+		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &availBytes, &c.CreatedAt); err != nil {
 			return nil, err
+		}
+		if len(availBytes) > 0 {
+			_ = json.Unmarshal(availBytes, &c.Availability)
+		}
+		if len(c.Availability) == 0 {
+			c.Availability = DefaultCabinetAvailability()
 		}
 		out = append(out, c)
 	}
 	return out, rows.Err()
 }
 
-func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode string) (*Cabinet, error) {
+func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode string, availability []CabinetDayAvailability) (*Cabinet, error) {
 	if colorCode == "" {
 		colorCode = "#0D9488"
 	}
-	var c Cabinet
-	err := tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code)
-		values ($1, $2, $3)
-		returning id, name, color_code, is_active, created_at`,
-		tenantID, name, colorCode).
-		Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &c.CreatedAt)
+	if len(availability) == 0 {
+		availability = DefaultCabinetAvailability()
+	}
+	availBytes, err := json.Marshal(availability)
 	if err != nil {
 		return nil, err
+	}
+	var c Cabinet
+	var rawAvail []byte
+	err = tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code, availability)
+		values ($1, $2, $3, $4::jsonb)
+		returning id, name, color_code, is_active, availability, created_at`,
+		tenantID, name, colorCode, availBytes).
+		Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &rawAvail, &c.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if len(rawAvail) > 0 {
+		_ = json.Unmarshal(rawAvail, &c.Availability)
+	} else {
+		c.Availability = availability
+	}
+	return &c, nil
+}
+
+func (s *Store) UpdateCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID, name, colorCode string, availability []CabinetDayAvailability) (*Cabinet, error) {
+	if colorCode == "" {
+		colorCode = "#0D9488"
+	}
+	if len(availability) == 0 {
+		availability = DefaultCabinetAvailability()
+	}
+	availBytes, err := json.Marshal(availability)
+	if err != nil {
+		return nil, err
+	}
+	var c Cabinet
+	var rawAvail []byte
+	err = tx.QueryRow(ctx, `update cabinets
+		set name = coalesce(nullif($3, ''), name),
+			color_code = coalesce(nullif($4, ''), color_code),
+			availability = $5::jsonb
+		where id = $1::uuid and tenant_id = $2::uuid and is_active = true
+		returning id, name, color_code, is_active, availability, created_at`,
+		cabinetID, tenantID, name, colorCode, availBytes).
+		Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &rawAvail, &c.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(rawAvail) > 0 {
+		_ = json.Unmarshal(rawAvail, &c.Availability)
+	} else {
+		c.Availability = availability
 	}
 	return &c, nil
 }

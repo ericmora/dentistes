@@ -2264,10 +2264,21 @@ export function AppointmentCard({
   );
 }
 
+export interface CabinetDayAvailability {
+  day_of_week: number; // 1 = Lunes .. 7 = Domingo
+  day_name?: string;
+  is_open: boolean;
+  start_time: string;
+  end_time: string;
+  break_start?: string;
+  break_end?: string;
+}
+
 export interface CabinetColumn {
   id: string;
   name: string;
   colorCode?: string;
+  availability?: CabinetDayAvailability[];
 }
 
 export function MultiCabinetTimeline({
@@ -2277,6 +2288,7 @@ export function MultiCabinetTimeline({
   selectedAppointmentId,
   selectedSlot,
   appointmentsByCabinet,
+  dayOfWeek,
   onSelectAppointment,
   onSelectSlot,
   onMoveAppointment,
@@ -2287,6 +2299,7 @@ export function MultiCabinetTimeline({
   selectedAppointmentId?: string;
   selectedSlot?: { cabinetId: string; slot: string } | null;
   appointmentsByCabinet: Record<string, AppointmentCardData[]>;
+  dayOfWeek?: number;
   onSelectAppointment?: (appointment: AppointmentCardData) => void;
   onSelectSlot?: (cabinetId: string, slot: string, suggestedDuration?: number) => void;
   onMoveAppointment?: (appointmentId: string, targetCabinetId: string, targetSlot: string) => void;
@@ -2378,6 +2391,53 @@ export function MultiCabinetTimeline({
                 const isDropHover = hoverTarget === cellKey;
                 const isSlotSelected = selectedSlot?.cabinetId === cab.id && selectedSlot?.slot === slot;
                 const isEmpty = starting.length === 0 && !isCoveredFromAbove;
+
+                const dayConfig = dayOfWeek && cab.availability
+                  ? cab.availability.find((a) => a.day_of_week === dayOfWeek)
+                  : undefined;
+
+                let isSlotBlocked = false;
+                let blockedReason = "";
+
+                if (dayConfig) {
+                  if (!dayConfig.is_open) {
+                    isSlotBlocked = true;
+                    blockedReason = "Cerrado hoy";
+                  } else {
+                    const openStart = parseTimelineMinutes(dayConfig.start_time || "09:00");
+                    const openEnd = parseTimelineMinutes(dayConfig.end_time || "20:00");
+                    if (slotStart < openStart || slotEnd > openEnd) {
+                      isSlotBlocked = true;
+                      blockedReason = "Fuera de horario";
+                    } else if (dayConfig.break_start && dayConfig.break_end) {
+                      const bStart = parseTimelineMinutes(dayConfig.break_start);
+                      const bEnd = parseTimelineMinutes(dayConfig.break_end);
+                      if (slotStart < bEnd && slotEnd > bStart) {
+                        isSlotBlocked = true;
+                        blockedReason = `Pausa (${dayConfig.break_start}–${dayConfig.break_end})`;
+                      }
+                    }
+                  }
+                }
+
+                if (isSlotBlocked && isEmpty) {
+                  return (
+                    <div
+                      key={cellKey}
+                      onClick={() => onSelectSlot?.(cab.id, slot, 30)}
+                      style={{ height: `${slotHeight}px` }}
+                      className="relative border-l border-slate-100 p-0.5 bg-slate-100/70 select-none overflow-hidden cursor-pointer group/blocked hover:bg-slate-200/50 transition-colors"
+                      title={`Gabinete no disponible: ${blockedReason}. Clic para forzar cita de urgencia.`}
+                    >
+                      <div className="flex h-full w-full items-center justify-center rounded border border-dashed border-slate-300/80 bg-white/40 px-1 text-[10px] font-medium text-slate-500">
+                        <span className="truncate flex items-center gap-1">
+                          <Lock className="h-2.5 w-2.5 shrink-0 text-slate-400" />
+                          <span>{blockedReason}</span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
 
                 // Compute gaps of >= 5 minutes in this slot [slotStart, slotEnd)
                 const isMinOccupied = (m: number) => {

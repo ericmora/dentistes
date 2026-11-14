@@ -420,7 +420,13 @@ export function AgendaPage() {
               </Alert>
             ) : (
               <MultiCabinetTimeline
-                cabinets={cabinets.map((c) => ({ id: c.id, name: c.name, colorCode: c.color_code }))}
+                cabinets={cabinets.map((c) => ({
+                  id: c.id,
+                  name: c.name,
+                  colorCode: c.color_code,
+                  availability: c.availability,
+                }))}
+                dayOfWeek={(new Date(`${date}T12:00:00`).getDay() || 7)}
                 slots={SLOTS}
                 slotHeight={28}
                 selectedAppointmentId={selectedAppt?.id}

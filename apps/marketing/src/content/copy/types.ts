@@ -112,7 +112,16 @@ export type Copy = {
     title: string;
     intro: string;
     points: { title: string; text: string }[];
-    diagram: { clinic: string; api: string; db: string; label: string };
+    diagram: {
+      clinic: string;
+      clinicSub: string;
+      api: string;
+      apiSub: string;
+      db: string;
+      dbSub: string;
+      label: string;
+      badges: string[];
+    };
     note: string;
   };
   pricing: {

@@ -16,7 +16,7 @@ import {
   useToast,
   formatMoney,
 } from "@dentistes/ui";
-import type { Treatment } from "@dentistes/sdk";
+import { defaultCabinetAvailability, type Cabinet, type CabinetDayAvailability, type Treatment } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 import { UsersPage } from "./Users";
 import { BillingPage } from "./Billing";
@@ -43,6 +43,11 @@ export function ClinicAdminPage() {
   const [confirmSubdomain, setConfirmSubdomain] = useState("");
   const [cancelAccountOpen, setCancelAccountOpen] = useState(false);
   const [cabinetToDelete, setCabinetToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Cabinets state
+  const [cabinetModalOpen, setCabinetModalOpen] = useState(false);
+  const [editingCabinet, setEditingCabinet] = useState<Cabinet | null>(null);
+  const [cabinetAvailability, setCabinetAvailability] = useState<CabinetDayAvailability[]>(defaultCabinetAvailability());
 
   // Treatments state
   const [treatmentModalOpen, setTreatmentModalOpen] = useState(false);
@@ -138,17 +143,57 @@ export function ClinicAdminPage() {
     setTreatmentModalOpen(true);
   }
 
-  const createCabinetMutation = useMutation({
-    mutationFn: () => sdk.createCabinet({ name: cabinetName, color_code: cabinetColor }),
+  function openCreateCabinet() {
+    setEditingCabinet(null);
+    setCabinetName("");
+    setCabinetColor("#0D9488");
+    setCabinetAvailability(defaultCabinetAvailability());
+    setCabinetModalOpen(true);
+  }
+
+  function openEditCabinet(cab: Cabinet) {
+    setEditingCabinet(cab);
+    setCabinetName(cab.name);
+    setCabinetColor(cab.color_code || "#0D9488");
+    setCabinetAvailability(cab.availability && cab.availability.length > 0 ? cab.availability : defaultCabinetAvailability());
+    setCabinetModalOpen(true);
+  }
+
+  function formatCabinetScheduleSummary(avail?: CabinetDayAvailability[]): string {
+    if (!avail || avail.length === 0) return "Lun–Vie 09:00–20:00 (Estándar)";
+    const openDays = avail.filter((d) => d.is_open);
+    if (openDays.length === 0) return "Cerrado todos los días";
+    if (openDays.length === 7) {
+      const p = openDays[0].break_start ? ` (Pausa ${openDays[0].break_start}–${openDays[0].break_end})` : "";
+      return `Abierto los 7 días · ${openDays[0].start_time}–${openDays[0].end_time}${p}`;
+    }
+    const daysStr = openDays.map((d) => d.day_name?.slice(0, 3) || `Día ${d.day_of_week}`).join(", ");
+    const p = openDays[0].break_start ? ` (Pausa ${openDays[0].break_start}–${openDays[0].break_end})` : "";
+    return `${daysStr} · ${openDays[0].start_time}–${openDays[0].end_time}${p}`;
+  }
+
+  const saveCabinetMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        name: cabinetName.trim(),
+        color_code: cabinetColor,
+        availability: cabinetAvailability,
+      };
+      if (editingCabinet) {
+        return sdk.updateCabinet(editingCabinet.id, payload);
+      }
+      return sdk.createCabinet(payload);
+    },
     onSuccess: async () => {
-      setCabinetName("");
-      notify({ tone: "success", title: "Gabinete añadido" });
+      setCabinetModalOpen(false);
+      setEditingCabinet(null);
+      notify({ tone: "success", title: editingCabinet ? "Gabinete actualizado" : "Gabinete creado" });
       await queryClient.invalidateQueries({ queryKey: ["cabinets"] });
     },
     onError: (err) => {
       notify({
         tone: "danger",
-        title: "No se pudo crear el gabinete",
+        title: "No se pudo guardar el gabinete",
         description: err instanceof Error ? err.message : undefined,
       });
     },
@@ -227,16 +272,52 @@ export function ClinicAdminPage() {
               id: "cabinets",
               label: "Gabinetes",
               content: (
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Card title="Gabinetes activos" description="Boxes disponibles en la agenda">
-                    <ul className="space-y-2">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Gabinetes dentales y disponibilidad</h3>
+                      <p className="text-sm text-slate-500">
+                        Gestiona los boxes de la clínica, colores distintivos y los horarios o franjas bloqueadas por día de la semana.
+                      </p>
+                    </div>
+                    <Button onClick={openCreateCabinet}>
+                      <Plus className="h-4 w-4" />
+                      Nuevo gabinete
+                    </Button>
+                  </div>
+
+                  <Card>
+                    <div className="divide-y divide-slate-100">
                       {(cabinetsQuery.data?.cabinets ?? []).map((cab) => (
-                        <li key={cab.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                          <span className="flex items-center gap-2 font-medium text-slate-900">
-                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: cab.color_code }} />
-                            {cab.name}
-                          </span>
-                          <div className="flex items-center gap-1.5">
+                        <div key={cab.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-start gap-3">
+                            <span
+                              className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: cab.color_code || "#0D9488" }}
+                              title={cab.color_code}
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-900">{cab.name}</span>
+                                <Badge tone="info" className="text-[10px]">Box Activo</Badge>
+                              </div>
+                              <p className="mt-0.5 text-xs text-slate-500 flex items-center gap-1.5">
+                                <Clock className="h-3 w-3 text-slate-400" />
+                                <span>{formatCabinetScheduleSummary(cab.availability)}</span>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 self-end sm:self-center">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs"
+                              title="Configurar horario y disponibilidad"
+                              onClick={() => openEditCabinet(cab)}
+                            >
+                              <Edit2 className="h-3.5 w-3.5 mr-1 text-slate-600" />
+                              Editar horario
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -247,36 +328,14 @@ export function ClinicAdminPage() {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
-                        </li>
+                        </div>
                       ))}
-                    </ul>
-                  </Card>
-                  <Card title="Añadir gabinete">
-                    <form
-                      className="space-y-3"
-                      onSubmit={(e: FormEvent) => {
-                        e.preventDefault();
-                        createCabinetMutation.mutate();
-                      }}
-                    >
-                      <Input
-                        label="Nombre del gabinete"
-                        value={cabinetName}
-                        onChange={(e) => setCabinetName(e.target.value)}
-                        placeholder="Box Cirugía"
-                        required
-                      />
-                      <Input
-                        label="Color identificativo"
-                        type="color"
-                        value={cabinetColor}
-                        onChange={(e) => setCabinetColor(e.target.value)}
-                      />
-                      <Button type="submit" loading={createCabinetMutation.isPending} className="w-full">
-                        <Plus className="h-4 w-4" />
-                        Crear gabinete
-                      </Button>
-                    </form>
+                      {(cabinetsQuery.data?.cabinets ?? []).length === 0 && (
+                        <div className="py-8 text-center text-sm text-slate-500">
+                          No hay gabinetes configurados. Pulsa en "Nuevo gabinete" para crear el primero.
+                        </div>
+                      )}
+                    </div>
                   </Card>
                 </div>
               ),
@@ -429,6 +488,138 @@ export function ClinicAdminPage() {
               : []),
           ]}
         />
+
+        <Modal
+          open={cabinetModalOpen}
+          onClose={() => setCabinetModalOpen(false)}
+          title={editingCabinet ? "Editar gabinete y disponibilidad" : "Nuevo gabinete"}
+          description="Configura el nombre del box, su color distintivo y los días y horas de disponibilidad semanal."
+          maxWidth="max-w-2xl"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setCabinetModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                loading={saveCabinetMutation.isPending}
+                onClick={() => saveCabinetMutation.mutate()}
+                disabled={!cabinetName.trim()}
+              >
+                Guardar gabinete
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 py-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Nombre del gabinete"
+                placeholder="Ej. Box 1 (Cirugía)"
+                value={cabinetName}
+                onChange={(e) => setCabinetName(e.target.value)}
+                required
+              />
+              <Input
+                label="Color identificativo"
+                type="color"
+                value={cabinetColor}
+                onChange={(e) => setCabinetColor(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Disponibilidad y bloqueos por día de la semana
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Los días desmarcados y las franjas de pausa o fuera de horario aparecerán bloqueados automáticamente en la agenda.
+                </p>
+              </div>
+
+              <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-slate-50/50">
+                {cabinetAvailability.map((d, index) => (
+                  <div key={d.day_of_week} className="flex flex-col gap-2 p-2.5 sm:flex-row sm:items-center sm:justify-between text-xs">
+                    <div className="flex items-center gap-2.5 w-28">
+                      <input
+                        type="checkbox"
+                        id={`day-${d.day_of_week}`}
+                        checked={d.is_open}
+                        onChange={(e) => {
+                          const next = [...cabinetAvailability];
+                          next[index] = { ...d, is_open: e.target.checked };
+                          setCabinetAvailability(next);
+                        }}
+                        className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                      />
+                      <label htmlFor={`day-${d.day_of_week}`} className="font-semibold text-slate-900 cursor-pointer">
+                        {d.day_name || `Día ${d.day_of_week}`}
+                      </label>
+                    </div>
+
+                    {d.is_open ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-500 font-medium">Horario:</span>
+                          <input
+                            type="time"
+                            value={d.start_time}
+                            onChange={(e) => {
+                              const next = [...cabinetAvailability];
+                              next[index] = { ...d, start_time: e.target.value };
+                              setCabinetAvailability(next);
+                            }}
+                            className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-800"
+                          />
+                          <span className="text-slate-400">–</span>
+                          <input
+                            type="time"
+                            value={d.end_time}
+                            onChange={(e) => {
+                              const next = [...cabinetAvailability];
+                              next[index] = { ...d, end_time: e.target.value };
+                              setCabinetAvailability(next);
+                            }}
+                            className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-800"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1 border-l border-slate-200 pl-3">
+                          <span className="text-[10px] text-slate-500 font-medium">Pausa/Bloqueo:</span>
+                          <input
+                            type="time"
+                            value={d.break_start || ""}
+                            onChange={(e) => {
+                              const next = [...cabinetAvailability];
+                              next[index] = { ...d, break_start: e.target.value };
+                              setCabinetAvailability(next);
+                            }}
+                            placeholder="14:00"
+                            className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-800"
+                          />
+                          <span className="text-slate-400">–</span>
+                          <input
+                            type="time"
+                            value={d.break_end || ""}
+                            onChange={(e) => {
+                              const next = [...cabinetAvailability];
+                              next[index] = { ...d, break_end: e.target.value };
+                              setCabinetAvailability(next);
+                            }}
+                            placeholder="15:00"
+                            className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 italic text-[11px]">Cerrado / Bloqueado todo el día</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Modal>
 
         <ConfirmDialog
           open={Boolean(cabinetToDelete)}
