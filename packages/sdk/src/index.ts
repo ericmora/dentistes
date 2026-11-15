@@ -26,6 +26,29 @@ export interface Tenant {
   trial_ends_at?: string;
 }
 
+export interface ClinicBudgetSettings {
+  logo_url: string;
+  clinic_contact_line: string;
+  budget_default_validity_days: number;
+  budget_default_series: string;
+  budget_warning_days_before_expiry: number;
+  budget_validity_terms: string;
+  budget_auto_expire: boolean;
+}
+
+export function defaultClinicBudgetSettings(): ClinicBudgetSettings {
+  return {
+    logo_url: "",
+    clinic_contact_line: "",
+    budget_default_validity_days: 30,
+    budget_default_series: "PRE",
+    budget_warning_days_before_expiry: 7,
+    budget_validity_terms:
+      "Presupuesto válido durante el periodo de vigencia indicado. Los importes reflejados incluyen los materiales y controles clínicos especificados para cada alternativa de tratamiento.",
+    budget_auto_expire: true,
+  };
+}
+
 export interface Feature {
   key: string;
   name: string;
@@ -175,6 +198,18 @@ export interface PatientDetail extends Patient {
   medical_alerts: MedicalAlerts;
 }
 
+export type ClinicalAttachmentKind = "XRAY" | "PHOTO" | "DOCUMENT";
+
+export interface ClinicalAttachment {
+  id: string;
+  kind: ClinicalAttachmentKind;
+  name: string;
+  mime_type: string;
+  data_url: string;
+  size_bytes?: number;
+  tooth_number?: string;
+}
+
 export interface ClinicalRecord {
   id: string;
   patient_id: string;
@@ -184,6 +219,7 @@ export interface ClinicalRecord {
   entry_type: "NOTE" | "DIAGNOSIS" | "PROCEDURE" | "PRESCRIPTION";
   content: string;
   amends_entry_id?: string;
+  attachments?: ClinicalAttachment[];
   created_at: string;
 }
 
@@ -224,6 +260,9 @@ export interface Cabinet {
   id: string;
   name: string;
   color_code: string;
+  equipment?: string;
+  allowed_categories?: string[];
+  allowed_treatments?: string[];
   is_active: boolean;
   availability?: CabinetDayAvailability[];
   created_at: string;
@@ -273,6 +312,111 @@ export interface CreatePatientInvoiceInput {
   due_date?: string;
   status?: "DRAFT" | "ISSUED";
   items: PatientInvoiceItem[];
+}
+
+export type ClinicalFindingStatus = "OPEN" | "IN_BUDGET" | "ACCEPTED" | "INVOICED" | "DISCARDED";
+export type ClinicalFindingSeverity = "LOW" | "MEDIUM" | "HIGH";
+
+export interface ClinicalFinding {
+  id: string;
+  tenant_id?: string;
+  patient_id: string;
+  doctor_id: string;
+  doctor_name?: string;
+  tooth_number: string;
+  surfaces: string[];
+  pathology_code: string;
+  diagnosis: string;
+  severity: ClinicalFindingSeverity;
+  status: ClinicalFindingStatus;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateFindingInput {
+  tooth_number: string;
+  surfaces?: string[];
+  pathology_code?: string;
+  diagnosis: string;
+  severity?: ClinicalFindingSeverity;
+  notes?: string;
+}
+
+export interface BudgetProcedureItem {
+  id: string;
+  treatment_code?: string;
+  description: string;
+  tooth_number?: string;
+  quantity: number;
+  unit_price_cents: number;
+  discount_percent?: number;
+  tax_rate_percent?: number;
+}
+
+export type PatientOptionResponse = "PENDING" | "ACCEPTED" | "REJECTED";
+
+export interface BudgetTreatmentOption {
+  id: string;
+  option_label: string;
+  name: string;
+  description?: string;
+  is_recommended: boolean;
+  items: BudgetProcedureItem[];
+  total_cents: number;
+  patient_response: PatientOptionResponse;
+  patient_response_at?: string;
+  patient_response_notes?: string;
+}
+
+export interface BudgetFindingBlock {
+  finding_id: string;
+  tooth_number: string;
+  surfaces?: string[];
+  diagnosis: string;
+  notes?: string;
+  options: BudgetTreatmentOption[];
+}
+
+export type PatientBudgetStatus =
+  | "DRAFT"
+  | "PRESENTED"
+  | "ACCEPTED"
+  | "PARTIAL"
+  | "REJECTED"
+  | "EXPIRED"
+  | "INVOICED";
+
+export interface PatientBudget {
+  id: string;
+  tenant_id?: string;
+  patient_id: string;
+  doctor_id: string;
+  doctor_name?: string;
+  series: string;
+  budget_number: number;
+  title: string;
+  issue_date: string;
+  validity_days: number;
+  valid_until: string;
+  status: PatientBudgetStatus;
+  findings_blocks: BudgetFindingBlock[];
+  min_estimate_amount: number;
+  max_estimate_amount: number;
+  accepted_amount: number;
+  notes: string;
+  invoice_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreatePatientBudgetInput {
+  series?: string;
+  title: string;
+  validity_days?: number;
+  status?: PatientBudgetStatus;
+  notes?: string;
+  findings_blocks: BudgetFindingBlock[];
 }
 
 export interface Doctor {
@@ -352,6 +496,7 @@ export interface AvailableSlot {
   cabinet_id: string;
   cabinet_name: string;
   cabinet_color?: string;
+  cabinet_equipment?: string;
   doctor_id?: string;
   doctor_name?: string;
   shift_id?: string;
@@ -888,6 +1033,7 @@ export class DentistesClient {
       content: string;
       appointment_id?: string;
       amends_entry_id?: string;
+      attachments?: ClinicalAttachment[];
     },
   ): Promise<{ record: ClinicalRecord }> {
     return this.request(`/v1/patients/${patientId}/clinical-records`, { method: "POST", body: input });
@@ -920,6 +1066,101 @@ export class DentistesClient {
     return this.request(`/v1/invoices/${encodeURIComponent(invoiceId)}/payments`, { method: "POST", body: input });
   }
 
+  listPatientFindings(
+    patientId: string,
+    params: { open?: boolean } = {},
+  ): Promise<{ findings: ClinicalFinding[] }> {
+    const q = params.open ? "?open=true" : "";
+    return this.request(`/v1/patients/${encodeURIComponent(patientId)}/findings${q}`);
+  }
+
+  createPatientFinding(
+    patientId: string,
+    input: CreateFindingInput,
+  ): Promise<{ finding: ClinicalFinding }> {
+    return this.request(`/v1/patients/${encodeURIComponent(patientId)}/findings`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  updateFindingStatus(
+    findingId: string,
+    input: { status: ClinicalFindingStatus; notes?: string },
+  ): Promise<{ finding: ClinicalFinding }> {
+    return this.request(`/v1/findings/${encodeURIComponent(findingId)}/status`, {
+      method: "PATCH",
+      body: input,
+    });
+  }
+
+  cancelFindingWithNote(
+    findingId: string,
+    clinicalNote: string,
+  ): Promise<{ finding: ClinicalFinding }> {
+    const trimmed = clinicalNote.trim();
+    if (!trimmed) {
+      return Promise.reject(new Error("Se requiere una nota clínica para cancelar el hallazgo"));
+    }
+    return this.updateFindingStatus(findingId, {
+      status: "DISCARDED",
+      notes: trimmed,
+    });
+  }
+
+  listPatientBudgets(
+    patientId: string,
+    params: { open?: boolean } = {},
+  ): Promise<{ budgets: PatientBudget[] }> {
+    const q = params.open ? "?open=true" : "";
+    return this.request(`/v1/patients/${encodeURIComponent(patientId)}/budgets${q}`);
+  }
+
+  createPatientBudget(
+    patientId: string,
+    input: CreatePatientBudgetInput,
+  ): Promise<{ budget: PatientBudget }> {
+    return this.request(`/v1/patients/${encodeURIComponent(patientId)}/budgets`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
+  updateBudgetOptionResponse(
+    budgetId: string,
+    input: {
+      finding_id: string;
+      option_id: string;
+      patient_response: PatientOptionResponse;
+      notes?: string;
+    },
+  ): Promise<{ budget: PatientBudget }> {
+    return this.request(`/v1/budgets/${encodeURIComponent(budgetId)}/options-response`, {
+      method: "PATCH",
+      body: input,
+    });
+  }
+
+  updateBudgetStatus(
+    budgetId: string,
+    input: { status: PatientBudgetStatus; validity_days?: number },
+  ): Promise<{ budget: PatientBudget }> {
+    return this.request(`/v1/budgets/${encodeURIComponent(budgetId)}/status`, {
+      method: "PATCH",
+      body: input,
+    });
+  }
+
+  convertBudgetToInvoice(
+    budgetId: string,
+    input: { series?: string } = {},
+  ): Promise<{ budget: PatientBudget; invoice: PatientInvoice }> {
+    return this.request(`/v1/budgets/${encodeURIComponent(budgetId)}/invoice`, {
+      method: "POST",
+      body: input,
+    });
+  }
+
   listCabinets(): Promise<{ cabinets: Cabinet[] }> {
     return this.request("/v1/cabinets");
   }
@@ -927,6 +1168,9 @@ export class DentistesClient {
   createCabinet(input: {
     name: string;
     color_code?: string;
+    equipment?: string;
+    allowed_categories?: string[];
+    allowed_treatments?: string[];
     availability?: CabinetDayAvailability[];
   }): Promise<{ cabinet: Cabinet }> {
     return this.request("/v1/cabinets", { method: "POST", body: input });
@@ -937,6 +1181,9 @@ export class DentistesClient {
     input: {
       name?: string;
       color_code?: string;
+      equipment?: string;
+      allowed_categories?: string[];
+      allowed_treatments?: string[];
       availability?: CabinetDayAvailability[];
     }
   ): Promise<{ cabinet: Cabinet }> {
@@ -1220,6 +1467,10 @@ export class DentistesClient {
   };
 
   clinic = {
+    getSettings: (): Promise<{ settings: ClinicBudgetSettings }> =>
+      this.request("/v1/clinic/settings"),
+    updateSettings: (input: Partial<ClinicBudgetSettings>): Promise<{ settings: ClinicBudgetSettings }> =>
+      this.request("/v1/clinic/settings", { method: "PUT", body: input }),
     cancel: (confirmSubdomain: string): Promise<{ status: string }> =>
       this.request("/v1/clinic/cancel", { method: "POST", body: { confirm_subdomain: confirmSubdomain } }),
   };

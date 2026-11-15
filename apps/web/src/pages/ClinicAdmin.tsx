@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  ClinicBrandingAndBudgetSettingsCard,
   ConfirmDialog,
   Input,
   Modal,
@@ -15,9 +16,12 @@ import {
   Tabs,
   useToast,
   formatMoney,
+  cn,
+  type ClinicBudgetSettingsUI,
 } from "@dentistes/ui";
 import { defaultCabinetAvailability, type Cabinet, type CabinetDayAvailability, type Treatment } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
+import { useUiStore } from "../lib/store";
 import { UsersPage } from "./Users";
 import { BillingPage } from "./Billing";
 
@@ -37,9 +41,12 @@ export function ClinicAdminPage() {
   const { sdk, me, logout } = useSession();
   const { notify } = useToast();
   const queryClient = useQueryClient();
+  const { clinicBudgetSettings, setClinicBudgetSettings } = useUiStore();
   const [activeTab, setActiveTab] = useState("billing");
   const [cabinetName, setCabinetName] = useState("");
   const [cabinetColor, setCabinetColor] = useState("#0D9488");
+  const [cabinetEquipment, setCabinetEquipment] = useState("");
+  const [cabinetAllowedCategories, setCabinetAllowedCategories] = useState<string[]>([]);
   const [confirmSubdomain, setConfirmSubdomain] = useState("");
   const [cancelAccountOpen, setCancelAccountOpen] = useState(false);
   const [cabinetToDelete, setCabinetToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -72,6 +79,41 @@ export function ClinicAdminPage() {
     queryKey: ["treatments"],
     queryFn: () => sdk.listTreatments({ all: true }),
     enabled: Boolean(me?.features?.agenda),
+  });
+
+  const clinicSettingsQuery = useQuery({
+    queryKey: ["clinic-settings", me?.active_tenant.id],
+    queryFn: async () => {
+      try {
+        const res = await sdk.clinic.getSettings();
+        setClinicBudgetSettings(res.settings);
+        return res.settings;
+      } catch {
+        return clinicBudgetSettings;
+      }
+    },
+    enabled: Boolean(me?.active_tenant.id),
+  });
+
+  const saveClinicSettingsMutation = useMutation({
+    mutationFn: async (next: ClinicBudgetSettingsUI) => {
+      setClinicBudgetSettings(next);
+      try {
+        const res = await sdk.clinic.updateSettings(next);
+        setClinicBudgetSettings(res.settings);
+        return res.settings;
+      } catch {
+        return next;
+      }
+    },
+    onSuccess: async () => {
+      notify({
+        tone: "success",
+        title: "Configuración de identidad y presupuestos guardada",
+        description: "El logo y los parámetros de vigencia se aplicarán a los presupuestos de la clínica.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["clinic-settings"] });
+    },
   });
 
   const saveTreatmentMutation = useMutation({
@@ -147,6 +189,8 @@ export function ClinicAdminPage() {
     setEditingCabinet(null);
     setCabinetName("");
     setCabinetColor("#0D9488");
+    setCabinetEquipment("");
+    setCabinetAllowedCategories([]);
     setCabinetAvailability(defaultCabinetAvailability());
     setCabinetModalOpen(true);
   }
@@ -155,6 +199,8 @@ export function ClinicAdminPage() {
     setEditingCabinet(cab);
     setCabinetName(cab.name);
     setCabinetColor(cab.color_code || "#0D9488");
+    setCabinetEquipment(cab.equipment || "");
+    setCabinetAllowedCategories(cab.allowed_categories || []);
     setCabinetAvailability(cab.availability && cab.availability.length > 0 ? cab.availability : defaultCabinetAvailability());
     setCabinetModalOpen(true);
   }
@@ -177,6 +223,8 @@ export function ClinicAdminPage() {
       const payload = {
         name: cabinetName.trim(),
         color_code: cabinetColor,
+        equipment: cabinetEquipment.trim(),
+        allowed_categories: cabinetAllowedCategories,
         availability: cabinetAvailability,
       };
       if (editingCabinet) {
@@ -264,6 +312,20 @@ export function ClinicAdminPage() {
               content: <BillingPage embedded />,
             },
             {
+              id: "branding-budgets",
+              label: "Identidad y Presupuestos",
+              content: (
+                <ClinicBrandingAndBudgetSettingsCard
+                  key={JSON.stringify(clinicSettingsQuery.data ?? clinicBudgetSettings)}
+                  clinicName={me?.active_tenant.name ?? "Clínica Dental"}
+                  clinicTaxId={me?.active_tenant.tax_id}
+                  initialSettings={clinicSettingsQuery.data ?? clinicBudgetSettings}
+                  saving={saveClinicSettingsMutation.isPending}
+                  onSave={(next) => saveClinicSettingsMutation.mutate(next)}
+                />
+              ),
+            },
+            {
               id: "users",
               label: "Equipo y Roles",
               content: <UsersPage />,
@@ -301,7 +363,21 @@ export function ClinicAdminPage() {
                                 <span className="font-semibold text-slate-900">{cab.name}</span>
                                 <Badge tone="info" className="text-[10px]">Box Activo</Badge>
                               </div>
-                              <p className="mt-0.5 text-xs text-slate-500 flex items-center gap-1.5">
+                              {cab.equipment && (
+                                <p className="mt-0.5 text-xs text-slate-700">
+                                  <span className="font-semibold text-slate-600">Equipación:</span> {cab.equipment}
+                                </p>
+                              )}
+                              {cab.allowed_categories && cab.allowed_categories.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {cab.allowed_categories.map((c) => (
+                                    <span key={c} className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.2 text-[10px] font-semibold text-teal-800 uppercase">
+                                      {c}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <p className="mt-1 text-xs text-slate-500 flex items-center gap-1.5">
                                 <Clock className="h-3 w-3 text-slate-400" />
                                 <span>{formatCabinetScheduleSummary(cab.availability)}</span>
                               </p>
@@ -525,6 +601,57 @@ export function ClinicAdminPage() {
                 value={cabinetColor}
                 onChange={(e) => setCabinetColor(e.target.value)}
               />
+            </div>
+
+            <Input
+              label="Equipamiento e instrumental instalado"
+              placeholder="Ej. Motor quirúrgico, lámpara scialítica, Rx intraoral, ultrasonidos..."
+              value={cabinetEquipment}
+              onChange={(e) => setCabinetEquipment(e.target.value)}
+            />
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 block">
+                Especialidades / Tratamientos ejecutables en este gabinete
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Selecciona qué tipos de tratamientos permite realizar la equipación de este box (si no marcas ninguna, admite cualquier tratamiento).
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  { id: "CONSERVADORA", label: "Conservadora" },
+                  { id: "CIRUGIA", label: "Cirugía" },
+                  { id: "IMPLANTES", label: "Implantes" },
+                  { id: "ENDODONCIA", label: "Endodoncia" },
+                  { id: "HIGIENE", label: "Higiene" },
+                  { id: "PREVENCION", label: "Prevención" },
+                  { id: "ORTODONCIA", label: "Ortodoncia" },
+                  { id: "PERIODONCIA", label: "Periodoncia" },
+                  { id: "PROTESIS", label: "Prótesis" },
+                  { id: "ESTETICA", label: "Estética" },
+                ].map((spec) => {
+                  const isChecked = cabinetAllowedCategories.includes(spec.id);
+                  return (
+                    <button
+                      key={spec.id}
+                      type="button"
+                      onClick={() => {
+                        setCabinetAllowedCategories((prev) =>
+                          isChecked ? prev.filter((c) => c !== spec.id) : [...prev, spec.id],
+                        );
+                      }}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 text-xs font-medium transition",
+                        isChecked
+                          ? "border-teal-600 bg-teal-50 text-teal-800 font-bold"
+                          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                      )}
+                    >
+                      {isChecked ? `✓ ${spec.label}` : spec.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="space-y-2 border-t border-slate-100 pt-3">

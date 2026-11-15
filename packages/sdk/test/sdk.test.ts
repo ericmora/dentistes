@@ -189,6 +189,39 @@ describe("Dentistes SDK Unit Tests", () => {
       if (url.includes("/v1/billing/portal")) {
         return new Response(JSON.stringify({ url: "https://billing.stripe.com/p123" }), { status: 200 });
       }
+      if (url.includes("/v1/clinic/settings") && method === "PUT") {
+        const parsed = body ?? {};
+        return new Response(
+          JSON.stringify({
+            settings: {
+              logo_url: parsed.logo_url ?? "",
+              clinic_contact_line: parsed.clinic_contact_line ?? "",
+              budget_default_validity_days: parsed.budget_default_validity_days ?? 60,
+              budget_default_series: parsed.budget_default_series ?? "PRE",
+              budget_warning_days_before_expiry: parsed.budget_warning_days_before_expiry ?? 7,
+              budget_validity_terms: parsed.budget_validity_terms ?? "",
+              budget_auto_expire: parsed.budget_auto_expire ?? true,
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.includes("/v1/clinic/settings")) {
+        return new Response(
+          JSON.stringify({
+            settings: {
+              logo_url: "https://clinica.example.com/logo.svg",
+              clinic_contact_line: "Av. Diagonal 450",
+              budget_default_validity_days: 30,
+              budget_default_series: "PRE",
+              budget_warning_days_before_expiry: 7,
+              budget_validity_terms: "Validez 30 días.",
+              budget_auto_expire: true,
+            },
+          }),
+          { status: 200 },
+        );
+      }
       if (url.includes("/v1/clinic/cancel")) {
         return new Response(JSON.stringify({ status: "CANCELED" }), { status: 200 });
       }
@@ -216,6 +249,15 @@ describe("Dentistes SDK Unit Tests", () => {
 
     const resumeRes = await client.billing.resume();
     assert.equal(resumeRes.subscription?.status, "ACTIVE");
+
+    const clinicSettings = await client.clinic.getSettings();
+    assert.equal(clinicSettings.settings.budget_default_validity_days, 30);
+
+    const updatedSettings = await client.clinic.updateSettings({
+      logo_url: "https://clinica.example.com/new-logo.svg",
+      budget_default_validity_days: 60,
+    });
+    assert.equal(updatedSettings.settings.budget_default_validity_days, 60);
 
     const clinicCancel = await client.clinic.cancel("clinica-garraf");
     assert.equal(clinicCancel.status, "CANCELED");
@@ -602,5 +644,266 @@ describe("Dentistes SDK Unit Tests", () => {
     });
     assert.equal(payment.payment.amount, 60.0);
     assert.equal(payment.payment.payment_method, "CARD");
+  });
+
+  test("DentistesClient clinical findings and multi-option budgets APIs", async () => {
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url.includes("/v1/patients/pat_1/findings") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            findings: [
+              {
+                id: "find_26",
+                patient_id: "pat_1",
+                doctor_id: "doc_1",
+                tooth_number: "26",
+                surfaces: ["mesial", "occlusal", "distal"],
+                pathology_code: "SEVERE_DAMAGE",
+                diagnosis: "Pieza 26 en muy mal estado",
+                severity: "HIGH",
+                status: "OPEN",
+                notes: "Pronóstico reservado",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/v1/patients/pat_1/findings") && method === "POST") {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            finding: {
+              id: "find_26",
+              patient_id: "pat_1",
+              doctor_id: "doc_1",
+              tooth_number: body.tooth_number,
+              surfaces: body.surfaces || [],
+              pathology_code: body.pathology_code || "GENERAL",
+              diagnosis: body.diagnosis,
+              severity: body.severity || "HIGH",
+              status: "OPEN",
+              notes: body.notes || "",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/v1/findings/find_26/status") && method === "PATCH") {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            finding: {
+              id: "find_26",
+              patient_id: "pat_1",
+              doctor_id: "doc_1",
+              tooth_number: "26",
+              surfaces: [],
+              pathology_code: "SEVERE_DAMAGE",
+              diagnosis: "Pieza 26 en muy mal estado",
+              severity: "HIGH",
+              status: body.status,
+              notes: body.notes || "",
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/v1/patients/pat_1/budgets") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            budgets: [
+              {
+                id: "bud_1",
+                patient_id: "pat_1",
+                doctor_id: "doc_1",
+                series: "PRE",
+                budget_number: 1,
+                title: "Plan Rehabilitación Pieza 26",
+                issue_date: "2026-11-14",
+                validity_days: 30,
+                valid_until: "2026-12-14",
+                status: "PRESENTED",
+                min_estimate_amount: 50,
+                max_estimate_amount: 1120,
+                accepted_amount: 0,
+                notes: "",
+                findings_blocks: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/v1/patients/pat_1/budgets") && method === "POST") {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            budget: {
+              id: "bud_1",
+              patient_id: "pat_1",
+              doctor_id: "doc_1",
+              series: body.series || "PRE",
+              budget_number: 1,
+              title: body.title,
+              issue_date: "2026-11-14",
+              validity_days: body.validity_days || 30,
+              valid_until: "2026-12-14",
+              status: "PRESENTED",
+              min_estimate_amount: 50,
+              max_estimate_amount: 1120,
+              accepted_amount: 0,
+              notes: body.notes || "",
+              findings_blocks: body.findings_blocks,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+          { status: 201 }
+        );
+      }
+
+      if (url.includes("/v1/budgets/bud_1/options-response") && method === "PATCH") {
+        return new Response(
+          JSON.stringify({
+            budget: {
+              id: "bud_1",
+              patient_id: "pat_1",
+              doctor_id: "doc_1",
+              series: "PRE",
+              budget_number: 1,
+              title: "Plan Rehabilitación Pieza 26",
+              issue_date: "2026-11-14",
+              validity_days: 30,
+              valid_until: "2026-12-14",
+              status: "ACCEPTED",
+              min_estimate_amount: 50,
+              max_estimate_amount: 1120,
+              accepted_amount: 1120,
+              notes: "",
+              findings_blocks: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/v1/budgets/bud_1/status") && method === "PATCH") {
+        const body = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            budget: {
+              id: "bud_1",
+              patient_id: "pat_1",
+              doctor_id: "doc_1",
+              series: "PRE",
+              budget_number: 1,
+              title: "Plan Rehabilitación Pieza 26",
+              issue_date: "2026-11-14",
+              validity_days: body.validity_days || 30,
+              valid_until: "2026-12-14",
+              status: body.status,
+              min_estimate_amount: 50,
+              max_estimate_amount: 1120,
+              accepted_amount: 0,
+              notes: "",
+              findings_blocks: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.includes("/v1/budgets/bud_1/invoice") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            budget: { id: "bud_1", status: "INVOICED", invoice_id: "inv_99" },
+            invoice: { id: "inv_99", series: "FAC", invoice_number: 99, total_amount: 1120 },
+          }),
+          { status: 201 }
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "auth-token",
+      fetch: mockFetch,
+    });
+
+    const findingsList = await client.listPatientFindings("pat_1", { open: true });
+    assert.equal(findingsList.findings.length, 1);
+    assert.equal(findingsList.findings[0].tooth_number, "26");
+
+    const createdFinding = await client.createPatientFinding("pat_1", {
+      tooth_number: "26",
+      diagnosis: "Pieza 26 en muy mal estado",
+      severity: "HIGH",
+    });
+    assert.equal(createdFinding.finding.status, "OPEN");
+
+    const updatedFinding = await client.updateFindingStatus("find_26", {
+      status: "DISCARDED",
+      notes: "Se descarta tras Rx periapical sin lesión",
+    });
+    assert.equal(updatedFinding.finding.status, "DISCARDED");
+
+    await assert.rejects(
+      () => client.cancelFindingWithNote("find_26", "   "),
+      /Se requiere una nota clínica/
+    );
+    const cancelledWithNote = await client.cancelFindingWithNote(
+      "find_26",
+      "Cancelado con nota clínica en historial"
+    );
+    assert.equal(cancelledWithNote.finding.status, "DISCARDED");
+    assert.equal(cancelledWithNote.finding.notes, "Cancelado con nota clínica en historial");
+
+    const budgetsList = await client.listPatientBudgets("pat_1", { open: true });
+    assert.equal(budgetsList.budgets.length, 1);
+
+    const createdBudget = await client.createPatientBudget("pat_1", {
+      title: "Plan Rehabilitación Pieza 26",
+      validity_days: 30,
+      findings_blocks: [],
+    });
+    assert.equal(createdBudget.budget.budget_number, 1);
+
+    const acceptedBudget = await client.updateBudgetOptionResponse("bud_1", {
+      finding_id: "find_26",
+      option_id: "opt_3",
+      patient_response: "ACCEPTED",
+      notes: "Acepta implante",
+    });
+    assert.equal(acceptedBudget.budget.status, "ACCEPTED");
+    assert.equal(acceptedBudget.budget.accepted_amount, 1120);
+
+    const statusBudget = await client.updateBudgetStatus("bud_1", { status: "REJECTED" });
+    assert.equal(statusBudget.budget.status, "REJECTED");
+
+    const invoiced = await client.convertBudgetToInvoice("bud_1", { series: "FAC" });
+    assert.equal(invoiced.budget.status, "INVOICED");
+    assert.equal(invoiced.invoice.invoice_number, 99);
   });
 });

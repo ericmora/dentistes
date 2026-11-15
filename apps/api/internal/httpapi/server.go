@@ -96,6 +96,8 @@ func (s *Server) Router() http.Handler {
 				r.With(s.requirePermission("billing:manage")).Post("/billing/cancel", s.handleCancelSubscription)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/resume", s.handleResumeSubscription)
 				r.With(s.requirePermission("billing:manage")).Post("/billing/portal", s.handlePortal)
+				r.Get("/clinic/settings", s.handleGetClinicSettings)
+				r.With(s.requirePermission("settings:manage")).Put("/clinic/settings", s.handleUpdateClinicSettings)
 				r.With(s.requirePermission("settings:manage")).Post("/clinic/cancel", s.handleCancelClinicAccount)
 
 				r.Route("/patients", func(r chi.Router) {
@@ -117,11 +119,25 @@ func (s *Server) Router() http.Handler {
 						r.With(s.requirePermission("clinical:write")).Put("/{id}/odontograms/{type}", s.handleUpsertOdontogram)
 					})
 
+					r.With(s.requirePermission("patients:read")).Get("/{id}/findings", s.handleListPatientFindings)
+					r.With(s.requirePermission("billing:write")).Post("/{id}/findings", s.handleCreatePatientFinding)
+
 					r.Group(func(r chi.Router) {
 						r.Use(s.requireFeature("billing_pdf"))
+						r.With(s.requirePermission("billing:read")).Get("/{id}/budgets", s.handleListPatientBudgets)
+						r.With(s.requirePermission("billing:write")).Post("/{id}/budgets", s.handleCreatePatientBudget)
 						r.With(s.requirePermission("billing:read")).Get("/{id}/invoices", s.handleListPatientInvoices)
 						r.With(s.requirePermission("billing:write")).Post("/{id}/invoices", s.handleCreatePatientInvoice)
 					})
+				})
+
+				r.With(s.requirePermission("billing:write")).Patch("/findings/{id}/status", s.handleUpdateFindingStatus)
+
+				r.Route("/budgets", func(r chi.Router) {
+					r.Use(s.requireFeature("billing_pdf"))
+					r.With(s.requirePermission("billing:write")).Patch("/{id}/options-response", s.handleUpdateBudgetOptionResponse)
+					r.With(s.requirePermission("billing:write")).Patch("/{id}/status", s.handleUpdateBudgetStatus)
+					r.With(s.requirePermission("billing:write")).Post("/{id}/invoice", s.handleConvertBudgetToInvoice)
 				})
 
 				r.Route("/invoices", func(r chi.Router) {
@@ -521,7 +537,7 @@ func writeError(w http.ResponseWriter, status int, code, message string, details
 }
 
 func decodeJSON(r *http.Request, dst any) error {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	dec := json.NewDecoder(io.LimitReader(r.Body, 10<<20))
 	dec.DisallowUnknownFields()
 	return dec.Decode(dst)
 }

@@ -25,9 +25,12 @@ func (s *Server) handleListCabinets(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name         string                         `json:"name"`
-		ColorCode    string                         `json:"color_code"`
-		Availability []store.CabinetDayAvailability `json:"availability"`
+		Name              string                         `json:"name"`
+		ColorCode         string                         `json:"color_code"`
+		Equipment         string                         `json:"equipment"`
+		AllowedCategories []string                       `json:"allowed_categories"`
+		AllowedTreatments []string                       `json:"allowed_treatments"`
+		Availability      []store.CabinetDayAvailability `json:"availability"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -40,7 +43,7 @@ func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := claimsFrom(r.Context())
 	tx := txFrom(r.Context())
-	cab, err := s.store.CreateCabinet(r.Context(), tx, claims.TenantID, req.Name, strings.TrimSpace(req.ColorCode), req.Availability)
+	cab, err := s.store.CreateCabinet(r.Context(), tx, claims.TenantID, req.Name, strings.TrimSpace(req.ColorCode), strings.TrimSpace(req.Equipment), req.AllowedCategories, req.AllowedTreatments, req.Availability)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not create cabinet", nil)
 		return
@@ -55,9 +58,12 @@ func (s *Server) handleUpdateCabinet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name         string                         `json:"name"`
-		ColorCode    string                         `json:"color_code"`
-		Availability []store.CabinetDayAvailability `json:"availability"`
+		Name              string                         `json:"name"`
+		ColorCode         string                         `json:"color_code"`
+		Equipment         string                         `json:"equipment"`
+		AllowedCategories []string                       `json:"allowed_categories"`
+		AllowedTreatments []string                       `json:"allowed_treatments"`
+		Availability      []store.CabinetDayAvailability `json:"availability"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -65,7 +71,7 @@ func (s *Server) handleUpdateCabinet(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := claimsFrom(r.Context())
 	tx := txFrom(r.Context())
-	cab, err := s.store.UpdateCabinet(r.Context(), tx, claims.TenantID, cabinetID, strings.TrimSpace(req.Name), strings.TrimSpace(req.ColorCode), req.Availability)
+	cab, err := s.store.UpdateCabinet(r.Context(), tx, claims.TenantID, cabinetID, strings.TrimSpace(req.Name), strings.TrimSpace(req.ColorCode), strings.TrimSpace(req.Equipment), req.AllowedCategories, req.AllowedTreatments, req.Availability)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "cabinet not found", nil)
 		return
@@ -208,6 +214,7 @@ func (s *Server) handleFindAvailableSlots(w http.ResponseWriter, r *http.Request
 	slots, err := s.store.FindAvailableSlots(r.Context(), tx, store.AvailableSlotSearchFilter{
 		CabinetID:         cabinetID,
 		DoctorID:          doctorID,
+		TreatmentType:     treatmentType,
 		TreatmentCategory: category,
 		DurationMinutes:   duration,
 		Shift:             shift,

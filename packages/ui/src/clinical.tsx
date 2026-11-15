@@ -318,11 +318,14 @@ export function getFdiToothInfo(toothNum: number): {
   };
 }
 
+export type OdontogramDisplayMode = "surfaces" | "anatomical";
+
 export function ToothSurfaceRenderer({
   tooth,
   selected,
   isUpper = true,
   compact = false,
+  displayMode = "surfaces",
   historyCount,
   onSelectSurface,
   onSelectTooth,
@@ -331,6 +334,7 @@ export function ToothSurfaceRenderer({
   selected?: boolean;
   isUpper?: boolean;
   compact?: boolean;
+  displayMode?: OdontogramDisplayMode;
   historyCount?: number;
   onSelectSurface?: (toothNumber: number, surface: ToothSurfaceName) => void;
   onSelectTooth?: (toothNumber: number) => void;
@@ -399,6 +403,7 @@ export function ToothSurfaceRenderer({
       {/* SVG Canvas (60 x 78): Crown Surface + Anatomical Roots */}
       <svg
         viewBox="0 0 60 78"
+        data-display-mode={displayMode}
         className={cn(
           "touch-manipulation transition-transform group-hover:scale-[1.02]",
           compact ? "h-10 w-8 sm:h-11 sm:w-9 xl:h-12 xl:w-9" : "h-14 w-11 sm:h-16 sm:w-12",
@@ -501,79 +506,180 @@ export function ToothSurfaceRenderer({
               </g>
             )}
 
-            {/* Crown Surfaces (5 faces) */}
-            <polygon
-              points="6,26 54,26 42,38 18,38"
-              fill={fillOf("vestibular")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "vestibular");
-              }}
-            >
-              <title>Vestibular</title>
-            </polygon>
+            {/* Crown Surfaces (5 faces or Anatomical Profile) */}
+            {displayMode === "anatomical" ? (
+              <g>
+                {/* Base Anatomical Crown Contour */}
+                <path
+                  d={
+                    category === "molar"
+                      ? "M 7 26 C 5 40, 6 66, 13 73 C 20 71, 25 74, 30 70 C 35 74, 40 71, 47 73 C 54 66, 55 40, 53 26 Z"
+                      : category === "canine"
+                      ? "M 12 26 C 10 44, 15 64, 30 74 C 45 64, 50 44, 48 26 Z"
+                      : category === "premolar"
+                      ? "M 10 26 C 8 42, 10 66, 20 73 C 26 70, 34 70, 40 73 C 50 66, 52 42, 50 26 Z"
+                      : "M 12 26 C 10 42, 11 66, 16 72 L 44 72 C 49 66, 50 42, 48 26 Z"
+                  }
+                  fill={isCrown ? `url(#gold-grad-${tNum})` : `url(#enamel-grad-${tNum})`}
+                  stroke="#334155"
+                  strokeWidth="1.4"
+                />
+                {/* Cervical / Palatino Zone */}
+                <path
+                  data-anatomical-zone="lingual"
+                  d="M 11 26 L 49 26 L 44 35 L 16 35 Z"
+                  fill={fillOf("lingual")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "lingual");
+                  }}
+                >
+                  <title>Palatino (Perfil Anatómico)</title>
+                </path>
+                {/* Mesial Flank Zone */}
+                <path
+                  data-anatomical-zone="mesial"
+                  d="M 10 28 L 20 35 L 20 61 L 12 68 C 7 58, 7 38, 10 28 Z"
+                  fill={fillOf("mesial")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "mesial");
+                  }}
+                >
+                  <title>Mesial (Perfil Anatómico)</title>
+                </path>
+                {/* Distal Flank Zone */}
+                <path
+                  data-anatomical-zone="distal"
+                  d="M 50 28 C 53 38, 53 58, 48 68 L 40 61 L 40 35 Z"
+                  fill={fillOf("distal")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "distal");
+                  }}
+                >
+                  <title>Distal (Perfil Anatómico)</title>
+                </path>
+                {/* Vestibular Frontal Face Zone */}
+                <rect
+                  data-anatomical-zone="vestibular"
+                  x="20"
+                  y="35"
+                  width="20"
+                  height="26"
+                  rx="4"
+                  fill={fillOf("vestibular")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "vestibular");
+                  }}
+                >
+                  <title>Vestibular (Perfil Anatómico)</title>
+                </rect>
+                {/* Occlusal / Incisal Cusp Zone */}
+                <path
+                  data-anatomical-zone="occlusal"
+                  d="M 12 61 L 48 61 L 45 71 C 38 74, 22 74, 15 71 Z"
+                  fill={fillOf("occlusal")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "occlusal");
+                  }}
+                >
+                  <title>Oclusal / Incisal (Perfil Anatómico)</title>
+                </path>
+              </g>
+            ) : (
+              <g>
+                <polygon
+                  points="6,26 54,26 42,38 18,38"
+                  fill={fillOf("vestibular")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "vestibular");
+                  }}
+                >
+                  <title>Vestibular</title>
+                </polygon>
 
-            <polygon
-              points="18,62 42,62 54,74 6,74"
-              fill={fillOf("lingual")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "lingual");
-              }}
-            >
-              <title>Palatino</title>
-            </polygon>
+                <polygon
+                  points="18,62 42,62 54,74 6,74"
+                  fill={fillOf("lingual")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "lingual");
+                  }}
+                >
+                  <title>Palatino</title>
+                </polygon>
 
-            <polygon
-              points="6,26 18,38 18,62 6,74"
-              fill={fillOf("mesial")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "mesial");
-              }}
-            >
-              <title>Mesial</title>
-            </polygon>
+                <polygon
+                  points="6,26 18,38 18,62 6,74"
+                  fill={fillOf("mesial")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "mesial");
+                  }}
+                >
+                  <title>Mesial</title>
+                </polygon>
 
-            <polygon
-              points="54,26 54,74 42,62 42,38"
-              fill={fillOf("distal")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "distal");
-              }}
-            >
-              <title>Distal</title>
-            </polygon>
+                <polygon
+                  points="54,26 54,74 42,62 42,38"
+                  fill={fillOf("distal")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "distal");
+                  }}
+                >
+                  <title>Distal</title>
+                </polygon>
 
-            <rect
-              x="18"
-              y="38"
-              width="24"
-              height="24"
-              fill={fillOf("occlusal")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "occlusal");
-              }}
-            >
-              <title>Oclusal / Incisal</title>
-            </rect>
+                <rect
+                  x="18"
+                  y="38"
+                  width="24"
+                  height="24"
+                  fill={fillOf("occlusal")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "occlusal");
+                  }}
+                >
+                  <title>Oclusal / Incisal</title>
+                </rect>
+              </g>
+            )}
 
             {/* Overlays: Crown or Missing */}
             {isCrown ? (
@@ -593,79 +699,180 @@ export function ToothSurfaceRenderer({
         ) : (
           /* LOWER ARCH: CROWN AT TOP (y: 2..50), ROOTS AT BOTTOM (y: 52..74) */
           <g>
-            {/* Crown Surfaces (5 faces) */}
-            <polygon
-              points="6,2 54,2 42,14 18,14"
-              fill={fillOf("lingual")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "lingual");
-              }}
-            >
-              <title>Lingual</title>
-            </polygon>
+            {/* Crown Surfaces (5 faces or Anatomical Profile) */}
+            {displayMode === "anatomical" ? (
+              <g>
+                {/* Base Anatomical Crown Contour */}
+                <path
+                  d={
+                    category === "molar"
+                      ? "M 7 50 C 5 36, 6 10, 13 3 C 20 5, 25 2, 30 6 C 35 2, 40 5, 47 3 C 54 10, 55 36, 53 50 Z"
+                      : category === "canine"
+                      ? "M 12 50 C 10 32, 15 12, 30 2 C 45 12, 50 32, 48 50 Z"
+                      : category === "premolar"
+                      ? "M 10 50 C 8 34, 10 10, 20 3 C 26 6, 34 6, 40 3 C 50 10, 52 34, 50 50 Z"
+                      : "M 12 50 C 10 34, 11 10, 16 4 L 44 4 C 49 10, 50 34, 48 50 Z"
+                  }
+                  fill={isCrown ? `url(#gold-grad-${tNum})` : `url(#enamel-grad-${tNum})`}
+                  stroke="#334155"
+                  strokeWidth="1.4"
+                />
+                {/* Occlusal / Incisal Cusp Zone */}
+                <path
+                  data-anatomical-zone="occlusal"
+                  d="M 15 5 C 22 2, 38 2, 45 5 L 48 15 L 12 15 Z"
+                  fill={fillOf("occlusal")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "occlusal");
+                  }}
+                >
+                  <title>Oclusal / Incisal (Perfil Anatómico)</title>
+                </path>
+                {/* Mesial Flank Zone */}
+                <path
+                  data-anatomical-zone="mesial"
+                  d="M 12 8 L 20 15 L 20 41 L 10 48 C 7 38, 7 18, 12 8 Z"
+                  fill={fillOf("mesial")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "mesial");
+                  }}
+                >
+                  <title>Mesial (Perfil Anatómico)</title>
+                </path>
+                {/* Distal Flank Zone */}
+                <path
+                  data-anatomical-zone="distal"
+                  d="M 48 8 C 53 18, 53 38, 50 48 L 40 41 L 40 15 Z"
+                  fill={fillOf("distal")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "distal");
+                  }}
+                >
+                  <title>Distal (Perfil Anatómico)</title>
+                </path>
+                {/* Vestibular Frontal Face Zone */}
+                <rect
+                  data-anatomical-zone="vestibular"
+                  x="20"
+                  y="15"
+                  width="20"
+                  height="26"
+                  rx="4"
+                  fill={fillOf("vestibular")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "vestibular");
+                  }}
+                >
+                  <title>Vestibular (Perfil Anatómico)</title>
+                </rect>
+                {/* Cervical / Lingual Zone */}
+                <path
+                  data-anatomical-zone="lingual"
+                  d="M 16 41 L 44 41 L 49 50 L 11 50 Z"
+                  fill={fillOf("lingual")}
+                  stroke="#64748B"
+                  strokeWidth="0.9"
+                  className="cursor-pointer transition hover:opacity-85"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "lingual");
+                  }}
+                >
+                  <title>Lingual (Perfil Anatómico)</title>
+                </path>
+              </g>
+            ) : (
+              <g>
+                <polygon
+                  points="6,2 54,2 42,14 18,14"
+                  fill={fillOf("lingual")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "lingual");
+                  }}
+                >
+                  <title>Lingual</title>
+                </polygon>
 
-            <polygon
-              points="18,38 42,38 54,50 6,50"
-              fill={fillOf("vestibular")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "vestibular");
-              }}
-            >
-              <title>Vestibular</title>
-            </polygon>
+                <polygon
+                  points="18,38 42,38 54,50 6,50"
+                  fill={fillOf("vestibular")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "vestibular");
+                  }}
+                >
+                  <title>Vestibular</title>
+                </polygon>
 
-            <polygon
-              points="6,2 18,14 18,38 6,50"
-              fill={fillOf("mesial")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "mesial");
-              }}
-            >
-              <title>Mesial</title>
-            </polygon>
+                <polygon
+                  points="6,2 18,14 18,38 6,50"
+                  fill={fillOf("mesial")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "mesial");
+                  }}
+                >
+                  <title>Mesial</title>
+                </polygon>
 
-            <polygon
-              points="54,2 54,50 42,38 42,14"
-              fill={fillOf("distal")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "distal");
-              }}
-            >
-              <title>Distal</title>
-            </polygon>
+                <polygon
+                  points="54,2 54,50 42,38 42,14"
+                  fill={fillOf("distal")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "distal");
+                  }}
+                >
+                  <title>Distal</title>
+                </polygon>
 
-            <rect
-              x="18"
-              y="14"
-              width="24"
-              height="24"
-              fill={fillOf("occlusal")}
-              stroke="#475569"
-              strokeWidth="1.2"
-              className="cursor-pointer transition hover:opacity-80"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectSurface?.(tooth.tooth_number, "occlusal");
-              }}
-            >
-              <title>Oclusal / Incisal</title>
-            </rect>
+                <rect
+                  x="18"
+                  y="14"
+                  width="24"
+                  height="24"
+                  fill={fillOf("occlusal")}
+                  stroke="#475569"
+                  strokeWidth="1.2"
+                  className="cursor-pointer transition hover:opacity-80"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectSurface?.(tooth.tooth_number, "occlusal");
+                  }}
+                >
+                  <title>Oclusal / Incisal</title>
+                </rect>
+              </g>
+            )}
 
             {/* Overlays: Crown or Missing */}
             {isCrown ? (
@@ -804,6 +1011,8 @@ export function OdontogramGrid({
   teeth,
   dentition = "adult",
   onDentitionChange,
+  displayMode,
+  onDisplayModeChange,
   activeTool = "caries",
   onToolChange,
   onToggleSurface,
@@ -816,6 +1025,8 @@ export function OdontogramGrid({
   teeth: Record<number, ToothState>;
   dentition?: "adult" | "child";
   onDentitionChange?: (d: "adult" | "child") => void;
+  displayMode?: OdontogramDisplayMode;
+  onDisplayModeChange?: (mode: OdontogramDisplayMode) => void;
   activeTool?: OdontogramActiveTool;
   onToolChange?: (tool: OdontogramActiveTool) => void;
   onToggleSurface?: (toothNumber: number, surface: ToothSurfaceName, nextStatus: ToothSurfaceStatus) => void;
@@ -825,6 +1036,14 @@ export function OdontogramGrid({
   historyCounts?: Record<number, number>;
   compact?: boolean;
 }) {
+  const [internalDisplayMode, setInternalDisplayMode] = useState<OdontogramDisplayMode>("surfaces");
+  const effectiveDisplayMode = displayMode ?? internalDisplayMode;
+
+  function handleDisplayModeChange(mode: OdontogramDisplayMode) {
+    setInternalDisplayMode(mode);
+    onDisplayModeChange?.(mode);
+  }
+
   const upperRight = dentition === "adult" ? ADULT_UPPER_RIGHT : CHILD_UPPER_RIGHT;
   const upperLeft = dentition === "adult" ? ADULT_UPPER_LEFT : CHILD_UPPER_LEFT;
   const lowerRight = dentition === "adult" ? ADULT_LOWER_RIGHT : CHILD_LOWER_RIGHT;
@@ -920,20 +1139,45 @@ export function OdontogramGrid({
             ))}
           </div>
 
-          <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
-            {(["adult", "child"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onDentitionChange?.(mode)}
-                className={cn(
-                  "rounded px-2 py-0.5 text-[11px] font-medium transition",
-                  dentition === mode ? "bg-brand-600 text-white font-semibold" : "text-slate-600 hover:text-slate-900",
-                )}
-              >
-                {mode === "adult" ? "Adulto (32)" : "Infantil (20)"}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
+              {(
+                [
+                  ["surfaces", "5 Caras"],
+                  ["anatomical", "Perfil Anatómico"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => handleDisplayModeChange(mode)}
+                  className={cn(
+                    "rounded px-2 py-0.5 text-[11px] font-medium transition",
+                    effectiveDisplayMode === mode
+                      ? "bg-brand-600 text-white font-semibold"
+                      : "text-slate-600 hover:text-slate-900",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5">
+              {(["adult", "child"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onDentitionChange?.(mode)}
+                  className={cn(
+                    "rounded px-2 py-0.5 text-[11px] font-medium transition",
+                    dentition === mode ? "bg-brand-600 text-white font-semibold" : "text-slate-600 hover:text-slate-900",
+                  )}
+                >
+                  {mode === "adult" ? "Adulto (32)" : "Infantil (20)"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -955,6 +1199,7 @@ export function OdontogramGrid({
                     selected={selectedTooth === num}
                     isUpper={true}
                     compact={true}
+                    displayMode={effectiveDisplayMode}
                     historyCount={historyCounts?.[num]}
                     onSelectTooth={handleToothClick}
                     onSelectSurface={handleSurfaceClick}
@@ -970,6 +1215,7 @@ export function OdontogramGrid({
                     selected={selectedTooth === num}
                     isUpper={true}
                     compact={true}
+                    displayMode={effectiveDisplayMode}
                     historyCount={historyCounts?.[num]}
                     onSelectTooth={handleToothClick}
                     onSelectSurface={handleSurfaceClick}
@@ -990,6 +1236,7 @@ export function OdontogramGrid({
                     selected={selectedTooth === num}
                     isUpper={false}
                     compact={true}
+                    displayMode={effectiveDisplayMode}
                     historyCount={historyCounts?.[num]}
                     onSelectTooth={handleToothClick}
                     onSelectSurface={handleSurfaceClick}
@@ -1005,6 +1252,7 @@ export function OdontogramGrid({
                     selected={selectedTooth === num}
                     isUpper={false}
                     compact={true}
+                    displayMode={effectiveDisplayMode}
                     historyCount={historyCounts?.[num]}
                     onSelectTooth={handleToothClick}
                     onSelectSurface={handleSurfaceClick}
@@ -1042,20 +1290,45 @@ export function OdontogramGrid({
             </div>
           </div>
 
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
-            {(["adult", "child"] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => onDentitionChange?.(mode)}
-                className={cn(
-                  "min-h-[30px] rounded-md px-3 text-xs font-medium transition",
-                  dentition === mode ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900",
-                )}
-              >
-                {mode === "adult" ? "Adulto (32 piezas)" : "Infantil (20 piezas)"}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              {(
+                [
+                  ["surfaces", "5 Caras (Corona)"],
+                  ["anatomical", "Perfil Anatómico"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => handleDisplayModeChange(mode)}
+                  className={cn(
+                    "min-h-[30px] rounded-md px-3 text-xs font-medium transition",
+                    effectiveDisplayMode === mode
+                      ? "bg-white text-slate-900 font-bold shadow-2xs"
+                      : "text-slate-600 hover:text-slate-900",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              {(["adult", "child"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => onDentitionChange?.(mode)}
+                  className={cn(
+                    "min-h-[30px] rounded-md px-3 text-xs font-medium transition",
+                    dentition === mode ? "bg-white text-slate-900 font-bold shadow-2xs" : "text-slate-600 hover:text-slate-900",
+                  )}
+                >
+                  {mode === "adult" ? "Adulto (32 piezas)" : "Infantil (20 piezas)"}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1160,6 +1433,7 @@ export function OdontogramGrid({
                   tooth={teeth[num] ?? emptyTooth(num)}
                   selected={selectedTooth === num}
                   isUpper={true}
+                  displayMode={effectiveDisplayMode}
                   historyCount={historyCounts?.[num]}
                   onSelectTooth={handleToothClick}
                   onSelectSurface={handleSurfaceClick}
@@ -1182,6 +1456,7 @@ export function OdontogramGrid({
                   tooth={teeth[num] ?? emptyTooth(num)}
                   selected={selectedTooth === num}
                   isUpper={true}
+                  displayMode={effectiveDisplayMode}
                   historyCount={historyCounts?.[num]}
                   onSelectTooth={handleToothClick}
                   onSelectSurface={handleSurfaceClick}
@@ -1213,6 +1488,7 @@ export function OdontogramGrid({
                   tooth={teeth[num] ?? emptyTooth(num)}
                   selected={selectedTooth === num}
                   isUpper={false}
+                  displayMode={effectiveDisplayMode}
                   historyCount={historyCounts?.[num]}
                   onSelectTooth={handleToothClick}
                   onSelectSurface={handleSurfaceClick}
@@ -1235,6 +1511,7 @@ export function OdontogramGrid({
                   tooth={teeth[num] ?? emptyTooth(num)}
                   selected={selectedTooth === num}
                   isUpper={false}
+                  displayMode={effectiveDisplayMode}
                   historyCount={historyCounts?.[num]}
                   onSelectTooth={handleToothClick}
                   onSelectSurface={handleSurfaceClick}
@@ -1670,6 +1947,67 @@ export function ToothAnatomicalViewer({
 
                   <path d="M 60 130 Q 110 136 160 130" stroke="#64748B" strokeWidth="1.5" fill="none" />
 
+                  {/* Interactive Surface Zones on Upper Anatomical Crown Profile */}
+                  <path
+                    data-anatomical-zone="lingual"
+                    d="M 64 132 L 156 132 L 144 150 L 76 150 Z"
+                    fill={fillOf("lingual")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("lingual")}
+                  >
+                    <title>Palatino (P)</title>
+                  </path>
+                  <path
+                    data-anatomical-zone="mesial"
+                    d="M 60 136 L 82 150 L 82 198 L 64 212 C 54 195, 53 160, 60 136 Z"
+                    fill={fillOf("mesial")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("mesial")}
+                  >
+                    <title>Mesial (M)</title>
+                  </path>
+                  <path
+                    data-anatomical-zone="distal"
+                    d="M 160 136 C 167 160, 166 195, 156 212 L 138 198 L 138 150 Z"
+                    fill={fillOf("distal")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("distal")}
+                  >
+                    <title>Distal (D)</title>
+                  </path>
+                  <rect
+                    data-anatomical-zone="vestibular"
+                    x="82"
+                    y="150"
+                    width="56"
+                    height="48"
+                    rx="8"
+                    fill={fillOf("vestibular")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("vestibular")}
+                  >
+                    <title>Vestibular (V)</title>
+                  </rect>
+                  <path
+                    data-anatomical-zone="occlusal"
+                    d="M 66 198 L 154 198 L 148 216 C 130 222, 90 222, 72 216 Z"
+                    fill={fillOf("occlusal")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("occlusal")}
+                  >
+                    <title>Oclusal / Incisal (O)</title>
+                  </path>
+
                   {isMissing && (
                     <g>
                       <line x1="45" y1="20" x2="175" y2="225" stroke="#DC2626" strokeWidth="5" strokeLinecap="round" />
@@ -1696,6 +2034,67 @@ export function ToothAnatomicalViewer({
                   />
 
                   <path d="M 60 115 Q 110 109 160 115" stroke="#64748B" strokeWidth="1.5" fill="none" />
+
+                  {/* Interactive Surface Zones on Lower Anatomical Crown Profile */}
+                  <path
+                    data-anatomical-zone="occlusal"
+                    d="M 72 29 C 90 23, 130 23, 148 29 L 154 47 L 66 47 Z"
+                    fill={fillOf("occlusal")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("occlusal")}
+                  >
+                    <title>Oclusal / Incisal (O)</title>
+                  </path>
+                  <path
+                    data-anatomical-zone="mesial"
+                    d="M 64 33 L 82 47 L 82 95 L 60 109 C 53 85, 54 50, 64 33 Z"
+                    fill={fillOf("mesial")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("mesial")}
+                  >
+                    <title>Mesial (M)</title>
+                  </path>
+                  <path
+                    data-anatomical-zone="distal"
+                    d="M 156 33 C 166 50, 167 85, 160 109 L 138 95 L 138 47 Z"
+                    fill={fillOf("distal")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("distal")}
+                  >
+                    <title>Distal (D)</title>
+                  </path>
+                  <rect
+                    data-anatomical-zone="vestibular"
+                    x="82"
+                    y="47"
+                    width="56"
+                    height="48"
+                    rx="8"
+                    fill={fillOf("vestibular")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("vestibular")}
+                  >
+                    <title>Vestibular (V)</title>
+                  </rect>
+                  <path
+                    data-anatomical-zone="lingual"
+                    d="M 76 95 L 144 95 L 156 113 L 64 113 Z"
+                    fill={fillOf("lingual")}
+                    stroke="#475569"
+                    strokeWidth="1.2"
+                    className={cn("transition cursor-pointer hover:opacity-85", !canWriteClinical && "cursor-default")}
+                    onClick={() => handleFaceClick("lingual")}
+                  >
+                    <title>Lingual (L)</title>
+                  </path>
 
                   {isImplant ? (
                     <g>
@@ -1794,7 +2193,7 @@ export function ToothAnatomicalViewer({
       </div>
 
       {/* Quick Surface Application Presets */}
-      {canWriteClinical && viewMode === "occlusal" && !isMissing && (
+      {canWriteClinical && (viewMode === "occlusal" || viewMode === "frontal") && !isMissing && (
         <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mr-1">Rápidos:</span>
           <button
@@ -2741,6 +3140,54 @@ export function WaitingListCandidateCard({
   );
 }
 
+export interface ClinicalAttachmentUI {
+  id: string;
+  kind: "XRAY" | "PHOTO" | "DOCUMENT";
+  name: string;
+  mime_type: string;
+  data_url: string;
+  size_bytes?: number;
+  tooth_number?: string;
+}
+
+export function buildSampleClinicalAttachment(
+  kind: "XRAY" | "PHOTO" | "DOCUMENT",
+  toothNumber?: number | string,
+): ClinicalAttachmentUI {
+  const tooth = toothNumber ? String(toothNumber) : "26";
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+  if (kind === "XRAY") {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160"><rect width="240" height="160" fill="#0f172a"/><rect x="14" y="14" width="212" height="132" rx="8" fill="#1e293b" stroke="#475569" stroke-width="1.5"/><path d="M95 36 C95 22 145 22 145 36 L138 86 L128 134 L120 96 L112 134 L102 86 Z" fill="#e2e8f0" opacity="0.88"/><circle cx="115" cy="54" r="10" fill="#0f172a" opacity="0.75"/><text x="24" y="34" fill="#94a3b8" font-family="monospace" font-size="11">RX PERIAPICAL · PIEZA ${tooth}</text></svg>`;
+    return {
+      id: `att-rx-${stamp}`,
+      kind: "XRAY",
+      name: `Rx_Periapical_Pieza_${tooth}.svg`,
+      mime_type: "image/svg+xml",
+      data_url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+      tooth_number: tooth,
+    };
+  }
+  if (kind === "PHOTO") {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160"><rect width="240" height="160" fill="#fff1f2"/><rect x="14" y="14" width="212" height="132" rx="10" fill="#ffe4e6" stroke="#fda4af" stroke-width="1.5"/><rect x="82" y="42" width="76" height="72" rx="18" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/><circle cx="120" cy="75" r="11" fill="#dc2626" opacity="0.7"/><text x="24" y="34" fill="#9f1239" font-family="sans-serif" font-weight="bold" font-size="11">FOTO INTRAORAL · PIEZA ${tooth}</text></svg>`;
+    return {
+      id: `att-photo-${stamp}`,
+      kind: "PHOTO",
+      name: `Foto_Intraoral_Pieza_${tooth}.svg`,
+      mime_type: "image/svg+xml",
+      data_url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+      tooth_number: tooth,
+    };
+  }
+  return {
+    id: `att-doc-${stamp}`,
+    kind: "DOCUMENT",
+    name: `Consentimiento_Informado_Pieza_${tooth}.pdf`,
+    mime_type: "application/pdf",
+    data_url: `data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nPj4KZW5kb2JqCnRyYWlsZXIKPDwvUm9vdCAxIDAgUj4+CiUlRU9G`,
+    tooth_number: tooth,
+  };
+}
+
 export interface ClinicalTimelineEntry {
   id: string;
   entryType: "NOTE" | "DIAGNOSIS" | "PROCEDURE" | "PRESCRIPTION";
@@ -2749,6 +3196,7 @@ export interface ClinicalTimelineEntry {
   licenseNumber?: string;
   createdAt: string;
   amendsEntryId?: string;
+  attachments?: ClinicalAttachmentUI[];
 }
 
 export function ClinicalHistoryTimeline({
@@ -2756,11 +3204,13 @@ export function ClinicalHistoryTimeline({
   compact = false,
   selectedTooth,
   onSelectTooth,
+  onPreviewAttachment,
 }: {
   entries: ClinicalTimelineEntry[];
   compact?: boolean;
   selectedTooth?: number;
   onSelectTooth?: (toothNumber: number) => void;
+  onPreviewAttachment?: (attachment: ClinicalAttachmentUI) => void;
 }) {
   const typeTone: Record<ClinicalTimelineEntry["entryType"], Tone> = {
     NOTE: "neutral",
@@ -2774,6 +3224,12 @@ export function ClinicalHistoryTimeline({
     DIAGNOSIS: "Diagnóstico",
     PROCEDURE: "Procedimiento",
     PRESCRIPTION: "Prescripción",
+  };
+
+  const attachmentKindMeta: Record<ClinicalAttachmentUI["kind"], { label: string; tone: Tone }> = {
+    XRAY: { label: "Radiografía", tone: "info" },
+    PHOTO: { label: "Fotografía", tone: "success" },
+    DOCUMENT: { label: "Documento", tone: "neutral" },
   };
 
   function extractToothNumbers(text: string): number[] {
@@ -2793,6 +3249,7 @@ export function ClinicalHistoryTimeline({
       {entries.map((entry) => {
         const teethNums = extractToothNumbers(entry.content);
         const matchesSelected = selectedTooth !== undefined && teethNums.includes(selectedTooth);
+        const attachments = entry.attachments ?? [];
 
         return (
           <li
@@ -2831,6 +3288,11 @@ export function ClinicalHistoryTimeline({
                     Addenda
                   </Badge>
                 ) : null}
+                {attachments.length > 0 ? (
+                  <Badge tone="info" className={compact ? "px-1.5 py-0 text-[10px]" : undefined}>
+                    {attachments.length} adjunto(s)
+                  </Badge>
+                ) : null}
                 <span className="inline-flex items-center gap-0.5 text-[11px] text-slate-400">
                   <Lock className="h-2.5 w-2.5" />
                   Inmutable
@@ -2841,6 +3303,69 @@ export function ClinicalHistoryTimeline({
             <p className={cn("whitespace-pre-wrap text-slate-800", compact ? "mt-1.5 text-xs leading-relaxed" : "mt-2 text-sm")}>
               {entry.content}
             </p>
+
+            {/* Attached clinical images (photos, X-rays) & documents */}
+            {attachments.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-2">
+                {attachments.map((att) => {
+                  const isImage =
+                    att.kind === "XRAY" ||
+                    att.kind === "PHOTO" ||
+                    att.mime_type.startsWith("image/");
+                  const meta = attachmentKindMeta[att.kind] ?? attachmentKindMeta.DOCUMENT;
+                  return (
+                    <div
+                      key={att.id}
+                      className="group relative flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/90 p-1.5 text-xs hover:border-brand-400 hover:bg-white transition"
+                    >
+                      {isImage ? (
+                        <img
+                          src={att.data_url}
+                          alt={att.name}
+                          className="h-10 w-14 rounded object-cover border border-slate-200 bg-slate-900 shrink-0"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-200 bg-white text-[10px] font-extrabold uppercase text-brand-700 shrink-0">
+                          DOC
+                        </div>
+                      )}
+                      <div className="min-w-0 max-w-[160px]">
+                        <div className="flex items-center gap-1">
+                          <Badge tone={meta.tone} className="px-1 py-0 text-[9px]">
+                            {meta.label}
+                          </Badge>
+                          {att.tooth_number ? (
+                            <span className="text-[9px] font-bold text-slate-500">#{att.tooth_number}</span>
+                          ) : null}
+                        </div>
+                        <p className="truncate font-semibold text-slate-800 text-[11px] mt-0.5" title={att.name}>
+                          {att.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {onPreviewAttachment ? (
+                            <button
+                              type="button"
+                              onClick={() => onPreviewAttachment(att)}
+                              className="text-[10px] font-semibold text-brand-700 hover:underline"
+                            >
+                              Ver / Ampliar
+                            </button>
+                          ) : null}
+                          <a
+                            href={att.data_url}
+                            download={att.name}
+                            className="text-[10px] text-slate-500 hover:text-slate-800 hover:underline"
+                          >
+                            Descargar
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
             <p className={cn("flex items-center gap-1 text-slate-500", compact ? "mt-1.5 text-[11px]" : "mt-3 text-xs")}>
               <UserCheck className="h-3 w-3 text-brand-600" />
               <span>{entry.doctorName}</span>
@@ -3047,3 +3572,2011 @@ export function QRVerifierBlock({
     </div>
   );
 }
+
+// ============================================================================
+// CLINICAL FINDINGS & MULTI-OPTION TREATMENT BUDGETS (F7)
+// ============================================================================
+
+export interface ClinicalFindingUI {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  doctor_name?: string;
+  tooth_number: string;
+  surfaces: string[];
+  pathology_code: string;
+  diagnosis: string;
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  status: "OPEN" | "IN_BUDGET" | "ACCEPTED" | "INVOICED" | "DISCARDED";
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetProcedureItemUI {
+  id: string;
+  treatment_code?: string;
+  description: string;
+  tooth_number?: string;
+  quantity: number;
+  unit_price_cents: number;
+  discount_percent?: number;
+  tax_rate_percent?: number;
+}
+
+export interface BudgetTreatmentOptionUI {
+  id: string;
+  option_label: string;
+  name: string;
+  description?: string;
+  is_recommended: boolean;
+  items: BudgetProcedureItemUI[];
+  total_cents: number;
+  patient_response: "PENDING" | "ACCEPTED" | "REJECTED";
+  patient_response_at?: string;
+  patient_response_notes?: string;
+}
+
+export interface BudgetFindingBlockUI {
+  finding_id: string;
+  tooth_number: string;
+  surfaces?: string[];
+  diagnosis: string;
+  notes?: string;
+  options: BudgetTreatmentOptionUI[];
+}
+
+export interface PatientBudgetUI {
+  id: string;
+  patient_id: string;
+  doctor_id: string;
+  doctor_name?: string;
+  series: string;
+  budget_number: number;
+  title: string;
+  issue_date: string;
+  validity_days: number;
+  valid_until: string;
+  status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "PARTIAL" | "REJECTED" | "EXPIRED" | "INVOICED";
+  findings_blocks: BudgetFindingBlockUI[];
+  min_estimate_amount: number;
+  max_estimate_amount: number;
+  accepted_amount: number;
+  notes: string;
+  invoice_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function buildThreeOptionsForFinding(finding: {
+  id: string;
+  tooth_number: string;
+  surfaces?: string[];
+  diagnosis: string;
+  notes?: string;
+}): BudgetFindingBlockUI {
+  const tooth = finding.tooth_number || "General";
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+  return {
+    finding_id: finding.id,
+    tooth_number: tooth,
+    surfaces: finding.surfaces ?? [],
+    diagnosis: finding.diagnosis,
+    notes: finding.notes,
+    options: [
+      {
+        id: `opt-${stamp}-1`,
+        option_label: "Opción 1",
+        name: "Extracción simple",
+        description: `Exodoncia conservadora de la pieza ${tooth}`,
+        is_recommended: false,
+        total_cents: 5000,
+        patient_response: "PENDING",
+        items: [
+          {
+            id: `it-${stamp}-1a`,
+            treatment_code: "EXTRACCION_SIMPLE",
+            description: `Extracción simple (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 5000,
+          },
+        ],
+      },
+      {
+        id: `opt-${stamp}-2`,
+        option_label: "Opción 2",
+        name: "Tratamiento de reconstrucción",
+        description: `Conservación dental mediante endodoncia, reconstrucción compleja y corona en pieza ${tooth}`,
+        is_recommended: false,
+        total_cents: 61500,
+        patient_response: "PENDING",
+        items: [
+          {
+            id: `it-${stamp}-2a`,
+            treatment_code: "ENDODONCIA_MULTIRRADICULAR",
+            description: `Endodoncia multirradicular (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 21000,
+          },
+          {
+            id: `it-${stamp}-2b`,
+            treatment_code: "OBTURACION_COMPLEJA",
+            description: `Reconstrucción compleja (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 8500,
+          },
+          {
+            id: `it-${stamp}-2c`,
+            treatment_code: "CORONA",
+            description: `Corona / Funda protectora (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 32000,
+          },
+        ],
+      },
+      {
+        id: `opt-${stamp}-3`,
+        option_label: "Opción 3",
+        name: "Extracción y después Implante",
+        description: `Rehabilitación implantológica completa: extracción + implante osteointegrado + corona sobre implante en pieza ${tooth}`,
+        is_recommended: true,
+        total_cents: 112000,
+        patient_response: "PENDING",
+        items: [
+          {
+            id: `it-${stamp}-3a`,
+            treatment_code: "EXTRACCION_SIMPLE",
+            description: `Extracción previa (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 5000,
+          },
+          {
+            id: `it-${stamp}-3b`,
+            treatment_code: "IMPLANTE",
+            description: `Colocación de implante osteointegrado (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 75000,
+          },
+          {
+            id: `it-${stamp}-3c`,
+            treatment_code: "CORONA",
+            description: `Corona sobre implante (Pieza ${tooth})`,
+            tooth_number: tooth,
+            quantity: 1,
+            unit_price_cents: 32000,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+const budgetStatusMeta: Record<
+  PatientBudgetUI["status"],
+  { label: string; tone: Tone }
+> = {
+  DRAFT: { label: "Borrador", tone: "neutral" },
+  PRESENTED: { label: "En estudio por el cliente", tone: "warning" },
+  ACCEPTED: { label: "Aceptado por el cliente", tone: "success" },
+  PARTIAL: { label: "Aceptación parcial", tone: "info" },
+  REJECTED: { label: "Descartado / Rechazado", tone: "danger" },
+  EXPIRED: { label: "Caducado", tone: "danger" },
+  INVOICED: { label: "Cerrado y Facturado", tone: "success" },
+};
+
+const optionResponseMeta: Record<
+  BudgetTreatmentOptionUI["patient_response"],
+  { label: string; tone: Tone; boxClass: string }
+> = {
+  PENDING: {
+    label: "En estudio por el cliente",
+    tone: "warning",
+    boxClass: "border-slate-200 bg-white",
+  },
+  ACCEPTED: {
+    label: "✓ Aceptado por el cliente",
+    tone: "success",
+    boxClass: "border-emerald-400 bg-emerald-50/40 ring-1 ring-emerald-400/50",
+  },
+  REJECTED: {
+    label: "✗ Descartado por el cliente",
+    tone: "neutral",
+    boxClass: "border-slate-200 bg-slate-50/70 opacity-75",
+  },
+};
+
+export function PatientBudgetCard({
+  budget,
+  currency = "EUR",
+  canWrite = false,
+  loading = false,
+  onRespondOption,
+  onUpdateStatus,
+  onConvertToInvoice,
+  onPrintFormat,
+  onCreateNewBudgetForFinding,
+}: {
+  budget: PatientBudgetUI;
+  currency?: string;
+  canWrite?: boolean;
+  loading?: boolean;
+  onRespondOption?: (
+    budgetId: string,
+    findingId: string,
+    optionId: string,
+    response: "PENDING" | "ACCEPTED" | "REJECTED",
+  ) => void;
+  onUpdateStatus?: (budgetId: string, status: PatientBudgetUI["status"], validityDays?: number) => void;
+  onConvertToInvoice?: (budgetId: string) => void;
+  onPrintFormat?: (budget: PatientBudgetUI) => void;
+  onCreateNewBudgetForFinding?: (finding: {
+    id: string;
+    tooth_number: string;
+    surfaces?: string[];
+    diagnosis: string;
+    notes?: string;
+  }) => void;
+}) {
+  const stMeta = budgetStatusMeta[budget.status] ?? budgetStatusMeta.PRESENTED;
+  const isClosed = budget.status === "INVOICED" || budget.status === "REJECTED";
+  const validUntilDate = budget.valid_until ? new Date(budget.valid_until) : null;
+  const isExpired =
+    !isClosed &&
+    validUntilDate !== null &&
+    !Number.isNaN(validUntilDate.getTime()) &&
+    validUntilDate.getTime() < Date.now() - 86400000;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+      {/* Header: Code, Title, Validity & Status */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-brand-700 px-2 py-0.5 text-xs font-extrabold text-white tabular-nums">
+              {budget.series}-{budget.budget_number}
+            </span>
+            <h3 className="text-sm font-bold text-slate-900">{budget.title}</h3>
+            <Badge tone={stMeta.tone}>{stMeta.label}</Badge>
+            {isExpired ? (
+              <Badge tone="danger">Vigencia vencida</Badge>
+            ) : (
+              <Badge tone="info">
+                Vigencia: {budget.validity_days} días (hasta{" "}
+                {validUntilDate ? validUntilDate.toLocaleDateString("es-ES") : budget.valid_until})
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            Emitido el {new Date(budget.issue_date).toLocaleDateString("es-ES")}
+            {budget.doctor_name ? ` · Facultativo: ${budget.doctor_name}` : ""}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {onPrintFormat ? (
+            <Button size="sm" variant="outline" onClick={() => onPrintFormat(budget)}>
+              Formato cliente / Imprimir
+            </Button>
+          ) : null}
+          {canWrite && !isClosed && onUpdateStatus ? (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={loading}
+                onClick={() => onUpdateStatus(budget.id, "PRESENTED", 30)}
+              >
+                Renovar +30d
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={loading}
+                onClick={() => onUpdateStatus(budget.id, "REJECTED")}
+              >
+                Descartar presupuesto
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Findings Blocks -> Below each Finding, the Proposed Treatment Alternatives */}
+      <div className="space-y-4">
+        {budget.findings_blocks.map((blk, blkIdx) => {
+          const allOptionsRejected =
+            blk.options.length > 0 && blk.options.every((o) => o.patient_response === "REJECTED");
+          const isFindingRejectedInThisBudget = allOptionsRejected || budget.status === "REJECTED";
+
+          return (
+          <div
+            key={blk.finding_id || `blk-${blkIdx}`}
+            className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-3"
+          >
+            {/* Top of Block: Clinical Finding (Hallazgo) */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-6 items-center justify-center rounded-md bg-slate-900 px-2 text-xs font-extrabold text-white tabular-nums">
+                  Pieza #{blk.tooth_number || "General"}
+                </span>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Hallazgo clínico detectado en odontograma
+                  </p>
+                  <p className="text-sm font-bold text-slate-900">
+                    {blk.diagnosis}
+                    {blk.surfaces && blk.surfaces.length > 0 ? (
+                      <span className="ml-2 text-xs font-normal text-slate-600">
+                        (Caras: {blk.surfaces.join(", ")})
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {isFindingRejectedInThisBudget ? (
+                  <Badge tone="warning" className="text-[10px]">
+                    Tratamiento descartado · Hallazgo sigue abierto
+                  </Badge>
+                ) : null}
+                {canWrite && isFindingRejectedInThisBudget && onCreateNewBudgetForFinding ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onCreateNewBudgetForFinding({
+                        id: blk.finding_id,
+                        tooth_number: blk.tooth_number,
+                        surfaces: blk.surfaces,
+                        diagnosis: blk.diagnosis,
+                        notes: blk.notes,
+                      })
+                    }
+                  >
+                    + Nuevo presupuesto para este hallazgo
+                  </Button>
+                ) : null}
+                <span className="text-xs font-semibold text-slate-600">
+                  {blk.options.length} tratamiento(s) alternativo(s) propuesto(s)
+                </span>
+              </div>
+            </div>
+
+            {/* Bottom of Block: Treatment Options / Alternatives Proposed for this Finding */}
+            <div className="grid gap-3 md:grid-cols-3">
+              {blk.options.map((opt) => {
+                const respMeta =
+                  optionResponseMeta[opt.patient_response] ?? optionResponseMeta.PENDING;
+                const optionTotalCents =
+                  opt.total_cents ||
+                  opt.items.reduce((acc, it) => acc + (it.quantity || 1) * it.unit_price_cents, 0);
+
+                return (
+                  <div
+                    key={opt.id}
+                    className={cn(
+                      "flex flex-col justify-between rounded-xl border p-3 transition",
+                      respMeta.boxClass,
+                    )}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wider text-brand-700">
+                              {opt.option_label}
+                            </span>
+                            {opt.is_recommended ? (
+                              <Badge tone="info" className="text-[10px] px-1.5 py-0">
+                                ★ Recomendado
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-900 mt-0.5">{opt.name}</h4>
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900 tabular-nums shrink-0">
+                          {formatMoney(optionTotalCents, currency)}
+                        </span>
+                      </div>
+
+                      {opt.description ? (
+                        <p className="text-xs text-slate-600 leading-snug">{opt.description}</p>
+                      ) : null}
+
+                      {/* Itemized Procedures inside this Option */}
+                      <ul className="space-y-1 border-t border-slate-100 pt-2 text-xs text-slate-700">
+                        {opt.items.map((it) => (
+                          <li key={it.id} className="flex items-center justify-between gap-2">
+                            <span className="truncate">
+                              • {it.description}{" "}
+                              {it.quantity > 1 ? `x${it.quantity}` : ""}
+                            </span>
+                            <span className="tabular-nums font-medium text-slate-600 shrink-0">
+                              {formatMoney((it.quantity || 1) * it.unit_price_cents, currency)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Explicit Customer Response Section */}
+                    <div className="mt-3 space-y-2 border-t border-slate-200/80 pt-2.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                          Respuesta cliente:
+                        </span>
+                        <Badge tone={respMeta.tone} className="text-[10px] px-1.5 py-0">
+                          {respMeta.label}
+                        </Badge>
+                      </div>
+
+                      {opt.patient_response_notes ? (
+                        <p className="text-[11px] italic text-slate-500">
+                          "{opt.patient_response_notes}"
+                        </p>
+                      ) : null}
+
+                      {canWrite && !isClosed && onRespondOption ? (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            disabled={loading || opt.patient_response === "ACCEPTED"}
+                            aria-label={`Aceptar opción ${opt.name}`}
+                            onClick={() =>
+                              onRespondOption(budget.id, blk.finding_id, opt.id, "ACCEPTED")
+                            }
+                            className={cn(
+                              "flex-1 rounded-lg px-2 py-1 text-xs font-semibold transition",
+                              opt.patient_response === "ACCEPTED"
+                                ? "bg-emerald-600 text-white cursor-default"
+                                : "border border-emerald-600 bg-white text-emerald-700 hover:bg-emerald-600 hover:text-white",
+                            )}
+                          >
+                            {opt.patient_response === "ACCEPTED" ? "✓ Aceptada" : "Aceptar opción"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={loading || opt.patient_response === "REJECTED"}
+                            aria-label={`Descartar opción ${opt.name}`}
+                            onClick={() =>
+                              onRespondOption(budget.id, blk.finding_id, opt.id, "REJECTED")
+                            }
+                            className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            Descartar
+                          </button>
+                          {opt.patient_response !== "PENDING" ? (
+                            <button
+                              type="button"
+                              disabled={loading}
+                              onClick={() =>
+                                onRespondOption(budget.id, blk.finding_id, opt.id, "PENDING")
+                              }
+                              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
+                              title="Volver a dejar en estudio"
+                            >
+                              En estudio
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          );
+        })}
+      </div>
+
+      {/* Footer: Comparative Range, Accepted Amount & Convert to Invoice Action */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center gap-6 text-xs tabular-nums">
+          <div>
+            <span className="text-slate-500 block">Horquilla propuesta según opción:</span>
+            <span className="text-sm font-bold text-slate-800">
+              {formatMoney(Math.round(budget.min_estimate_amount * 100), currency)} –{" "}
+              {formatMoney(Math.round(budget.max_estimate_amount * 100), currency)}
+            </span>
+          </div>
+          <div>
+            <span className="text-slate-500 block">Total tratamientos aceptados por el cliente:</span>
+            <span className="text-base font-extrabold text-emerald-700">
+              {formatMoney(Math.round(budget.accepted_amount * 100), currency)}
+            </span>
+          </div>
+        </div>
+
+        {canWrite && budget.status !== "INVOICED" && budget.accepted_amount > 0 && onConvertToInvoice ? (
+          <Button
+            size="sm"
+            loading={loading}
+            onClick={() => onConvertToInvoice(budget.id)}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Facturar tratamientos aceptados
+          </Button>
+        ) : budget.status === "INVOICED" ? (
+          <Badge tone="success">Presupuesto cerrado y facturado</Badge>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export interface ClinicBudgetSettingsUI {
+  logo_url: string;
+  clinic_contact_line: string;
+  budget_default_validity_days: number;
+  budget_default_series: string;
+  budget_warning_days_before_expiry: number;
+  budget_validity_terms: string;
+  budget_auto_expire: boolean;
+}
+
+export const DEFAULT_CLINIC_BUDGET_SETTINGS: ClinicBudgetSettingsUI = {
+  logo_url: "",
+  clinic_contact_line: "",
+  budget_default_validity_days: 30,
+  budget_default_series: "PRE",
+  budget_warning_days_before_expiry: 7,
+  budget_validity_terms:
+    "Presupuesto válido durante el periodo de vigencia indicado. Los importes reflejados incluyen los materiales y controles clínicos especificados para cada alternativa de tratamiento.",
+  budget_auto_expire: true,
+};
+
+export const SAMPLE_CLINIC_LOGO_DATA_URL =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 48" fill="none">
+      <rect width="48" height="48" rx="12" fill="#0F3F34"/>
+      <path d="M16 14C12.5 14 11 17.5 11 21.5C11 26.5 13.5 31 15 35.5C16 38.5 17.5 39 19 36C20.5 33 21.5 29 24 29C26.5 29 27.5 33 29 36C30.5 39 32 38.5 33 35.5C34.5 31 37 26.5 37 21.5C37 17.5 35.5 14 32 14C28.5 14 26.5 16 24 16C21.5 16 19.5 14 16 14Z" fill="#CCFBF1" stroke="#5EEAD4" stroke-width="1.5"/>
+      <text x="58" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="800" fill="#0F172A">CLÍNICA DENTAL</text>
+      <text x="58" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="600" fill="#0D9488" letter-spacing="1.5">ODONTOLOGÍA AVANZADA</text>
+    </svg>`,
+  );
+
+export function BudgetPrintFormatDocument({
+  budget,
+  patientName,
+  patientDni,
+  clinicName = "Clínica Dental",
+  clinicLogoUrl,
+  clinicTaxId,
+  clinicContactLine,
+  validityTerms,
+  currency = "EUR",
+  onPrint,
+}: {
+  budget: PatientBudgetUI;
+  patientName: string;
+  patientDni?: string;
+  clinicName?: string;
+  clinicLogoUrl?: string;
+  clinicTaxId?: string;
+  clinicContactLine?: string;
+  validityTerms?: string;
+  currency?: string;
+  onPrint?: () => void;
+}) {
+  const issueDateFormatted = new Date(budget.issue_date).toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const validUntilFormatted = new Date(budget.valid_until).toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const effectiveValidityTerms =
+    validityTerms?.trim() ||
+    DEFAULT_CLINIC_BUDGET_SETTINGS.budget_validity_terms;
+
+  return (
+    <div
+      data-print-budget="true"
+      className="print-budget-sheet space-y-5 rounded-xl border border-slate-300 bg-white p-6 text-slate-900 shadow-xs"
+    >
+      {/* Top Action Bar (Hidden when printing) */}
+      {onPrint ? (
+        <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 px-4 py-2.5">
+          <div className="text-xs text-brand-950">
+            <span className="font-bold">Vista previa de impresión A4</span> · Optimizada para papel y exportación a PDF sin bordes ni menús.
+          </div>
+          <Button size="sm" onClick={onPrint}>
+            Imprimir / Guardar PDF para el cliente
+          </Button>
+        </div>
+      ) : null}
+
+      {/* Editorial Clinical Document Header */}
+      <div className="print-avoid-break flex flex-wrap items-start justify-between gap-6 border-b-2 border-slate-900 pb-5">
+        <div className="flex items-start gap-4">
+          {clinicLogoUrl && clinicLogoUrl.trim() ? (
+            <img
+              src={clinicLogoUrl.trim()}
+              alt={`Logo de ${clinicName}`}
+              className="h-14 max-w-[180px] object-contain shrink-0"
+            />
+          ) : (
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-900 text-white shadow-2xs"
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 36 36" className="h-7 w-7 fill-current">
+                <path d="M11 8C8 8 6.5 11 6.5 14.5C6.5 19 8.5 23 10 27C11 29.5 12.2 30 13.5 27.5C14.8 25 15.8 21.5 18 21.5C20.2 21.5 21.2 25 22.5 27.5C23.8 30 25 29.5 26 27C27.5 23 29.5 19 29.5 14.5C29.5 11 28 8 25 8C22 8 20.2 9.8 18 9.8C15.8 9.8 14 8 11 8Z" />
+              </svg>
+            </div>
+          )}
+
+          <div className="space-y-0.5">
+            <p className="text-sm font-extrabold uppercase tracking-wider text-brand-800">
+              {clinicName}
+            </p>
+            {clinicTaxId ? (
+              <p className="text-[11px] font-semibold text-slate-600">
+                NIF / Identificación Fiscal: <span className="text-slate-800">{clinicTaxId}</span>
+              </p>
+            ) : null}
+            {clinicContactLine ? (
+              <p className="text-[11px] text-slate-500">{clinicContactLine}</p>
+            ) : null}
+            <h2 className="pt-1 text-lg font-extrabold tracking-tight text-slate-900">
+              PRESUPUESTO CLÍNICO Y OPCIONES DE TRATAMIENTO
+            </h2>
+          </div>
+        </div>
+
+        {/* Document Reference & Validity Box */}
+        <div className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-right text-xs text-slate-700 space-y-1 min-w-[230px]">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Nº Presupuesto
+            </span>
+            <span className="text-sm font-extrabold tabular-nums text-slate-900">
+              {budget.series}-{budget.budget_number}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-500">Fecha de emisión:</span>
+            <strong className="tabular-nums text-slate-900">{issueDateFormatted}</strong>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-slate-500">Vigencia del presupuesto:</span>
+            <strong className="tabular-nums text-brand-800">
+              {budget.validity_days} días (Válido hasta {validUntilFormatted})
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Patient & Treatment Plan Identification Bar */}
+      <div className="print-avoid-break grid gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 sm:grid-cols-3 text-xs">
+        <div>
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Paciente
+          </span>
+          <span className="font-extrabold text-slate-900 text-sm">
+            {patientName}
+          </span>
+          {patientDni ? (
+            <span className="ml-1.5 text-slate-600 font-medium">({patientDni})</span>
+          ) : null}
+        </div>
+        <div>
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Plan de Tratamiento
+          </span>
+          <span className="font-bold text-slate-900">{budget.title}</span>
+        </div>
+        <div className="sm:text-right">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Facultativo Responsable
+          </span>
+          <span className="font-semibold text-slate-800">
+            {budget.doctor_name || "Equipo Médico Odontológico"}
+          </span>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-600 leading-relaxed">
+        A continuación se detallan los hallazgos clínicos registrados en su exploración odontológica y las{" "}
+        <strong>alternativas de tratamiento propuestas</strong> para cada pieza dental. Puede estudiar este
+        documento y marcar la opción que desea aceptar para cada hallazgo.
+      </p>
+
+      {/* Clinical Findings & Comparative Treatment Alternatives */}
+      <div className="space-y-4">
+        {budget.findings_blocks.map((blk, idx) => (
+          <div
+            key={blk.finding_id || idx}
+            className="print-avoid-break overflow-hidden rounded-xl border border-slate-300 bg-white"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-slate-100/90 px-4 py-2">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-6 items-center rounded-md bg-slate-900 px-2 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                  Pieza #{blk.tooth_number}
+                </span>
+                <span className="text-xs font-extrabold uppercase text-slate-900">
+                  HALLAZGO #{idx + 1} · {blk.diagnosis}
+                </span>
+              </div>
+              {blk.surfaces && blk.surfaces.length > 0 ? (
+                <span className="text-[11px] font-semibold text-slate-600">
+                  Caras afectadas: {blk.surfaces.join(", ")}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="divide-y divide-slate-200 p-3 space-y-2.5">
+              {blk.options.map((opt) => {
+                const totalCents =
+                  opt.total_cents ||
+                  opt.items.reduce((acc, i) => acc + (i.quantity || 1) * i.unit_price_cents, 0);
+                const isAccepted = opt.patient_response === "ACCEPTED";
+                return (
+                  <div
+                    key={opt.id}
+                    className={cn(
+                      "flex flex-wrap items-start justify-between gap-3 rounded-lg border p-3 text-xs first:mt-0",
+                      isAccepted
+                        ? "border-emerald-500 bg-emerald-50/40"
+                        : opt.is_recommended
+                        ? "border-brand-300 bg-brand-50/20"
+                        : "border-slate-200 bg-white",
+                    )}
+                  >
+                    <div className="space-y-1.5 flex-1 min-w-[220px]">
+                      <div className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-xs border border-slate-800 bg-white text-[11px] font-extrabold leading-none">
+                          {isAccepted ? "✓" : ""}
+                        </span>
+                        <span className="text-xs font-extrabold">
+                          {opt.option_label}: {opt.name}
+                        </span>
+                        {opt.is_recommended ? (
+                          <span className="rounded-md border border-brand-300 bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-900">
+                            ★ Opción recomendada
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {opt.description ? (
+                        <p className="pl-6 text-[11px] text-slate-600">{opt.description}</p>
+                      ) : null}
+
+                      {opt.items.length > 0 ? (
+                        <table className="mt-1 w-full pl-6 text-[11px] text-slate-700">
+                          <tbody>
+                            {opt.items.map((it) => (
+                              <tr key={it.id} className="border-b border-dotted border-slate-200 last:border-none">
+                                <td className="py-0.5 pl-6 pr-2">
+                                  • {it.description}
+                                  {it.quantity && it.quantity > 1 ? ` (x${it.quantity})` : ""}
+                                </td>
+                                <td className="py-0.5 text-right font-medium tabular-nums text-slate-600 w-24">
+                                  {formatMoney((it.quantity || 1) * it.unit_price_cents, currency)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : null}
+                    </div>
+
+                    <div className="text-right tabular-nums shrink-0 min-w-[140px]">
+                      <span className="text-sm font-extrabold text-slate-900 block">
+                        {formatMoney(totalCents, currency)}
+                      </span>
+                      <span className="mt-0.5 inline-block text-[10px] font-semibold uppercase text-slate-600">
+                        {isAccepted
+                          ? "✓ Opción aceptada"
+                          : opt.patient_response === "REJECTED"
+                          ? "Opción descartada"
+                          : "[ ] Marcar si elige esta opción"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Economic Summary Strip */}
+      <div className="print-avoid-break flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-xs tabular-nums">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+            Horquilla económica según alternativa elegida
+          </span>
+          <span className="text-sm font-extrabold text-slate-900">
+            {formatMoney(Math.round(budget.min_estimate_amount * 100), currency)} –{" "}
+            {formatMoney(Math.round(budget.max_estimate_amount * 100), currency)}
+          </span>
+        </div>
+
+        <div className="text-right">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+            Total tratamientos aceptados
+          </span>
+          <span className="text-base font-extrabold text-emerald-800">
+            {formatMoney(Math.round(budget.accepted_amount * 100), currency)}
+          </span>
+        </div>
+      </div>
+
+      {/* Notes & Clinic Validity Terms Box */}
+      <div className="print-avoid-break rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 text-[11px] text-slate-700 space-y-1.5">
+        {budget.notes ? (
+          <p>
+            <strong className="text-slate-900">Observaciones clínicas del presupuesto:</strong> {budget.notes}
+          </p>
+        ) : null}
+        <p className="text-slate-600">
+          <strong className="text-slate-800">Condiciones de vigencia ({budget.validity_days} días · hasta {validUntilFormatted}):</strong>{" "}
+          {effectiveValidityTerms}
+        </p>
+      </div>
+
+      {/* Signatures & Patient Conformity Block */}
+      <div className="print-avoid-break grid grid-cols-2 gap-8 border-t-2 border-slate-300 pt-5 text-xs text-slate-700">
+        <div>
+          <p className="font-bold text-slate-900">Firma y Sello del Facultativo / Clínica</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{clinicName}</p>
+          <div className="mt-10 border-b border-dashed border-slate-400" />
+        </div>
+        <div>
+          <p className="font-bold text-slate-900">
+            Conformidad y Aceptación del Paciente (indicar opción elegida)
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Fdo.: {patientName} {patientDni ? `· DNI/NIE: ${patientDni}` : ""}
+          </p>
+          <div className="mt-10 border-b border-dashed border-slate-400" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ClinicBrandingAndBudgetSettingsCard({
+  clinicName,
+  clinicTaxId,
+  initialSettings,
+  saving = false,
+  onSave,
+}: {
+  clinicName: string;
+  clinicTaxId?: string;
+  initialSettings?: Partial<ClinicBudgetSettingsUI>;
+  saving?: boolean;
+  onSave: (settings: ClinicBudgetSettingsUI) => void;
+}) {
+  const [logoUrl, setLogoUrl] = useState(initialSettings?.logo_url ?? DEFAULT_CLINIC_BUDGET_SETTINGS.logo_url);
+  const [contactLine, setContactLine] = useState(
+    initialSettings?.clinic_contact_line ?? DEFAULT_CLINIC_BUDGET_SETTINGS.clinic_contact_line,
+  );
+  const [validityDays, setValidityDays] = useState<number>(
+    initialSettings?.budget_default_validity_days ?? DEFAULT_CLINIC_BUDGET_SETTINGS.budget_default_validity_days,
+  );
+  const [defaultSeries, setDefaultSeries] = useState(
+    initialSettings?.budget_default_series ?? DEFAULT_CLINIC_BUDGET_SETTINGS.budget_default_series,
+  );
+  const [warningDays, setWarningDays] = useState<number>(
+    initialSettings?.budget_warning_days_before_expiry ??
+      DEFAULT_CLINIC_BUDGET_SETTINGS.budget_warning_days_before_expiry,
+  );
+  const [validityTerms, setValidityTerms] = useState(
+    initialSettings?.budget_validity_terms ?? DEFAULT_CLINIC_BUDGET_SETTINGS.budget_validity_terms,
+  );
+  const [autoExpire, setAutoExpire] = useState<boolean>(
+    initialSettings?.budget_auto_expire ?? DEFAULT_CLINIC_BUDGET_SETTINGS.budget_auto_expire,
+  );
+
+  const previewValidUntil = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + (Number(validityDays) || 30));
+    return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }, [validityDays]);
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-12">
+        {/* Left column (7 cols): Form controls for Logo & Budget Validity Parameters */}
+        <div className="lg:col-span-7 space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              Identidad Visual (Logo) y Parámetros de Vigencia de Presupuestos
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Configura el logotipo oficial de la clínica y las condiciones de validez por defecto que se aplicarán al emitir e imprimir presupuestos para los pacientes.
+            </p>
+          </div>
+
+          {/* 1. Clinic Logo Configuration */}
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+            <label
+              htmlFor="clinic-logo-url-input"
+              className="block text-xs font-bold uppercase tracking-wider text-slate-700"
+            >
+              URL o imagen del logo de la clínica
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="clinic-logo-url-input"
+                type="text"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://tu-clinica.com/logo.png o sube una imagen…"
+                className="h-9 flex-1 min-w-[200px] rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-brand-500 focus:outline-none"
+              />
+              <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                <span>Subir imagen</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      if (typeof reader.result === "string") {
+                        setLogoUrl(reader.result);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => setLogoUrl(SAMPLE_CLINIC_LOGO_DATA_URL)}
+                className="h-9 rounded-lg border border-brand-200 bg-brand-50 px-2.5 text-xs font-semibold text-brand-800 hover:bg-brand-100"
+              >
+                Usar logo dental de muestra
+              </button>
+              {logoUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setLogoUrl("")}
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-500 hover:bg-red-50 hover:text-red-700"
+                >
+                  Quitar logo
+                </button>
+              ) : null}
+            </div>
+
+            <div className="pt-1">
+              <label
+                htmlFor="clinic-contact-line-input"
+                className="block text-xs font-semibold text-slate-700 mb-1"
+              >
+                Datos de cabecera para documentos impresos (Dirección, Teléfono, Registro Sanitario)
+              </label>
+              <input
+                id="clinic-contact-line-input"
+                type="text"
+                value={contactLine}
+                onChange={(e) => setContactLine(e.target.value)}
+                placeholder="Ej. Av. Diagonal 450, 08006 Barcelona · Tel. 932 00 11 22 · Reg. Sanitario E08991234"
+                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          {/* 2. Budget Validity Parameters */}
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+            <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+              Parámetros de Vigencia de los Presupuestos
+            </span>
+
+            <div className="space-y-1.5">
+              <label
+                htmlFor="budget-default-validity-input"
+                className="block text-xs font-semibold text-slate-700"
+              >
+                Plazo de vigencia por defecto (días naturales)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                {[15, 30, 45, 60, 90].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setValidityDays(days)}
+                    className={cn(
+                      "rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
+                      validityDays === days
+                        ? "border-brand-600 bg-brand-600 text-white shadow-2xs"
+                        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100",
+                    )}
+                  >
+                    {days} días
+                  </button>
+                ))}
+                <input
+                  id="budget-default-validity-input"
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={validityDays}
+                  onChange={(e) => setValidityDays(Math.max(1, Math.min(365, Number(e.target.value) || 30)))}
+                  className="h-8 w-20 rounded-lg border border-slate-300 bg-white px-2 text-center text-xs font-bold tabular-nums text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="budget-default-series-input"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Serie por defecto de presupuestos
+                </label>
+                <input
+                  id="budget-default-series-input"
+                  type="text"
+                  value={defaultSeries}
+                  onChange={(e) => setDefaultSeries(e.target.value.toUpperCase())}
+                  placeholder="PRE"
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold uppercase text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="budget-warning-days-input"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Aviso de vencimiento próximo (días antes)
+                </label>
+                <input
+                  id="budget-warning-days-input"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={warningDays}
+                  onChange={(e) => setWarningDays(Math.max(1, Math.min(90, Number(e.target.value) || 7)))}
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs tabular-nums text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="budget-validity-terms-input"
+                className="block text-xs font-semibold text-slate-700 mb-1"
+              >
+                Condiciones legales y texto de vigencia impreso al pie del presupuesto
+              </label>
+              <textarea
+                id="budget-validity-terms-input"
+                rows={3}
+                value={validityTerms}
+                onChange={(e) => setValidityTerms(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs text-slate-900 focus:border-brand-500 focus:outline-none"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoExpire}
+                onChange={(e) => setAutoExpire(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600"
+              />
+              <span>
+                Marcar automáticamente los presupuestos como caducados una vez superada su fecha límite de vigencia
+              </span>
+            </label>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <Button
+              loading={saving}
+              onClick={() =>
+                onSave({
+                  logo_url: logoUrl.trim(),
+                  clinic_contact_line: contactLine.trim(),
+                  budget_default_validity_days: Number(validityDays) || 30,
+                  budget_default_series: defaultSeries.trim().toUpperCase() || "PRE",
+                  budget_warning_days_before_expiry: Number(warningDays) || 7,
+                  budget_validity_terms: validityTerms.trim(),
+                  budget_auto_expire: autoExpire,
+                })
+              }
+            >
+              Guardar logo y parámetros de vigencia
+            </Button>
+          </div>
+        </div>
+
+        {/* Right column (5 cols): Live Print Header & Validity Footer Preview */}
+        <div className="lg:col-span-5 space-y-3 rounded-xl border border-slate-200 bg-slate-100/70 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-700">
+              Vista previa de cabecera e impresión
+            </span>
+            <Badge tone="info">Formato A4</Badge>
+          </div>
+
+          <div className="space-y-4 rounded-xl border border-slate-300 bg-white p-4 shadow-xs text-xs">
+            <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-3">
+              <div className="flex items-start gap-2.5">
+                {logoUrl.trim() ? (
+                  <img
+                    src={logoUrl.trim()}
+                    alt={`Vista previa logo ${clinicName}`}
+                    className="h-11 max-w-[140px] object-contain shrink-0"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-900 text-white font-extrabold">
+                    CD
+                  </div>
+                )}
+                <div>
+                  <p className="font-extrabold uppercase text-brand-800">{clinicName}</p>
+                  {clinicTaxId ? <p className="text-[10px] text-slate-500">NIF: {clinicTaxId}</p> : null}
+                  {contactLine ? <p className="text-[10px] text-slate-500">{contactLine}</p> : null}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-[10px]">
+                <p className="font-extrabold text-slate-900">{defaultSeries || "PRE"}-101</p>
+                <p className="font-semibold text-brand-800">
+                  Vigencia: {validityDays} días (hasta {previewValidUntil})
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 text-[11px] text-slate-600">
+              <strong className="text-slate-800">Condiciones de vigencia ({validityDays} días):</strong>{" "}
+              {validityTerms}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AppointmentOpenFindingsAndBudgetsSummary({
+  findings,
+  budgets,
+  currency = "EUR",
+  onNavigateToBudgets,
+}: {
+  findings: ClinicalFindingUI[];
+  budgets: PatientBudgetUI[];
+  currency?: string;
+  onNavigateToBudgets?: () => void;
+}) {
+  // Filter only unclosed findings (!INVOICED && !DISCARDED) and unclosed budgets (!INVOICED && !REJECTED)
+  const openFindings = useMemo(
+    () => findings.filter((f) => f.status !== "INVOICED" && f.status !== "DISCARDED"),
+    [findings],
+  );
+  const openBudgets = useMemo(
+    () => budgets.filter((b) => b.status !== "INVOICED" && b.status !== "REJECTED"),
+    [budgets],
+  );
+
+  if (openFindings.length === 0 && openBudgets.length === 0) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 text-xs text-slate-500">
+        Sin hallazgos ni presupuestos pendientes de cierre para este paciente.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200/90 bg-amber-50/50 p-3 space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-900">
+          Hallazgos y Presupuestos Abiertos
+        </span>
+        <Badge tone="warning" className="text-[10px] px-1.5 py-0">
+          {openFindings.length} hallazgo(s) · {openBudgets.length} ppto(s)
+        </Badge>
+      </div>
+
+      {/* Unclosed Clinical Findings */}
+      {openFindings.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold uppercase text-slate-500">
+            Hallazgos activos del odontograma:
+          </p>
+          <ul className="space-y-1">
+            {openFindings.map((f) => (
+              <li
+                key={f.id}
+                className="flex items-center justify-between gap-1.5 rounded-lg border border-amber-200/70 bg-white px-2 py-1 text-xs"
+              >
+                <span className="truncate font-medium text-slate-800">
+                  <strong className="text-brand-800">Pieza #{f.tooth_number}:</strong> {f.diagnosis}
+                </span>
+                <Badge
+                  tone={f.status === "ACCEPTED" ? "success" : f.status === "IN_BUDGET" ? "info" : "warning"}
+                  className="text-[9px] px-1.5 py-0 shrink-0"
+                >
+                  {f.status === "ACCEPTED"
+                    ? "Aceptado"
+                    : f.status === "IN_BUDGET"
+                    ? "Presupuestado"
+                    : "Sin presupuestar"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Unclosed Patient Budgets & Customer Option Responses */}
+      {openBudgets.length > 0 ? (
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold uppercase text-slate-500">
+            Presupuestos pendientes de cierre / facturación:
+          </p>
+          {openBudgets.map((b) => {
+            const stMeta = budgetStatusMeta[b.status] ?? budgetStatusMeta.PRESENTED;
+            return (
+              <div
+                key={b.id}
+                className="rounded-lg border border-slate-200 bg-white p-2 text-xs space-y-1.5 shadow-2xs"
+              >
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="font-bold text-slate-900 truncate">
+                    {b.series}-{b.budget_number} · {b.title}
+                  </span>
+                  <Badge tone={stMeta.tone} className="text-[9px] px-1.5 py-0 shrink-0">
+                    {stMeta.label}
+                  </Badge>
+                </div>
+
+                <p className="text-[11px] text-slate-500 tabular-nums">
+                  Vigencia hasta {new Date(b.valid_until).toLocaleDateString("es-ES")} ·{" "}
+                  {b.accepted_amount > 0
+                    ? `Aceptado: ${formatMoney(Math.round(b.accepted_amount * 100), currency)}`
+                    : `Opciones: ${formatMoney(Math.round(b.min_estimate_amount * 100), currency)}–${formatMoney(Math.round(b.max_estimate_amount * 100), currency)}`}
+                </p>
+
+                {/* Breakdown of findings & accepted/pending options */}
+                <div className="space-y-1 border-t border-slate-100 pt-1">
+                  {b.findings_blocks.map((blk, i) => {
+                    const acceptedOpt = blk.options.find((o) => o.patient_response === "ACCEPTED");
+                    return (
+                      <div key={blk.finding_id || i} className="text-[11px] text-slate-700">
+                        <span className="font-semibold">Pieza #{blk.tooth_number}:</span>{" "}
+                        {acceptedOpt ? (
+                          <span className="font-semibold text-emerald-700">
+                            ✓ {acceptedOpt.option_label} ({acceptedOpt.name})
+                          </span>
+                        ) : (
+                          <span className="text-amber-800">
+                            {blk.options.length} alternativa(s) en estudio por el cliente
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {onNavigateToBudgets ? (
+        <button
+          type="button"
+          onClick={onNavigateToBudgets}
+          className="w-full rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-center text-xs font-semibold text-amber-900 hover:bg-amber-100/70 transition"
+        >
+          Gestionar hallazgos y aceptación de presupuestos →
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export interface ToothGraphicalEvolutionStep {
+  id: string;
+  stageLabel: string;
+  subtitle: string;
+  dateLabel?: string;
+  toothState: ToothState;
+  changeBadges: string[];
+  tone: Tone;
+  isCurrent?: boolean;
+}
+
+const SURFACE_SHORT_MAP: Record<ToothSurfaceName, string> = {
+  occlusal: "O",
+  mesial: "M",
+  distal: "D",
+  vestibular: "V",
+  lingual: "L/P",
+};
+
+const GENERAL_STATUS_LABEL_MAP: Record<NonNullable<ToothState["general_status"]>, string> = {
+  present: "Sano",
+  endodontics: "Endodoncia",
+  crown: "Corona",
+  implant: "Implante",
+  missing: "Ausente",
+};
+
+const SURFACE_STATUS_LABEL_MAP: Record<ToothSurfaceStatus, string> = {
+  healthy: "Sana",
+  caries: "Caries",
+  restored: "Obturada",
+  planned: "Planificada",
+  missing: "Ausente",
+};
+
+function cloneToothState(toothNumber: number, state?: ToothState): ToothState {
+  const base = state ?? emptyTooth(toothNumber);
+  return {
+    tooth_number: toothNumber,
+    general_status: base.general_status ?? "present",
+    notes: base.notes,
+    surfaces: {
+      occlusal: base.surfaces?.occlusal ?? "healthy",
+      mesial: base.surfaces?.mesial ?? "healthy",
+      distal: base.surfaces?.distal ?? "healthy",
+      vestibular: base.surfaces?.vestibular ?? "healthy",
+      lingual: base.surfaces?.lingual ?? "healthy",
+    },
+  };
+}
+
+function normalizeSurfaceKey(raw: string): ToothSurfaceName | null {
+  const s = raw.trim().toLowerCase();
+  if (s === "o" || s.startsWith("ocl") || s.startsWith("occ") || s.startsWith("inc")) return "occlusal";
+  if (s === "m" || s.startsWith("mes")) return "mesial";
+  if (s === "d" || s.startsWith("dis")) return "distal";
+  if (s === "v" || s.startsWith("ves") || s.startsWith("buc")) return "vestibular";
+  if (s === "l" || s === "p" || s.startsWith("lin") || s.startsWith("pal")) return "lingual";
+  return null;
+}
+
+function inferSurfacesFromClinicalText(text: string): ToothSurfaceName[] {
+  const found = new Set<ToothSurfaceName>();
+  const upper = text.toUpperCase();
+  if (/\bMOD\b/.test(upper)) {
+    found.add("mesial");
+    found.add("occlusal");
+    found.add("distal");
+  }
+  if (/\b(?:MO|OM)\b/.test(upper) || /MESIO[-\s]?OCLUSAL/i.test(text)) {
+    found.add("mesial");
+    found.add("occlusal");
+  }
+  if (/\b(?:OD|DO)\b/.test(upper) || /OCLUSO[-\s]?DISTAL/i.test(text)) {
+    found.add("occlusal");
+    found.add("distal");
+  }
+  if (/oclusal|incisal/i.test(text)) found.add("occlusal");
+  if (/mesial/i.test(text)) found.add("mesial");
+  if (/distal/i.test(text)) found.add("distal");
+  if (/vestibular|bucal/i.test(text)) found.add("vestibular");
+  if (/palatin[oa]|lingual/i.test(text)) found.add("lingual");
+  return Array.from(found);
+}
+
+function computeToothDiffBadges(prev: ToothState, next: ToothState): string[] {
+  const badges: string[] = [];
+  const prevGen = prev.general_status ?? "present";
+  const nextGen = next.general_status ?? "present";
+
+  if (prevGen !== nextGen) {
+    badges.push(`${GENERAL_STATUS_LABEL_MAP[prevGen]} → ${GENERAL_STATUS_LABEL_MAP[nextGen]}`);
+  }
+
+  const byTargetStatus: Partial<Record<ToothSurfaceStatus, string[]>> = {};
+  (Object.keys(SURFACE_SHORT_MAP) as ToothSurfaceName[]).forEach((surf) => {
+    const pSt = prev.surfaces?.[surf] ?? "healthy";
+    const nSt = next.surfaces?.[surf] ?? "healthy";
+    if (pSt !== nSt) {
+      if (!byTargetStatus[nSt]) byTargetStatus[nSt] = [];
+      byTargetStatus[nSt]!.push(SURFACE_SHORT_MAP[surf]);
+    }
+  });
+
+  (Object.entries(byTargetStatus) as Array<[ToothSurfaceStatus, string[]]>).forEach(([st, surfs]) => {
+    badges.push(`${SURFACE_STATUS_LABEL_MAP[st]} (${surfs.join(", ")})`);
+  });
+
+  return badges;
+}
+
+function summarizeToothStateBadges(state: ToothState): string[] {
+  const badges: string[] = [];
+  const gen = state.general_status ?? "present";
+  if (gen !== "present") {
+    badges.push(GENERAL_STATUS_LABEL_MAP[gen]);
+  }
+  const bySt: Partial<Record<ToothSurfaceStatus, string[]>> = {};
+  (Object.keys(SURFACE_SHORT_MAP) as ToothSurfaceName[]).forEach((surf) => {
+    const st = state.surfaces?.[surf] ?? "healthy";
+    if (st !== "healthy") {
+      if (!bySt[st]) bySt[st] = [];
+      bySt[st]!.push(SURFACE_SHORT_MAP[surf]);
+    }
+  });
+  (Object.entries(bySt) as Array<[ToothSurfaceStatus, string[]]>).forEach(([st, surfs]) => {
+    badges.push(`${SURFACE_STATUS_LABEL_MAP[st]} (${surfs.join(", ")})`);
+  });
+  if (badges.length === 0) {
+    badges.push("Sano (5 caras)");
+  }
+  return badges;
+}
+
+export function buildToothGraphicalEvolutionSteps({
+  toothNumber,
+  initialToothState,
+  historicalToothState,
+  currentToothState,
+  findings = [],
+  records = [],
+}: {
+  toothNumber: number;
+  initialToothState?: ToothState;
+  historicalToothState?: ToothState;
+  currentToothState?: ToothState;
+  findings?: ClinicalFindingUI[];
+  records?: ClinicalTimelineEntry[];
+}): ToothGraphicalEvolutionStep[] {
+  const steps: ToothGraphicalEvolutionStep[] = [];
+  const baseInitial = cloneToothState(toothNumber, initialToothState);
+
+  steps.push({
+    id: `step-initial-${toothNumber}`,
+    stageLabel: "Estado Inicial",
+    subtitle: "Odontograma de base",
+    toothState: baseInitial,
+    changeBadges: summarizeToothStateBadges(baseInitial),
+    tone: "neutral",
+  });
+
+  let runningState = cloneToothState(toothNumber, baseInitial);
+
+  if (historicalToothState) {
+    const histClone = cloneToothState(toothNumber, historicalToothState);
+    const diffs = computeToothDiffBadges(runningState, histClone);
+    if (diffs.length > 0) {
+      steps.push({
+        id: `step-historical-${toothNumber}`,
+        stageLabel: "Odontograma Histórico",
+        subtitle: "Revisión intermedia",
+        toothState: histClone,
+        changeBadges: diffs,
+        tone: "info",
+      });
+      runningState = histClone;
+    }
+  }
+
+  // Apply findings for this tooth in chronological order
+  const toothFindings = findings
+    .filter((f) => String(f.tooth_number) === String(toothNumber))
+    .slice()
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  for (const finding of toothFindings) {
+    const nextState = cloneToothState(toothNumber, runningState);
+    const explicitSurfaces = (finding.surfaces ?? [])
+      .map(normalizeSurfaceKey)
+      .filter((s): s is ToothSurfaceName => s !== null);
+    const targetSurfaces =
+      explicitSurfaces.length > 0 ? explicitSurfaces : inferSurfacesFromClinicalText(`${finding.diagnosis} ${finding.notes ?? ""}`);
+
+    const text = `${finding.pathology_code ?? ""} ${finding.diagnosis} ${finding.notes ?? ""}`.toLowerCase();
+    if (/ausente|exodoncia|extracci/i.test(text)) {
+      nextState.general_status = "missing";
+    } else if (/endodoncia|pulpar|necrosis/i.test(text) && targetSurfaces.length === 0) {
+      nextState.surfaces.occlusal = "caries";
+    } else if (targetSurfaces.length > 0) {
+      targetSurfaces.forEach((surf) => {
+        nextState.surfaces[surf] = "caries";
+      });
+    } else {
+      nextState.surfaces.occlusal = "caries";
+    }
+
+    const diffs = computeToothDiffBadges(runningState, nextState);
+    const changeBadges =
+      diffs.length > 0
+        ? diffs
+        : targetSurfaces.length > 0
+        ? [`Caries (${targetSurfaces.map((s) => SURFACE_SHORT_MAP[s]).join(", ")})`]
+        : ["Hallazgo registrado"];
+
+    if (finding.status === "DISCARDED") {
+      changeBadges.push("Hallazgo cancelado");
+    }
+
+    steps.push({
+      id: `step-finding-${finding.id}`,
+      stageLabel: finding.status === "DISCARDED" ? "Hallazgo Cancelado" : "Hallazgo Clínico",
+      subtitle: finding.diagnosis,
+      dateLabel: finding.created_at ? new Date(finding.created_at).toLocaleDateString("es-ES") : undefined,
+      toothState: nextState,
+      changeBadges,
+      tone: finding.status === "DISCARDED" ? "neutral" : "warning",
+    });
+
+    if (finding.status !== "DISCARDED") {
+      runningState = nextState;
+    }
+  }
+
+  // Apply clinical records for this tooth (oldest to newest)
+  const chronologicalRecords = records.slice().reverse();
+  for (const rec of chronologicalRecords) {
+    // Skip auto-generated finding creation notes if we already rendered the finding card above, unless no findings were passed
+    if (toothFindings.length > 0 && /Hallazgo clínico registrado en pieza/i.test(rec.content)) {
+      continue;
+    }
+
+    const nextState = cloneToothState(toothNumber, runningState);
+    const text = rec.content.toLowerCase();
+    const mentionedSurfaces = inferSurfacesFromClinicalText(rec.content);
+
+    if (/implante|osteointegr/i.test(text)) {
+      nextState.general_status = "implant";
+    } else if (/exodoncia|extracci[oó]n|pieza ausente/i.test(text)) {
+      nextState.general_status = "missing";
+    } else if (/corona|zirconio|funda|pr[oó]tesis fija/i.test(text)) {
+      nextState.general_status = "crown";
+    } else if (/endodoncia|biopulpectom|conducto/i.test(text)) {
+      nextState.general_status = "endodontics";
+    }
+
+    if (/obturaci[oó]n|reconstrucci[oó]n|composite|empaste|incrustaci[oó]n|restauraci[oó]n/i.test(text)) {
+      if (mentionedSurfaces.length > 0) {
+        mentionedSurfaces.forEach((s) => {
+          nextState.surfaces[s] = "restored";
+        });
+      } else {
+        // Restore any previously carious surfaces or occlusal by default
+        const carious = (Object.keys(SURFACE_SHORT_MAP) as ToothSurfaceName[]).filter(
+          (s) => nextState.surfaces[s] === "caries",
+        );
+        if (carious.length > 0) {
+          carious.forEach((s) => {
+            nextState.surfaces[s] = "restored";
+          });
+        } else {
+          nextState.surfaces.occlusal = "restored";
+        }
+      }
+    } else if (/caries|desmineralizaci[oó]n|fractura/i.test(text) && rec.entryType === "DIAGNOSIS") {
+      const surfs = mentionedSurfaces.length > 0 ? mentionedSurfaces : (["occlusal"] as ToothSurfaceName[]);
+      surfs.forEach((s) => {
+        nextState.surfaces[s] = "caries";
+      });
+    }
+
+    const diffs = computeToothDiffBadges(runningState, nextState);
+    const cleanSubtitle = rec.content.replace(/^\[Pieza\s+\d+\]\s*/i, "");
+
+    steps.push({
+      id: `step-rec-${rec.id}`,
+      stageLabel:
+        rec.entryType === "PROCEDURE"
+          ? "Tratamiento / Procedimiento"
+          : rec.entryType === "DIAGNOSIS"
+          ? "Diagnóstico"
+          : "Evolución Clínica",
+      subtitle: cleanSubtitle,
+      dateLabel: rec.createdAt,
+      toothState: nextState,
+      changeBadges: diffs.length > 0 ? diffs : summarizeToothStateBadges(nextState),
+      tone: rec.entryType === "PROCEDURE" ? "info" : rec.entryType === "DIAGNOSIS" ? "warning" : "neutral",
+    });
+
+    runningState = nextState;
+  }
+
+  // Final step: Current state on the odontogram
+  const finalCurrent = cloneToothState(toothNumber, currentToothState);
+  const diffFromInitial = computeToothDiffBadges(baseInitial, finalCurrent);
+  const diffFromRunning = computeToothDiffBadges(runningState, finalCurrent);
+  const currentBadges =
+    diffFromInitial.length > 0
+      ? diffFromInitial
+      : diffFromRunning.length > 0
+      ? diffFromRunning
+      : summarizeToothStateBadges(finalCurrent);
+
+  steps.push({
+    id: `step-current-${toothNumber}`,
+    stageLabel: "Estado Actual",
+    subtitle:
+      diffFromInitial.length > 0
+        ? `Cambios acumulados (${diffFromInitial.length})`
+        : "Estado activo en odontograma",
+    toothState: finalCurrent,
+    changeBadges: currentBadges,
+    tone: diffFromInitial.length > 0 ? "success" : "info",
+    isCurrent: true,
+  });
+
+  return steps;
+}
+
+export function SelectedToothEvolutionAndHistoryPanel({
+  toothNumber,
+  displayMode = "surfaces",
+  initialToothState,
+  historicalToothState,
+  currentToothState,
+  findings = [],
+  records = [],
+  onSelectTooth,
+  onPreviewAttachment,
+}: {
+  toothNumber: number;
+  displayMode?: OdontogramDisplayMode;
+  initialToothState?: ToothState;
+  historicalToothState?: ToothState;
+  currentToothState?: ToothState;
+  findings?: ClinicalFindingUI[];
+  records?: ClinicalTimelineEntry[];
+  onSelectTooth?: (toothNumber: number) => void;
+  onPreviewAttachment?: (attachment: ClinicalAttachmentUI) => void;
+}) {
+  const info = getFdiToothInfo(toothNumber);
+  const isUpper = info.arch === "upper";
+
+  const toothFindings = useMemo(
+    () => findings.filter((f) => String(f.tooth_number) === String(toothNumber)),
+    [findings, toothNumber],
+  );
+
+  const steps = useMemo(
+    () =>
+      buildToothGraphicalEvolutionSteps({
+        toothNumber,
+        initialToothState,
+        historicalToothState,
+        currentToothState,
+        findings: toothFindings,
+        records,
+      }),
+    [toothNumber, initialToothState, historicalToothState, currentToothState, toothFindings, records],
+  );
+
+  const initialVsCurrentDiffs = useMemo(
+    () =>
+      computeToothDiffBadges(
+        cloneToothState(toothNumber, initialToothState),
+        cloneToothState(toothNumber, currentToothState),
+      ),
+    [toothNumber, initialToothState, currentToothState],
+  );
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs space-y-3">
+      {/* 1. GRAPHICAL EVOLUTION OF CHANGES FOR SELECTED TOOTH */}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-brand-100 text-xs font-extrabold text-brand-800 tabular-nums">
+              #{toothNumber}
+            </span>
+            <div>
+              <h3 className="text-xs font-bold text-slate-900">
+                Evolución gráfica de cambios · Pieza #{toothNumber} ({info.name})
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Comparativa visual desde el estado inicial pasando por los hallazgos y tratamientos sufridos por la pieza
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {initialVsCurrentDiffs.length > 0 ? (
+              initialVsCurrentDiffs.map((diff, idx) => (
+                <Badge key={idx} tone="warning" className="px-1.5 py-0 text-[10px]">
+                  Δ {diff}
+                </Badge>
+              ))
+            ) : (
+              <Badge tone="neutral" className="px-1.5 py-0 text-[10px]">
+                Sin alteraciones estructurales respecto al inicio
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Horizontal Graphical Timeline of Tooth States */}
+        <div className="flex items-stretch gap-2 overflow-x-auto pb-1 pt-0.5">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-stretch gap-2 shrink-0">
+              <div
+                className={cn(
+                  "flex min-w-[165px] max-w-[210px] shrink-0 flex-col justify-between rounded-xl border p-2.5 transition",
+                  step.isCurrent
+                    ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-300"
+                    : "border-slate-200 bg-slate-50/60",
+                )}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <Badge tone={step.tone} className="px-1.5 py-0 text-[9px]">
+                      {step.stageLabel}
+                    </Badge>
+                    {step.dateLabel ? (
+                      <span className="text-[9px] font-medium tabular-nums text-slate-400">
+                        {step.dateLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="line-clamp-2 text-[11px] font-semibold text-slate-800 leading-tight" title={step.subtitle}>
+                    {step.subtitle}
+                  </p>
+                </div>
+
+                {/* Graphical SVG representation of the tooth at this stage */}
+                <div className="my-1.5 flex items-center justify-center rounded-lg border border-slate-200/80 bg-white py-1.5 shadow-2xs">
+                  <ToothSurfaceRenderer
+                    tooth={step.toothState}
+                    isUpper={isUpper}
+                    compact={true}
+                    displayMode={displayMode}
+                    selected={Boolean(step.isCurrent)}
+                  />
+                </div>
+
+                {/* Change badges for this step */}
+                <div className="flex flex-wrap gap-1 pt-0.5">
+                  {step.changeBadges.map((b, i) => (
+                    <span
+                      key={i}
+                      className={cn(
+                        "inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold",
+                        step.isCurrent
+                          ? "bg-brand-600 text-white"
+                          : "bg-slate-200/80 text-slate-700",
+                      )}
+                    >
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {index < steps.length - 1 ? (
+                <div className="flex items-center justify-center text-slate-400 font-bold text-sm select-none px-0.5">
+                  →
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 2. CLINICAL HISTORY OF THE SELECTED TOOTH */}
+      <div className="border-t border-slate-200 pt-2.5 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-brand-700" />
+            <h4 className="text-xs font-bold text-slate-900">
+              Historia clínica de la pieza #{toothNumber}
+            </h4>
+            <Badge tone={records.length + toothFindings.length > 0 ? "info" : "neutral"} className="px-1.5 py-0 text-[10px]">
+              {records.length} evolución(es) · {toothFindings.length} hallazgo(s)
+            </Badge>
+          </div>
+        </div>
+
+        {/* Active or cancelled findings for this tooth */}
+        {toothFindings.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {toothFindings.map((f) => (
+              <div
+                key={f.id}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px]",
+                  f.status === "DISCARDED"
+                    ? "border-slate-200 bg-slate-100 text-slate-500 line-through"
+                    : "border-amber-200 bg-amber-50/70 text-amber-950",
+                )}
+              >
+                <Badge
+                  tone={
+                    f.status === "ACCEPTED"
+                      ? "success"
+                      : f.status === "IN_BUDGET"
+                      ? "info"
+                      : f.status === "DISCARDED"
+                      ? "neutral"
+                      : "warning"
+                  }
+                  className="px-1 py-0 text-[9px]"
+                >
+                  {f.status === "ACCEPTED"
+                    ? "Aceptado"
+                    : f.status === "IN_BUDGET"
+                    ? "En presupuesto"
+                    : f.status === "DISCARDED"
+                    ? "Cancelado"
+                    : "Hallazgo abierto"}
+                </Badge>
+                <span className="font-semibold">{f.diagnosis}</span>
+                {f.notes ? <span className="text-slate-500">· {f.notes}</span> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* Clinical History Entries for this tooth */}
+        {records.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-2.5 text-center text-xs text-slate-500">
+            Sin entradas registradas en la historia clínica para la pieza #{toothNumber}.
+          </div>
+        ) : (
+          <div className="max-h-48 overflow-y-auto pr-1">
+            <ClinicalHistoryTimeline
+              entries={records.map((r) => ({
+                ...r,
+                content: r.content.replace(new RegExp(`^\\[Pieza\\s+#?${toothNumber}\\]\\s*`, "i"), ""),
+              }))}
+              compact={true}
+              selectedTooth={toothNumber}
+              onSelectTooth={onSelectTooth}
+              onPreviewAttachment={onPreviewAttachment}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export type OdontogramAutosaveStatus = "idle" | "saving" | "saved" | "error";
+
+export interface OdontogramUndoEntry {
+  id: string;
+  label: string;
+  teeth: Record<number, ToothState>;
+  timestamp: string;
+}
+
+export function cloneOdontogramTeethMap(teeth: Record<number, ToothState>): Record<number, ToothState> {
+  const result: Record<number, ToothState> = {};
+  for (const [k, v] of Object.entries(teeth)) {
+    const num = Number(k);
+    if (!Number.isNaN(num) && v) {
+      result[num] = cloneToothState(num, v);
+    }
+  }
+  return result;
+}
+
+export function pushOdontogramUndoEntry(
+  stack: OdontogramUndoEntry[],
+  prevTeeth: Record<number, ToothState>,
+  label: string,
+  maxDepth = 30,
+): OdontogramUndoEntry[] {
+  const entry: OdontogramUndoEntry = {
+    id: `undo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    label,
+    teeth: cloneOdontogramTeethMap(prevTeeth),
+    timestamp: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+  };
+  return [entry, ...stack].slice(0, maxDepth);
+}
+
+export function OdontogramAutosaveUndoBar({
+  autosaveStatus,
+  lastSavedAt,
+  undoCount,
+  lastUndoLabel,
+  canWriteClinical = true,
+  onUndo,
+  onRetrySave,
+}: {
+  autosaveStatus: OdontogramAutosaveStatus;
+  lastSavedAt?: string;
+  undoCount: number;
+  lastUndoLabel?: string;
+  canWriteClinical?: boolean;
+  onUndo: () => void;
+  onRetrySave?: () => void;
+}) {
+  return (
+    <div className="inline-flex flex-wrap items-center gap-1.5">
+      {/* Live Autosave Status Badge */}
+      <span
+        aria-live="polite"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition",
+          autosaveStatus === "saving"
+            ? "border-amber-200 bg-amber-50 text-amber-800"
+            : autosaveStatus === "error"
+            ? "border-red-200 bg-red-50 text-red-800"
+            : autosaveStatus === "saved"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-slate-200 bg-slate-50 text-slate-600",
+        )}
+      >
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            autosaveStatus === "saving"
+              ? "bg-amber-500 animate-pulse"
+              : autosaveStatus === "error"
+              ? "bg-red-600"
+              : autosaveStatus === "saved"
+              ? "bg-emerald-600"
+              : "bg-slate-400",
+          )}
+        />
+        <span>
+          {autosaveStatus === "saving"
+            ? "Autoguardando…"
+            : autosaveStatus === "error"
+            ? "Error al autoguardar"
+            : autosaveStatus === "saved"
+            ? `Autoguardado${lastSavedAt ? ` · ${lastSavedAt}` : ""}`
+            : "Autoguardado activo"}
+        </span>
+        {autosaveStatus === "error" && onRetrySave ? (
+          <button
+            type="button"
+            onClick={onRetrySave}
+            className="ml-1 underline font-bold hover:text-red-950"
+          >
+            Reintentar
+          </button>
+        ) : null}
+      </span>
+
+      {/* Undo Button */}
+      <button
+        type="button"
+        disabled={!canWriteClinical || undoCount === 0}
+        onClick={onUndo}
+        title={
+          lastUndoLabel
+            ? `Deshacer último cambio: ${lastUndoLabel} (Ctrl+Z / ⌘Z)`
+            : "Deshacer último cambio en el odontograma (Ctrl+Z / ⌘Z)"
+        }
+        className={cn(
+          "inline-flex min-h-[30px] items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
+          !canWriteClinical || undoCount === 0
+            ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+            : "border-slate-300 bg-white text-slate-800 shadow-2xs hover:border-brand-400 hover:bg-brand-50 hover:text-brand-900",
+        )}
+      >
+        <span aria-hidden="true" className="text-xs font-bold leading-none">
+          ↶
+        </span>
+        <span>Deshacer</span>
+        {undoCount > 0 ? (
+          <span className="rounded-full bg-brand-100 px-1.5 py-0 text-[10px] font-extrabold tabular-nums text-brand-800">
+            {undoCount}
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
+
+

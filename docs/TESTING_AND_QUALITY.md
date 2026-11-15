@@ -46,6 +46,13 @@ Els camins crítics de l'aplicació han de tenir sempre cobertura de tests E2E /
    - Cancel·lació definitiva de clínica (`POST /v1/clinic/cancel`): exclusiu per a l'Owner, cancel·lació a Stripe, tancament del tenant i revocació de totes les sessions.
 6. **Camí Crític 6: Captació de Leads Pública:**
    - Validació i emmagatzematge segur de contactes comercials (`POST /v1/public/leads`).
+7. **Camí Crític 7: Flux Clínic de Troballes (Hallazgos), Pressupostos Multi-Opció, Historial i Adjunts:**
+   - Registre de troballes clíniques vinculades a l'odontograma (`POST /v1/patients/{id}/findings`), que s'afegeixen automàticament a l'historial clínic del pacient (`clinical_records`).
+   - Creació de pressupostos estructurats per troballes amb múltiples alternatives de tractament (p. ex. Extracció vs Reconstrucció vs Extracció + Implant) i període de vigència (`POST /v1/patients/{id}/budgets`).
+   - **Persistència de la troballa davant rebuig de tractaments:** Quan es descarta un tractament o un pressupost sencer, **no es descarta la troballa clínica** (la troballa torna a estat `OPEN` per poder elaborar un nou pressupost posterior sobre la mateixa troballa i acceptar-lo).
+   - **Cancel·lació de troballa amb nota clínica:** Una troballa només es pot cancel·lar (`DISCARDED`) aportant obligatòriament una nota clínica justificativa, la qual queda registrada a l'historial clínic del pacient.
+   - **Adjunts a l'historial clínic:** A l'historial del pacient (`clinical_records`) es poden adjuntar imatges (fotografies clíniques, radiografies periapicals/ortopantomografies) i documents diversos (informes, consentiments PDF).
+   - Conversió de tractaments acceptats en factura (`POST /v1/budgets/{id}/invoice`) i visibilitat de troballes/pressupostos oberts a la fitxa de la cita a l'agenda.
 
 ## 3. Estratègia d'Entorns de Prova
 

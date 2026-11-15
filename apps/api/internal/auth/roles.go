@@ -24,7 +24,7 @@ var rolePermissions = map[string][]string{
 		"patients:read", "patients:write",
 		"clinical:read", "clinical:write",
 		"appointments:read", "appointments:write",
-		"billing:read",
+		"billing:read", "billing:write",
 	},
 	"HYGIENIST": {
 		"patients:read",

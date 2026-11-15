@@ -46,14 +46,22 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-[1px]" onClick={onClose} />
+    <div
+      className="modal-print-wrapper fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div className="modal-backdrop-no-print fixed inset-0 bg-slate-950/50 backdrop-blur-[1px]" onClick={onClose} />
       <div
         ref={panelRef}
         tabIndex={-1}
-        className={cn("relative z-10 w-full rounded-xl border border-slate-200 bg-white shadow-xl outline-none", maxWidth)}
+        className={cn(
+          "modal-print-panel relative z-10 w-full rounded-xl border border-slate-200 bg-white shadow-xl outline-none",
+          maxWidth,
+        )}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div className="modal-header-no-print flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
@@ -67,8 +75,12 @@ export function Modal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="max-h-[75vh] overflow-y-auto px-5 py-4">{children}</div>
-        {footer ? <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3">{footer}</div> : null}
+        <div className="modal-print-body max-h-[75vh] overflow-y-auto px-5 py-4">{children}</div>
+        {footer ? (
+          <div className="modal-footer-no-print flex justify-end gap-2 border-t border-slate-100 px-5 py-3">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );

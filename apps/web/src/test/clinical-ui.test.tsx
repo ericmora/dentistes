@@ -6,10 +6,15 @@ import {
   ClinicalHistoryTimeline,
   CriticalAlertBanner,
   MultiCabinetTimeline,
+  OdontogramAutosaveUndoBar,
   OdontogramGrid,
+  SelectedToothEvolutionAndHistoryPanel,
   ToothAnatomicalViewer,
   ToothDetailHistoryPanel,
+  buildToothGraphicalEvolutionSteps,
+  cloneOdontogramTeethMap,
   computeAppointmentLanes,
+  pushOdontogramUndoEntry,
 } from "@dentistes/ui";
 
 describe("Agenda UI Components", () => {
@@ -453,5 +458,261 @@ describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {
 
     expect(screen.getByText("Paciente Alpha")).toBeInTheDocument();
     expect(screen.getByText("Paciente Beta")).toBeInTheDocument();
+  });
+
+  it("buildToothGraphicalEvolutionSteps computes chronological graphical tooth states and surface/status diff badges", () => {
+    const steps = buildToothGraphicalEvolutionSteps({
+      toothNumber: 26,
+      initialToothState: {
+        tooth_number: 26,
+        general_status: "present",
+        surfaces: {
+          occlusal: "healthy",
+          mesial: "healthy",
+          distal: "healthy",
+          vestibular: "healthy",
+          lingual: "healthy",
+        },
+      },
+      currentToothState: {
+        tooth_number: 26,
+        general_status: "endodontics",
+        surfaces: {
+          occlusal: "restored",
+          mesial: "restored",
+          distal: "restored",
+          vestibular: "healthy",
+          lingual: "healthy",
+        },
+      },
+      findings: [
+        {
+          id: "find-26",
+          patient_id: "pat-1",
+          doctor_id: "doc-1",
+          tooth_number: "26",
+          surfaces: ["mesial", "occlusal", "distal"],
+          pathology_code: "CARIES_PROFUNDA",
+          diagnosis: "Caries profunda MOD con afectación pulpar",
+          severity: "HIGH",
+          status: "ACCEPTED",
+          notes: "Dolor al frío",
+          created_at: "2026-10-01T10:00:00Z",
+          updated_at: "2026-10-01T10:00:00Z",
+        },
+      ],
+      records: [
+        {
+          id: "rec-26-endo",
+          entryType: "PROCEDURE",
+          content: "[Pieza 26] Endodoncia multirradicular y reconstrucción MOD con composite",
+          doctorName: "Dra. Elena Gómez",
+          createdAt: "10/10/2026",
+        },
+      ],
+    });
+
+    // Should include Initial state, intermediate finding/procedure states, and Current state
+    expect(steps.length).toBeGreaterThanOrEqual(3);
+    expect(steps[0].stageLabel).toMatch(/Estado Inicial/i);
+    expect(steps[0].toothState.general_status).toBe("present");
+
+    // Finding step reflects caries on M, O, D
+    const findingStep = steps.find((s) => s.id.includes("find-26"));
+    expect(findingStep).toBeDefined();
+    expect(findingStep?.toothState.surfaces.occlusal).toBe("caries");
+    expect(findingStep?.toothState.surfaces.mesial).toBe("caries");
+    expect(findingStep?.changeBadges.some((b) => b.includes("Caries"))).toBe(true);
+
+    // Final step reflects Current state (Endodoncia + Obturación MOD)
+    const lastStep = steps[steps.length - 1];
+    expect(lastStep.stageLabel).toMatch(/Estado Actual/i);
+    expect(lastStep.toothState.general_status).toBe("endodontics");
+    expect(lastStep.toothState.surfaces.occlusal).toBe("restored");
+    expect(lastStep.changeBadges.length).toBeGreaterThan(0);
+  });
+
+  it("renders SelectedToothEvolutionAndHistoryPanel below the odontogram inspector bar with graphical changes and tooth clinical history", () => {
+    const handlePreviewAttachment = vi.fn();
+
+    render(
+      <SelectedToothEvolutionAndHistoryPanel
+        toothNumber={26}
+        initialToothState={{
+          tooth_number: 26,
+          general_status: "present",
+          surfaces: {
+            occlusal: "healthy",
+            mesial: "healthy",
+            distal: "healthy",
+            vestibular: "healthy",
+            lingual: "healthy",
+          },
+        }}
+        currentToothState={{
+          tooth_number: 26,
+          general_status: "crown",
+          surfaces: {
+            occlusal: "restored",
+            mesial: "restored",
+            distal: "restored",
+            vestibular: "healthy",
+            lingual: "healthy",
+          },
+        }}
+        findings={[
+          {
+            id: "f-26-1",
+            patient_id: "pat-1",
+            doctor_id: "doc-1",
+            tooth_number: "26",
+            surfaces: ["occlusal", "mesial"],
+            pathology_code: "CARIES",
+            diagnosis: "Destrucción coronaria mesio-oclusal",
+            severity: "HIGH",
+            status: "ACCEPTED",
+            notes: "Requiere rehabilitación protésica",
+            created_at: "2026-11-01T09:00:00Z",
+            updated_at: "2026-11-01T09:00:00Z",
+          },
+        ]}
+        records={[
+          {
+            id: "r-26-1",
+            entryType: "PROCEDURE",
+            content: "[Pieza 26] Tallado y colocación de corona zirconio monolítico",
+            doctorName: "Dr. Jordi Martí",
+            createdAt: "14/11/2026",
+            attachments: [
+              {
+                id: "att-rx-26",
+                kind: "XRAY",
+                name: "Rx_Control_Corona_26.svg",
+                mime_type: "image/svg+xml",
+                data_url: "data:image/svg+xml;utf8,<svg></svg>",
+                tooth_number: "26",
+              },
+            ],
+          },
+        ]}
+        onPreviewAttachment={handlePreviewAttachment}
+      />,
+    );
+
+    // 1. Graphical evolution section
+    expect(screen.getByText(/Evolución gráfica de cambios · Pieza #26/i)).toBeInTheDocument();
+    expect(screen.getByText("Estado Inicial")).toBeInTheDocument();
+    expect(screen.getByText("Estado Actual")).toBeInTheDocument();
+    expect(screen.getAllByText(/Destrucción coronaria mesio-oclusal/i).length).toBeGreaterThan(0);
+
+    // 2. Clinical history of the selected tooth section
+    expect(screen.getByText(/Historia clínica de la pieza #26/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Tallado y colocación de corona zirconio monolítico/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Rx_Control_Corona_26.svg")).toBeInTheDocument();
+  });
+
+  it("manages odontogram undo history snapshots and renders OdontogramAutosaveUndoBar with live status and undo action", () => {
+    const initialTeeth = {
+      16: {
+        tooth_number: 16,
+        general_status: "present" as const,
+        surfaces: {
+          occlusal: "healthy" as const,
+          mesial: "healthy" as const,
+          distal: "healthy" as const,
+          vestibular: "healthy" as const,
+          lingual: "healthy" as const,
+        },
+      },
+    };
+
+    const stack1 = pushOdontogramUndoEntry([], initialTeeth, "Pieza #16 · Cara O: Caries");
+    expect(stack1).toHaveLength(1);
+    expect(stack1[0].label).toBe("Pieza #16 · Cara O: Caries");
+
+    // Mutating original map must not mutate the snapshot stored in undo stack
+    const cloned = cloneOdontogramTeethMap(initialTeeth);
+    cloned[16].surfaces.occlusal = "caries";
+    expect(stack1[0].teeth[16].surfaces.occlusal).toBe("healthy");
+
+    const handleUndo = vi.fn();
+    const { rerender } = render(
+      <OdontogramAutosaveUndoBar
+        autosaveStatus="saving"
+        undoCount={stack1.length}
+        lastUndoLabel={stack1[0].label}
+        canWriteClinical={true}
+        onUndo={handleUndo}
+      />,
+    );
+
+    expect(screen.getByText(/Autoguardando/i)).toBeInTheDocument();
+    const undoBtn = screen.getByRole("button", { name: /Deshacer/i });
+    expect(undoBtn).not.toBeDisabled();
+    fireEvent.click(undoBtn);
+    expect(handleUndo).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <OdontogramAutosaveUndoBar
+        autosaveStatus="saved"
+        lastSavedAt="19:30:05"
+        undoCount={0}
+        canWriteClinical={true}
+        onUndo={handleUndo}
+      />,
+    );
+
+    expect(screen.getByText(/Autoguardado/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Deshacer/i })).toBeDisabled();
+  });
+
+  it("allows switching OdontogramGrid between '5 Caras' and 'Perfil Anatómico' and visualizes/edits treatments and findings in anatomical profile", () => {
+    const handleToggleSurface = vi.fn();
+    const handleSelectTooth = vi.fn();
+
+    render(
+      <OdontogramGrid
+        compact={true}
+        teeth={{
+          16: {
+            tooth_number: 16,
+            general_status: "endodontics",
+            surfaces: {
+              occlusal: "caries",
+              mesial: "restored",
+              distal: "planned",
+              vestibular: "healthy",
+              lingual: "healthy",
+            },
+          },
+        }}
+        activeTool="caries"
+        selectedTooth={16}
+        onSelectTooth={handleSelectTooth}
+        onToggleSurface={handleToggleSurface}
+      />,
+    );
+
+    // View mode toggle buttons in OdontogramGrid
+    const fiveFacesBtn = screen.getByRole("button", { name: /5 Caras/i });
+    const anatomicalProfileBtn = screen.getByRole("button", { name: /Perfil Anatómico/i });
+    expect(fiveFacesBtn).toBeInTheDocument();
+    expect(anatomicalProfileBtn).toBeInTheDocument();
+
+    // Switch OdontogramGrid to "Perfil Anatómico"
+    fireEvent.click(anatomicalProfileBtn);
+
+    // Verify anatomical profile SVG elements are rendered for tooth 16 and interactive surface zones work
+    const tooth16Svg = screen.getByRole("img", { name: /Pieza 16/i });
+    expect(tooth16Svg).toHaveAttribute("data-display-mode", "anatomical");
+
+    const vestZone = tooth16Svg.querySelector('[data-anatomical-zone="vestibular"]');
+    expect(vestZone).not.toBeNull();
+    if (vestZone) {
+      fireEvent.click(vestZone);
+      expect(handleToggleSurface).toHaveBeenCalledWith(16, "vestibular", "caries");
+    }
   });
 });

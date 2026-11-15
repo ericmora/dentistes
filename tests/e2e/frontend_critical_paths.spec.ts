@@ -255,8 +255,12 @@ test.describe("Frontend Critical Paths E2E", () => {
       });
     });
 
+    let odoVersion = 2;
+    const autosavePayloads: Array<{ teeth_data: Record<string, any>; version?: number }> = [];
+
     await page.route("**/v1/patients**", async (route) => {
       const url = route.request().url();
+      const method = route.request().method();
       if (url.includes("clinical-records") || url.includes("/records")) {
         await route.fulfill({
           status: 200,
@@ -276,6 +280,26 @@ test.describe("Frontend Critical Paths E2E", () => {
           }),
         });
       } else if (url.includes("/odontograms")) {
+        if (method === "PUT") {
+          const payload = JSON.parse(route.request().postData() || "{}");
+          autosavePayloads.push(payload);
+          odoVersion += 1;
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              odontogram: {
+                id: "odo-1",
+                patient_id: "pat-1",
+                type: "CURRENT",
+                version: odoVersion,
+                updated_at: new Date().toISOString(),
+                teeth_data: payload.teeth_data ?? {},
+              },
+            }),
+          });
+          return;
+        }
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -285,7 +309,7 @@ test.describe("Frontend Critical Paths E2E", () => {
                 id: "odo-1",
                 patient_id: "pat-1",
                 type: "CURRENT",
-                version: 2,
+                version: odoVersion,
                 updated_at: new Date().toISOString(),
                 teeth_data: {
                   "16": {
@@ -357,6 +381,28 @@ test.describe("Frontend Critical Paths E2E", () => {
     // 4. Verify the FIRST view immediately shows BOTH Odontogram and Clinical History without switching tabs or scrolling
     await expect(page.getByRole("button", { name: /Guardar odontograma/i })).toBeVisible();
     await expect(page.getByText("[Pieza 16] Apertura cameral y conductometría")).toBeVisible();
+    await expect(page.getByText(/Evolución gráfica de cambios · Pieza #16/i)).toBeVisible();
+    await expect(page.getByText(/Historia clínica de la pieza #16/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /Firmar y guardar/i })).toBeVisible();
+
+    // 5. Verify Odontogram Autosave and Undo ("Deshacer")
+    const undoBtn = page.getByRole("button", { name: /Deshacer/i });
+    await expect(undoBtn).toBeDisabled();
+
+    // Change piece 16 status to "Corona" -> triggers automatic save
+    await page.getByRole("button", { name: "Corona", exact: true }).first().click();
+    await expect(undoBtn).toBeEnabled();
+    await expect.poll(() => autosavePayloads.length).toBeGreaterThanOrEqual(1);
+    expect(autosavePayloads[0].teeth_data["16"].general_status).toBe("crown");
+
+    // Click "Deshacer" -> reverts piece 16 back to "endodontics" and autosaves the reverted state
+    await undoBtn.click();
+    await expect(undoBtn).toBeDisabled();
+    await expect.poll(() => autosavePayloads.length).toBeGreaterThanOrEqual(2);
+    expect(autosavePayloads[autosavePayloads.length - 1].teeth_data["16"].general_status).toBe("endodontics");
+
+    // 6. Verify switching Odontogram between "5 Caras" and "Perfil Anatómico"
+    await page.getByRole("button", { name: "Perfil Anatómico" }).first().click();
+    await expect(page.locator("svg[data-display-mode='anatomical']").first()).toBeVisible();
   });
 });

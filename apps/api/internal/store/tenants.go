@@ -2,11 +2,107 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
+
+type ClinicBudgetSettings struct {
+	LogoURL                       string `json:"logo_url"`
+	ClinicContactLine             string `json:"clinic_contact_line"`
+	BudgetDefaultValidityDays     int    `json:"budget_default_validity_days"`
+	BudgetDefaultSeries           string `json:"budget_default_series"`
+	BudgetWarningDaysBeforeExpiry int    `json:"budget_warning_days_before_expiry"`
+	BudgetValidityTerms           string `json:"budget_validity_terms"`
+	BudgetAutoExpire              bool   `json:"budget_auto_expire"`
+}
+
+func DefaultClinicBudgetSettings() ClinicBudgetSettings {
+	return ClinicBudgetSettings{
+		LogoURL:                       "",
+		ClinicContactLine:             "",
+		BudgetDefaultValidityDays:     30,
+		BudgetDefaultSeries:           "PRE",
+		BudgetWarningDaysBeforeExpiry: 7,
+		BudgetValidityTerms:           "Presupuesto válido durante el periodo de vigencia indicado. Los importes reflejados incluyen los materiales y controles clínicos especificados para cada alternativa de tratamiento.",
+		BudgetAutoExpire:              true,
+	}
+}
+
+func NormalizeClinicBudgetSettings(in ClinicBudgetSettings) ClinicBudgetSettings {
+	def := DefaultClinicBudgetSettings()
+	out := ClinicBudgetSettings{
+		LogoURL:                       strings.TrimSpace(in.LogoURL),
+		ClinicContactLine:             strings.TrimSpace(in.ClinicContactLine),
+		BudgetDefaultValidityDays:     in.BudgetDefaultValidityDays,
+		BudgetDefaultSeries:           strings.ToUpper(strings.TrimSpace(in.BudgetDefaultSeries)),
+		BudgetWarningDaysBeforeExpiry: in.BudgetWarningDaysBeforeExpiry,
+		BudgetValidityTerms:           strings.TrimSpace(in.BudgetValidityTerms),
+		BudgetAutoExpire:              in.BudgetAutoExpire,
+	}
+	if out.BudgetDefaultValidityDays < 1 || out.BudgetDefaultValidityDays > 365 {
+		out.BudgetDefaultValidityDays = def.BudgetDefaultValidityDays
+	}
+	if out.BudgetDefaultSeries == "" {
+		out.BudgetDefaultSeries = def.BudgetDefaultSeries
+	}
+	if len(out.BudgetDefaultSeries) > 10 {
+		out.BudgetDefaultSeries = out.BudgetDefaultSeries[:10]
+	}
+	if out.BudgetWarningDaysBeforeExpiry < 1 || out.BudgetWarningDaysBeforeExpiry > 90 {
+		out.BudgetWarningDaysBeforeExpiry = def.BudgetWarningDaysBeforeExpiry
+	}
+	if out.BudgetValidityTerms == "" {
+		out.BudgetValidityTerms = def.BudgetValidityTerms
+	}
+	return out
+}
+
+func (s *Store) GetClinicBudgetSettings(ctx context.Context, tx pgx.Tx, tenantID string) (ClinicBudgetSettings, error) {
+	var raw []byte
+	err := tx.QueryRow(ctx, `select coalesce(config, '{}'::jsonb) from tenants where id = $1`, tenantID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return DefaultClinicBudgetSettings(), ErrNotFound
+	}
+	if err != nil {
+		return DefaultClinicBudgetSettings(), err
+	}
+	if len(raw) == 0 {
+		return DefaultClinicBudgetSettings(), nil
+	}
+	var parsed ClinicBudgetSettings
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return DefaultClinicBudgetSettings(), nil
+	}
+	return NormalizeClinicBudgetSettings(parsed), nil
+}
+
+func (s *Store) UpdateClinicBudgetSettings(ctx context.Context, tx pgx.Tx, tenantID string, in ClinicBudgetSettings) (ClinicBudgetSettings, error) {
+	norm := NormalizeClinicBudgetSettings(in)
+	payload, err := json.Marshal(norm)
+	if err != nil {
+		return norm, err
+	}
+	var updatedRaw []byte
+	err = tx.QueryRow(ctx, `update tenants
+		set config = coalesce(config, '{}'::jsonb) || $2::jsonb
+		where id = $1
+		returning config`, tenantID, string(payload)).Scan(&updatedRaw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return norm, ErrNotFound
+	}
+	if err != nil {
+		return norm, err
+	}
+	var out ClinicBudgetSettings
+	if err := json.Unmarshal(updatedRaw, &out); err != nil {
+		return norm, nil
+	}
+	return NormalizeClinicBudgetSettings(out), nil
+}
 
 func (s *Store) CreateTenant(ctx context.Context, tx pgx.Tx, name, subdomain string, trialEndsAt time.Time) (*Tenant, error) {
 	return s.CreateTenantWithBilling(ctx, tx, name, subdomain, "ES", "EUR", "", trialEndsAt)

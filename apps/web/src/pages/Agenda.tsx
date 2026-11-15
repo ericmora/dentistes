@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import {
   Alert,
+  AppointmentOpenFindingsAndBudgetsSummary,
   Badge,
   Button,
   Combobox,
@@ -97,6 +98,7 @@ export function AgendaPage() {
   const { sdk, me } = useSession();
   const { notify } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [date, setDate] = useState(todayISO);
   const [doctorFilter, setDoctorFilter] = useState("");
   const [cabinetFilter, setCabinetFilter] = useState("");
@@ -238,6 +240,18 @@ export function AgendaPage() {
   });
   const selectedPatient = selectedPatientQuery.data?.patient;
 
+  const selectedPatientFindingsQuery = useQuery({
+    queryKey: ["patient-findings", selectedAppt?.patient_id, "open"],
+    queryFn: () => sdk.listPatientFindings(selectedAppt!.patient_id, { open: true }),
+    enabled: Boolean(selectedAppt?.patient_id),
+  });
+
+  const selectedPatientBudgetsQuery = useQuery({
+    queryKey: ["patient-budgets", selectedAppt?.patient_id, "open"],
+    queryFn: () => sdk.listPatientBudgets(selectedAppt!.patient_id, { open: true }),
+    enabled: Boolean(selectedAppt?.patient_id && me?.features?.billing_pdf),
+  });
+
   const createMutation = useMutation({
     mutationFn: () => {
       const { start, end } = slotToRange(date, newForm.slot, Number(newForm.duration) || 30);
@@ -279,6 +293,8 @@ export function AgendaPage() {
         start_time: start,
         end_time: end,
         treatment_type: input.appt.treatment_type,
+        is_forced: input.appt.is_forced,
+        notes: input.appt.notes,
         version: input.appt.version,
       });
     },
@@ -717,6 +733,16 @@ export function AgendaPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Open Clinical Findings & Unclosed Budgets in Appointment View */}
+                <AppointmentOpenFindingsAndBudgetsSummary
+                  findings={selectedPatientFindingsQuery.data?.findings ?? []}
+                  budgets={selectedPatientBudgetsQuery.data?.budgets ?? []}
+                  currency="EUR"
+                  onNavigateToBudgets={() =>
+                    navigate(`/patients/${selectedAppt.patient_id}?tab=billing`)
+                  }
+                />
 
                 {/* 1-Click Appointment Status Workflow */}
                 <div className="space-y-1.5">
@@ -1361,6 +1387,11 @@ export function AgendaPage() {
                               <span>·</span>
                               <span className="truncate">{slot.formatted_date}</span>
                             </div>
+                            {slot.cabinet_equipment && (
+                              <p className="mt-1 text-[10px] text-slate-500 truncate" title={slot.cabinet_equipment}>
+                                <span className="font-medium text-slate-600">Equipación:</span> {slot.cabinet_equipment}
+                              </p>
+                            )}
                           </div>
 
                           <Button

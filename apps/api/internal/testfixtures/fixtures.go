@@ -130,6 +130,10 @@ var (
 		LicenseNumber: "COL-08081234",
 		Color:         "#0F766E",
 	}
+
+	Patient1ID = "019325c8-p001-7000-8000-000000000001"
+	FindingTooth26ID = "019325c8-f026-7000-8000-000000000001"
+	BudgetRehabID = "019325c8-b001-7000-8000-000000000001"
 )
 
 // BaseMondayMorning returns Monday 09:00 UTC for consistent agenda test slots.

@@ -72,12 +72,15 @@ func DefaultCabinetAvailability() []CabinetDayAvailability {
 }
 
 type Cabinet struct {
-	ID           string                   `json:"id"`
-	Name         string                   `json:"name"`
-	ColorCode    string                   `json:"color_code"`
-	IsActive     bool                     `json:"is_active"`
-	Availability []CabinetDayAvailability `json:"availability"`
-	CreatedAt    time.Time                `json:"created_at"`
+	ID                string                   `json:"id"`
+	Name              string                   `json:"name"`
+	ColorCode         string                   `json:"color_code"`
+	Equipment         string                   `json:"equipment"`
+	AllowedCategories []string                 `json:"allowed_categories"`
+	AllowedTreatments []string                 `json:"allowed_treatments"`
+	IsActive          bool                     `json:"is_active"`
+	Availability      []CabinetDayAvailability `json:"availability"`
+	CreatedAt         time.Time                `json:"created_at"`
 }
 
 type ClinicHoliday struct {
@@ -156,7 +159,7 @@ type UpsertAppointmentInput struct {
 }
 
 func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) {
-	rows, err := tx.Query(ctx, `select id, name, coalesce(color_code, '#0D9488'), is_active, coalesce(availability, '[]'::jsonb), created_at
+	rows, err := tx.Query(ctx, `select id, name, coalesce(color_code, '#0D9488'), coalesce(equipment, ''), coalesce(allowed_categories, '[]'::jsonb), coalesce(allowed_treatments, '[]'::jsonb), is_active, coalesce(availability, '[]'::jsonb), created_at
 		from cabinets where is_active = true order by created_at, name`)
 	if err != nil {
 		return nil, err
@@ -165,9 +168,15 @@ func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) 
 	out := []Cabinet{}
 	for rows.Next() {
 		var c Cabinet
-		var availBytes []byte
-		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &availBytes, &c.CreatedAt); err != nil {
+		var catBytes, treatBytes, availBytes []byte
+		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &catBytes, &treatBytes, &c.IsActive, &availBytes, &c.CreatedAt); err != nil {
 			return nil, err
+		}
+		if len(catBytes) > 0 {
+			_ = json.Unmarshal(catBytes, &c.AllowedCategories)
+		}
+		if len(treatBytes) > 0 {
+			_ = json.Unmarshal(treatBytes, &c.AllowedTreatments)
 		}
 		if len(availBytes) > 0 {
 			_ = json.Unmarshal(availBytes, &c.Availability)
@@ -180,27 +189,38 @@ func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) 
 	return out, rows.Err()
 }
 
-func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode string, availability []CabinetDayAvailability) (*Cabinet, error) {
+func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode, equipment string, allowedCategories, allowedTreatments []string, availability []CabinetDayAvailability) (*Cabinet, error) {
 	if colorCode == "" {
 		colorCode = "#0D9488"
 	}
 	if len(availability) == 0 {
 		availability = DefaultCabinetAvailability()
 	}
+	if allowedCategories == nil {
+		allowedCategories = []string{}
+	}
+	if allowedTreatments == nil {
+		allowedTreatments = []string{}
+	}
 	availBytes, err := json.Marshal(availability)
 	if err != nil {
 		return nil, err
 	}
+	catBytes, _ := json.Marshal(allowedCategories)
+	treatBytes, _ := json.Marshal(allowedTreatments)
+
 	var c Cabinet
-	var rawAvail []byte
-	err = tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code, availability)
-		values ($1, $2, $3, $4::jsonb)
-		returning id, name, color_code, is_active, availability, created_at`,
-		tenantID, name, colorCode, availBytes).
-		Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &rawAvail, &c.CreatedAt)
+	var rawCats, rawTreats, rawAvail []byte
+	err = tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code, equipment, allowed_categories, allowed_treatments, availability)
+		values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
+		returning id, name, color_code, coalesce(equipment, ''), allowed_categories, allowed_treatments, is_active, availability, created_at`,
+		tenantID, name, colorCode, equipment, catBytes, treatBytes, availBytes).
+		Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &rawCats, &rawTreats, &c.IsActive, &rawAvail, &c.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
+	_ = json.Unmarshal(rawCats, &c.AllowedCategories)
+	_ = json.Unmarshal(rawTreats, &c.AllowedTreatments)
 	if len(rawAvail) > 0 {
 		_ = json.Unmarshal(rawAvail, &c.Availability)
 	} else {
@@ -209,33 +229,47 @@ func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, co
 	return &c, nil
 }
 
-func (s *Store) UpdateCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID, name, colorCode string, availability []CabinetDayAvailability) (*Cabinet, error) {
+func (s *Store) UpdateCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID, name, colorCode, equipment string, allowedCategories, allowedTreatments []string, availability []CabinetDayAvailability) (*Cabinet, error) {
 	if colorCode == "" {
 		colorCode = "#0D9488"
 	}
 	if len(availability) == 0 {
 		availability = DefaultCabinetAvailability()
 	}
+	if allowedCategories == nil {
+		allowedCategories = []string{}
+	}
+	if allowedTreatments == nil {
+		allowedTreatments = []string{}
+	}
 	availBytes, err := json.Marshal(availability)
 	if err != nil {
 		return nil, err
 	}
+	catBytes, _ := json.Marshal(allowedCategories)
+	treatBytes, _ := json.Marshal(allowedTreatments)
+
 	var c Cabinet
-	var rawAvail []byte
+	var rawCats, rawTreats, rawAvail []byte
 	err = tx.QueryRow(ctx, `update cabinets
 		set name = coalesce(nullif($3, ''), name),
 			color_code = coalesce(nullif($4, ''), color_code),
-			availability = $5::jsonb
+			equipment = $5,
+			allowed_categories = $6::jsonb,
+			allowed_treatments = $7::jsonb,
+			availability = $8::jsonb
 		where id = $1::uuid and tenant_id = $2::uuid and is_active = true
-		returning id, name, color_code, is_active, availability, created_at`,
-		cabinetID, tenantID, name, colorCode, availBytes).
-		Scan(&c.ID, &c.Name, &c.ColorCode, &c.IsActive, &rawAvail, &c.CreatedAt)
+		returning id, name, color_code, coalesce(equipment, ''), allowed_categories, allowed_treatments, is_active, availability, created_at`,
+		cabinetID, tenantID, name, colorCode, equipment, catBytes, treatBytes, availBytes).
+		Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &rawCats, &rawTreats, &c.IsActive, &rawAvail, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
+	_ = json.Unmarshal(rawCats, &c.AllowedCategories)
+	_ = json.Unmarshal(rawTreats, &c.AllowedTreatments)
 	if len(rawAvail) > 0 {
 		_ = json.Unmarshal(rawAvail, &c.Availability)
 	} else {
@@ -436,6 +470,7 @@ func (s *Store) UpdateAppointmentStatus(ctx context.Context, tx pgx.Tx, id, stat
 type AvailableSlotSearchFilter struct {
 	CabinetID         string
 	DoctorID          string
+	TreatmentType     string
 	TreatmentCategory string
 	DurationMinutes   int
 	Shift             string // "morning", "afternoon", "all"
@@ -445,19 +480,20 @@ type AvailableSlotSearchFilter struct {
 }
 
 type AvailableSlot struct {
-	CabinetID       string `json:"cabinet_id"`
-	CabinetName     string `json:"cabinet_name"`
-	CabinetColor    string `json:"cabinet_color"`
-	DoctorID        string `json:"doctor_id,omitempty"`
-	DoctorName      string `json:"doctor_name,omitempty"`
-	ShiftID         string `json:"shift_id,omitempty"`
-	ShiftName       string `json:"shift_name,omitempty"`
-	Date            string `json:"date"`
-	StartTime       string `json:"start_time"`
-	EndTime         string `json:"end_time"`
-	DurationMinutes int    `json:"duration_minutes"`
-	Shift           string `json:"shift"`
-	FormattedDate   string `json:"formatted_date"`
+	CabinetID        string `json:"cabinet_id"`
+	CabinetName      string `json:"cabinet_name"`
+	CabinetColor     string `json:"cabinet_color"`
+	CabinetEquipment string `json:"cabinet_equipment,omitempty"`
+	DoctorID         string `json:"doctor_id,omitempty"`
+	DoctorName       string `json:"doctor_name,omitempty"`
+	ShiftID          string `json:"shift_id,omitempty"`
+	ShiftName        string `json:"shift_name,omitempty"`
+	Date             string `json:"date"`
+	StartTime        string `json:"start_time"`
+	EndTime          string `json:"end_time"`
+	DurationMinutes  int    `json:"duration_minutes"`
+	Shift            string `json:"shift"`
+	FormattedDate    string `json:"formatted_date"`
 }
 
 type CalculateSlotsContext struct {
@@ -619,6 +655,31 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 				}
 
 				cab := cabMap[shift.CabinetID]
+				if filter.TreatmentCategory != "" && len(cab.AllowedCategories) > 0 {
+					matchedCat := false
+					for _, ac := range cab.AllowedCategories {
+						if strings.EqualFold(ac, filter.TreatmentCategory) {
+							matchedCat = true
+							break
+						}
+					}
+					if !matchedCat {
+						continue
+					}
+				}
+				if filter.TreatmentType != "" && len(cab.AllowedTreatments) > 0 {
+					matchedTreat := false
+					for _, at := range cab.AllowedTreatments {
+						if strings.EqualFold(at, filter.TreatmentType) {
+							matchedTreat = true
+							break
+						}
+					}
+					if !matchedTreat {
+						continue
+					}
+				}
+
 				cabName := cab.Name
 				if cabName == "" {
 					cabName = shift.CabinetName
@@ -747,19 +808,20 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 										docName = calcCtx.DoctorNames[docID]
 									}
 									results = append(results, AvailableSlot{
-										CabinetID:       shift.CabinetID,
-										CabinetName:     cabName,
-										CabinetColor:    cabColor,
-										DoctorID:        docID,
-										DoctorName:      docName,
-										ShiftID:         shift.ID,
-										ShiftName:       shift.Name,
-										Date:            dateStr,
-										StartTime:       formatMinutesToHHMM(t),
-										EndTime:         formatMinutesToHHMM(t + filter.DurationMinutes),
-										DurationMinutes: filter.DurationMinutes,
-										Shift:           shiftName,
-										FormattedDate:   formatSpanishDate(currentDate),
+										CabinetID:        shift.CabinetID,
+										CabinetName:      cabName,
+										CabinetColor:     cabColor,
+										CabinetEquipment: cab.Equipment,
+										DoctorID:         docID,
+										DoctorName:       docName,
+										ShiftID:          shift.ID,
+										ShiftName:        shift.Name,
+										Date:             dateStr,
+										StartTime:        formatMinutesToHHMM(t),
+										EndTime:          formatMinutesToHHMM(t + filter.DurationMinutes),
+										DurationMinutes:  filter.DurationMinutes,
+										Shift:            shiftName,
+										FormattedDate:    formatSpanishDate(currentDate),
 									})
 									if len(results) >= filter.Limit {
 										return results
@@ -786,19 +848,20 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 								docName = calcCtx.DoctorNames[docID]
 							}
 							results = append(results, AvailableSlot{
-								CabinetID:       shift.CabinetID,
-								CabinetName:     cabName,
-								CabinetColor:    cabColor,
-								DoctorID:        docID,
-								DoctorName:      docName,
-								ShiftID:         shift.ID,
-								ShiftName:       shift.Name,
-								Date:            dateStr,
-								StartTime:       formatMinutesToHHMM(t),
-								EndTime:         formatMinutesToHHMM(t + filter.DurationMinutes),
-								DurationMinutes: filter.DurationMinutes,
-								Shift:           shiftName,
-								FormattedDate:   formatSpanishDate(currentDate),
+								CabinetID:        shift.CabinetID,
+								CabinetName:      cabName,
+								CabinetColor:     cabColor,
+								CabinetEquipment: cab.Equipment,
+								DoctorID:         docID,
+								DoctorName:       docName,
+								ShiftID:          shift.ID,
+								ShiftName:        shift.Name,
+								Date:             dateStr,
+								StartTime:        formatMinutesToHHMM(t),
+								EndTime:          formatMinutesToHHMM(t + filter.DurationMinutes),
+								DurationMinutes:  filter.DurationMinutes,
+								Shift:            shiftName,
+								FormattedDate:    formatSpanishDate(currentDate),
 							})
 							if len(results) >= filter.Limit {
 								return results
@@ -823,6 +886,31 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 		for _, cab := range calcCtx.Cabinets {
 			if filter.CabinetID != "" && cab.ID != filter.CabinetID {
 				continue
+			}
+
+			if filter.TreatmentCategory != "" && len(cab.AllowedCategories) > 0 {
+				matchedCat := false
+				for _, ac := range cab.AllowedCategories {
+					if strings.EqualFold(ac, filter.TreatmentCategory) {
+						matchedCat = true
+						break
+					}
+				}
+				if !matchedCat {
+					continue
+				}
+			}
+			if filter.TreatmentType != "" && len(cab.AllowedTreatments) > 0 {
+				matchedTreat := false
+				for _, at := range cab.AllowedTreatments {
+					if strings.EqualFold(at, filter.TreatmentType) {
+						matchedTreat = true
+						break
+					}
+				}
+				if !matchedTreat {
+					continue
+				}
 			}
 
 			var dayConfig *CabinetDayAvailability
@@ -940,15 +1028,16 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 								shiftName = "afternoon"
 							}
 							results = append(results, AvailableSlot{
-								CabinetID:       cab.ID,
-								CabinetName:     cab.Name,
-								CabinetColor:    cab.ColorCode,
-								Date:            dateStr,
-								StartTime:       formatMinutesToHHMM(t),
-								EndTime:         formatMinutesToHHMM(t + filter.DurationMinutes),
-								DurationMinutes: filter.DurationMinutes,
-								Shift:           shiftName,
-								FormattedDate:   formatSpanishDate(currentDate),
+								CabinetID:        cab.ID,
+								CabinetName:      cab.Name,
+								CabinetColor:     cab.ColorCode,
+								CabinetEquipment: cab.Equipment,
+								Date:             dateStr,
+								StartTime:        formatMinutesToHHMM(t),
+								EndTime:          formatMinutesToHHMM(t + filter.DurationMinutes),
+								DurationMinutes:  filter.DurationMinutes,
+								Shift:            shiftName,
+								FormattedDate:    formatSpanishDate(currentDate),
 							})
 							if len(results) >= filter.Limit {
 								return results
@@ -972,14 +1061,15 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 						shiftName = "afternoon"
 					}
 					results = append(results, AvailableSlot{
-						CabinetID:       cab.ID,
-						CabinetName:     cab.Name,
-						CabinetColor:    cab.ColorCode,
-						Date:            dateStr,
-						StartTime:       formatMinutesToHHMM(t),
-						EndTime:         formatMinutesToHHMM(t + filter.DurationMinutes),
-						DurationMinutes: filter.DurationMinutes,
-						Shift:           shiftName,
+						CabinetID:        cab.ID,
+						CabinetName:      cab.Name,
+						CabinetColor:     cab.ColorCode,
+						CabinetEquipment: cab.Equipment,
+						Date:             dateStr,
+						StartTime:        formatMinutesToHHMM(t),
+						EndTime:          formatMinutesToHHMM(t + filter.DurationMinutes),
+						DurationMinutes:  filter.DurationMinutes,
+						Shift:            shiftName,
 						FormattedDate:   formatSpanishDate(currentDate),
 					})
 					if len(results) >= filter.Limit {

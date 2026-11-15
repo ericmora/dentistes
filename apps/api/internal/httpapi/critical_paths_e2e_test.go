@@ -406,3 +406,128 @@ func TestCriticalPath7_GeolocationMultiCurrencyAndFiscalCompliance(t *testing.T)
 		t.Fatalf("expected beta electronic invoicing enabled, got: %#v", capsBeta.Features.ElectronicInvoicing)
 	}
 }
+
+// Critical Path 7: Odontogram Findings -> Multi-Option Treatment Budgets -> Patient Acceptance -> Invoicing & Agenda Visibility
+func TestCriticalPath7_FindingsBudgetsAndPatientAcceptance(t *testing.T) {
+	// 1. Dentist RBAC permission verification for findings and budgets
+	if !auth.HasPermission(auth.RoleDentist, "clinical:write") || !auth.HasPermission(auth.RoleDentist, "billing:write") {
+		t.Fatal("expected RoleDentist to have both clinical:write and billing:write permissions")
+	}
+
+	// 2. Build a clinical finding (Piece 26 in very bad state) with 3 treatment options:
+	//    - Option 1: Simple extraction (50 EUR)
+	//    - Option 2: Reconstruction (Endodontics + Complex reconstruction = 295 EUR)
+	//    - Option 3: Extraction + Implant + Crown (1120 EUR)
+	blocks := []store.BudgetFindingBlock{
+		{
+			FindingID:   testfixtures.FindingTooth26ID,
+			ToothNumber: "26",
+			Surfaces:    []string{"mesial", "occlusal", "distal"},
+			Diagnosis:   "Pieza 26 en muy mal estado",
+			Options: []store.BudgetTreatmentOption{
+				{
+					ID:          "opt-extraccion",
+					OptionLabel: "Opción 1",
+					Name:        "Extracción simple",
+					Items: []store.BudgetProcedureItem{
+						{ID: "i1", TreatmentCode: "EXTRACCION_SIMPLE", Description: "Extracción simple pieza 26", ToothNumber: "26", Quantity: 1, UnitPriceCents: 5000},
+					},
+					PatientResponse: "PENDING",
+				},
+				{
+					ID:          "opt-reconstruccion",
+					OptionLabel: "Opción 2",
+					Name:        "Tratamiento de reconstrucción",
+					Items: []store.BudgetProcedureItem{
+						{ID: "i2", TreatmentCode: "ENDODONCIA_MULTIRRADICULAR", Description: "Endodoncia multirradicular pieza 26", ToothNumber: "26", Quantity: 1, UnitPriceCents: 21000},
+						{ID: "i3", TreatmentCode: "OBTURACION_COMPLEJA", Description: "Reconstrucción compleja pieza 26", ToothNumber: "26", Quantity: 1, UnitPriceCents: 8500},
+					},
+					PatientResponse: "PENDING",
+				},
+				{
+					ID:            "opt-implante",
+					OptionLabel:   "Opción 3",
+					Name:          "Extracción y después Implante",
+					IsRecommended: true,
+					Items: []store.BudgetProcedureItem{
+						{ID: "i4", TreatmentCode: "EXTRACCION_SIMPLE", Description: "Extracción simple pieza 26", ToothNumber: "26", Quantity: 1, UnitPriceCents: 5000},
+						{ID: "i5", TreatmentCode: "IMPLANTE", Description: "Colocación de implante pieza 26", ToothNumber: "26", Quantity: 1, UnitPriceCents: 75000},
+						{ID: "i6", TreatmentCode: "CORONA", Description: "Corona sobre implante pieza 26", ToothNumber: "26", Quantity: 1, UnitPriceCents: 32000},
+					},
+					PatientResponse: "PENDING",
+				},
+			},
+		},
+	}
+
+	normalized, minEst, maxEst, accepted := store.NormalizeAndComputeBudgetBlocks(blocks)
+	if minEst != 50.00 || maxEst != 1120.00 || accepted != 0.00 {
+		t.Fatalf("unexpected initial budget range: min=%.2f max=%.2f accepted=%.2f", minEst, maxEst, accepted)
+	}
+
+	// 3. Patient studies options at home and returns accepting Option 3 (Extracción + Implante)
+	updated, budgetStatus, err := store.ApplyBudgetOptionResponse(
+		normalized,
+		testfixtures.FindingTooth26ID,
+		"opt-implante",
+		"ACCEPTED",
+		"Aceptado por el paciente tras estudiar las 3 opciones en casa",
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error recording patient acceptance: %v", err)
+	}
+	if budgetStatus != "ACCEPTED" {
+		t.Fatalf("expected budget status ACCEPTED, got %s", budgetStatus)
+	}
+	if updated[0].Options[0].PatientResponse != "REJECTED" || updated[0].Options[1].PatientResponse != "REJECTED" || updated[0].Options[2].PatientResponse != "ACCEPTED" {
+		t.Fatalf("unexpected option responses: %+v", updated[0].Options)
+	}
+
+	// 4. Verify open vs closed visibility for patient appointment view
+	if !store.IsBudgetOpen(budgetStatus) {
+		t.Fatal("expected ACCEPTED budget (not yet invoiced) to appear as open in appointment view")
+	}
+	if store.IsBudgetOpen("INVOICED") || store.IsBudgetOpen("REJECTED") {
+		t.Fatal("expected INVOICED and REJECTED budgets to be closed and hidden from open appointment alerts")
+	}
+
+	// 5. Verify that discarding a budget/treatment does NOT discard the finding:
+	//    it returns to OPEN so a second budget can be created and accepted for the same finding.
+	rejectedBlocks, rejectedBudgetStatus, err := store.ApplyBudgetOptionResponse(
+		updated,
+		testfixtures.FindingTooth26ID,
+		"opt-implante",
+		"REJECTED",
+		"Descarta presupuesto 1",
+		time.Now().UTC(),
+	)
+	if err != nil || rejectedBudgetStatus != "REJECTED" {
+		t.Fatalf("expected budget 1 REJECTED when all options rejected, got status=%s err=%v", rejectedBudgetStatus, err)
+	}
+	findingStatus := store.ResolveFindingStatusAfterBudgetChange("IN_BUDGET", rejectedBlocks[0])
+	if findingStatus != "OPEN" || !store.IsFindingOpen(findingStatus) {
+		t.Fatalf("expected finding to remain OPEN (not DISCARDED) after budget rejection, got %s", findingStatus)
+	}
+
+	// 6. Verify that cancelling a finding requires a clinical note and formats clinical history entry
+	if err := store.ValidateFindingStatusUpdate("DISCARDED", ""); err == nil {
+		t.Fatal("expected error when cancelling finding without clinical note")
+	}
+	if err := store.ValidateFindingStatusUpdate("DISCARDED", "Hallazgo cancelado tras radiografía periapical"); err != nil {
+		t.Fatalf("expected valid finding cancellation with clinical note, got %v", err)
+	}
+	historyText := store.FormatFindingCreatedHistoryContent("26", []string{"mesial", "occlusal"}, "Pieza 26 en muy mal estado", "Revisar vitalidad")
+	if !strings.Contains(historyText, "Pieza 26") {
+		t.Fatalf("expected created finding history content to reference Pieza 26, got %s", historyText)
+	}
+
+	// 7. Verify clinical history attachments (photos, X-rays, documents)
+	attachments, err := store.NormalizeClinicalAttachments([]store.ClinicalAttachment{
+		{Kind: "XRAY", Name: "Rx_Pieza_26.png", MimeType: "image/png", DataURL: "data:image/png;base64,AAA=", ToothNumber: "26"},
+		{Kind: "DOCUMENT", Name: "Consentimiento_Implante.pdf", MimeType: "application/pdf", DataURL: "data:application/pdf;base64,BBB="},
+	})
+	if err != nil || len(attachments) != 2 {
+		t.Fatalf("expected 2 valid clinical attachments, got len=%d err=%v", len(attachments), err)
+	}
+}

@@ -4,12 +4,78 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
 var ErrVersionConflict = errors.New("version conflict")
+
+type ClinicalAttachment struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"` // XRAY | PHOTO | DOCUMENT
+	Name        string `json:"name"`
+	MimeType    string `json:"mime_type"`
+	DataURL     string `json:"data_url"`
+	SizeBytes   int64  `json:"size_bytes,omitempty"`
+	ToothNumber string `json:"tooth_number,omitempty"`
+}
+
+func NormalizeClinicalAttachments(in []ClinicalAttachment) ([]ClinicalAttachment, error) {
+	if len(in) == 0 {
+		return []ClinicalAttachment{}, nil
+	}
+	out := make([]ClinicalAttachment, 0, len(in))
+	for i, a := range in {
+		name := strings.TrimSpace(a.Name)
+		if name == "" {
+			name = fmt.Sprintf("adjunto-%d", i+1)
+		}
+		dataURL := strings.TrimSpace(a.DataURL)
+		if dataURL == "" {
+			return nil, errors.New("attachment data_url is required")
+		}
+		mime := strings.TrimSpace(a.MimeType)
+		if mime == "" {
+			if strings.HasPrefix(dataURL, "data:application/pdf") {
+				mime = "application/pdf"
+			} else if strings.HasPrefix(dataURL, "data:image/") {
+				mime = "image/png"
+			} else {
+				mime = "application/octet-stream"
+			}
+		}
+		kind := strings.ToUpper(strings.TrimSpace(a.Kind))
+		switch kind {
+		case "XRAY", "PHOTO", "DOCUMENT":
+		default:
+			lowerName := strings.ToLower(name)
+			if strings.Contains(lowerName, "rx") || strings.Contains(lowerName, "radio") || strings.Contains(lowerName, "periapical") || strings.Contains(lowerName, "orto") {
+				kind = "XRAY"
+			} else if strings.HasPrefix(mime, "image/") {
+				kind = "PHOTO"
+			} else {
+				kind = "DOCUMENT"
+			}
+		}
+		id := strings.TrimSpace(a.ID)
+		if id == "" {
+			id = fmt.Sprintf("att-%d-%d", time.Now().UTC().UnixNano(), i+1)
+		}
+		out = append(out, ClinicalAttachment{
+			ID:          id,
+			Kind:        kind,
+			Name:        name,
+			MimeType:    mime,
+			DataURL:     dataURL,
+			SizeBytes:   a.SizeBytes,
+			ToothNumber: strings.TrimSpace(a.ToothNumber),
+		})
+	}
+	return out, nil
+}
 
 type PatientDetail struct {
 	Patient
@@ -31,15 +97,16 @@ type UpdatePatientInput struct {
 }
 
 type ClinicalRecord struct {
-	ID            string    `json:"id"`
-	PatientID     string    `json:"patient_id"`
-	DoctorID      string    `json:"doctor_id"`
-	DoctorName    string    `json:"doctor_name"`
-	AppointmentID *string   `json:"appointment_id,omitempty"`
-	EntryType     string    `json:"entry_type"`
-	Content       string    `json:"content"`
-	AmendsEntryID *string   `json:"amends_entry_id,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            string               `json:"id"`
+	PatientID     string               `json:"patient_id"`
+	DoctorID      string               `json:"doctor_id"`
+	DoctorName    string               `json:"doctor_name"`
+	AppointmentID *string              `json:"appointment_id,omitempty"`
+	EntryType     string               `json:"entry_type"`
+	Content       string               `json:"content"`
+	AmendsEntryID *string              `json:"amends_entry_id,omitempty"`
+	Attachments   []ClinicalAttachment `json:"attachments"`
+	CreatedAt     time.Time            `json:"created_at"`
 }
 
 type Odontogram struct {
@@ -114,7 +181,7 @@ func (s *Store) LogClinicalAccess(ctx context.Context, tx pgx.Tx, tenantID, user
 
 func (s *Store) ListClinicalRecords(ctx context.Context, tx pgx.Tx, patientID string) ([]ClinicalRecord, error) {
 	rows, err := tx.Query(ctx, `select cr.id, cr.patient_id, cr.doctor_id, u.full_name, cr.appointment_id,
-			cr.entry_type, cr.content, cr.amends_entry_id, cr.created_at
+			cr.entry_type, cr.content, cr.amends_entry_id, coalesce(cr.attachments, '[]'::jsonb), cr.created_at
 		from clinical_records cr
 		join users u on u.id = cr.doctor_id
 		where cr.patient_id = $1
@@ -126,29 +193,52 @@ func (s *Store) ListClinicalRecords(ctx context.Context, tx pgx.Tx, patientID st
 	out := []ClinicalRecord{}
 	for rows.Next() {
 		var r ClinicalRecord
+		var attBytes []byte
 		if err := rows.Scan(&r.ID, &r.PatientID, &r.DoctorID, &r.DoctorName, &r.AppointmentID,
-			&r.EntryType, &r.Content, &r.AmendsEntryID, &r.CreatedAt); err != nil {
+			&r.EntryType, &r.Content, &r.AmendsEntryID, &attBytes, &r.CreatedAt); err != nil {
 			return nil, err
+		}
+		_ = json.Unmarshal(attBytes, &r.Attachments)
+		if r.Attachments == nil {
+			r.Attachments = []ClinicalAttachment{}
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
 }
 
-func (s *Store) CreateClinicalRecord(ctx context.Context, tx pgx.Tx, tenantID, patientID, doctorID string, appointmentID *string, entryType, content string, amendsEntryID *string) (*ClinicalRecord, error) {
-	var r ClinicalRecord
-	err := tx.QueryRow(ctx, `with inserted as (
-			insert into clinical_records (tenant_id, patient_id, doctor_id, appointment_id, entry_type, content, amends_entry_id)
-			values ($1, $2, $3, $4::uuid, $5, $6, $7::uuid)
-			returning id, patient_id, doctor_id, appointment_id, entry_type, content, amends_entry_id, created_at
-		)
-		select i.id, i.patient_id, i.doctor_id, u.full_name, i.appointment_id, i.entry_type, i.content, i.amends_entry_id, i.created_at
-		from inserted i
-		join users u on u.id = i.doctor_id`,
-		tenantID, patientID, doctorID, appointmentID, entryType, content, amendsEntryID).
-		Scan(&r.ID, &r.PatientID, &r.DoctorID, &r.DoctorName, &r.AppointmentID, &r.EntryType, &r.Content, &r.AmendsEntryID, &r.CreatedAt)
+func (s *Store) CreateClinicalRecord(ctx context.Context, tx pgx.Tx, tenantID, patientID, doctorID string, appointmentID *string, entryType, content string, amendsEntryID *string, attachments ...[]ClinicalAttachment) (*ClinicalRecord, error) {
+	var rawAtts []ClinicalAttachment
+	if len(attachments) > 0 {
+		rawAtts = attachments[0]
+	}
+	normAtts, err := NormalizeClinicalAttachments(rawAtts)
 	if err != nil {
 		return nil, err
+	}
+	attJSON, err := json.Marshal(normAtts)
+	if err != nil {
+		return nil, err
+	}
+
+	var r ClinicalRecord
+	var attOut []byte
+	err = tx.QueryRow(ctx, `with inserted as (
+			insert into clinical_records (tenant_id, patient_id, doctor_id, appointment_id, entry_type, content, amends_entry_id, attachments)
+			values ($1, $2, $3, $4::uuid, $5, $6, $7::uuid, $8::jsonb)
+			returning id, patient_id, doctor_id, appointment_id, entry_type, content, amends_entry_id, attachments, created_at
+		)
+		select i.id, i.patient_id, i.doctor_id, u.full_name, i.appointment_id, i.entry_type, i.content, i.amends_entry_id, i.attachments, i.created_at
+		from inserted i
+		join users u on u.id = i.doctor_id`,
+		tenantID, patientID, doctorID, appointmentID, entryType, content, amendsEntryID, string(attJSON)).
+		Scan(&r.ID, &r.PatientID, &r.DoctorID, &r.DoctorName, &r.AppointmentID, &r.EntryType, &r.Content, &r.AmendsEntryID, &attOut, &r.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	_ = json.Unmarshal(attOut, &r.Attachments)
+	if r.Attachments == nil {
+		r.Attachments = []ClinicalAttachment{}
 	}
 	return &r, nil
 }

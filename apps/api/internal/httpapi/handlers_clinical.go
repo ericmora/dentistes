@@ -160,10 +160,11 @@ func (s *Server) handleListClinicalRecords(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleCreateClinicalRecord(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "id")
 	var req struct {
-		EntryType     string  `json:"entry_type"`
-		Content       string  `json:"content"`
-		AppointmentID *string `json:"appointment_id"`
-		AmendsEntryID *string `json:"amends_entry_id"`
+		EntryType     string                     `json:"entry_type"`
+		Content       string                     `json:"content"`
+		AppointmentID *string                    `json:"appointment_id"`
+		AmendsEntryID *string                    `json:"amends_entry_id"`
+		Attachments   []store.ClinicalAttachment `json:"attachments"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -176,7 +177,19 @@ func (s *Server) handleCreateClinicalRecord(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "VALIDATION", "entry_type must be NOTE, DIAGNOSIS, PROCEDURE or PRESCRIPTION", nil)
 		return
 	}
+	normAttachments, err := store.NormalizeClinicalAttachments(req.Attachments)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "VALIDATION", err.Error(), nil)
+		return
+	}
 	content := strings.TrimSpace(req.Content)
+	if content == "" && len(normAttachments) > 0 {
+		names := make([]string, 0, len(normAttachments))
+		for _, a := range normAttachments {
+			names = append(names, a.Name)
+		}
+		content = "Adjunto clínico incorporado al historial: " + strings.Join(names, ", ")
+	}
 	if content == "" {
 		writeError(w, http.StatusBadRequest, "VALIDATION", "content is required", nil)
 		return
@@ -192,7 +205,7 @@ func (s *Server) handleCreateClinicalRecord(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	record, err := s.store.CreateClinicalRecord(r.Context(), tx, claims.TenantID, patientID, claims.Subject, req.AppointmentID, entryType, content, req.AmendsEntryID)
+	record, err := s.store.CreateClinicalRecord(r.Context(), tx, claims.TenantID, patientID, claims.Subject, req.AppointmentID, entryType, content, req.AmendsEntryID, normAttachments)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not create clinical record", nil)
 		return

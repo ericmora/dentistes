@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,6 +20,7 @@ import {
 import {
   Alert,
   Badge,
+  BudgetPrintFormatDocument,
   Button,
   Card,
   ClinicalHistoryTimeline,
@@ -28,25 +29,38 @@ import {
   Input,
   InvoiceLineEditor,
   Modal,
+  OdontogramAutosaveUndoBar,
   OdontogramGrid,
+  PatientBudgetCard,
   PermissionGate,
   QRVerifierBlock,
   Select,
+  SelectedToothEvolutionAndHistoryPanel,
   Skeleton,
   Switch,
   Textarea,
   ToothAnatomicalViewer,
+  buildSampleClinicalAttachment,
+  buildThreeOptionsForFinding,
   cn,
   emptyTooth,
   formatMoney,
   getFdiToothInfo,
+  pushOdontogramUndoEntry,
   useToast,
+  type BudgetFindingBlockUI,
+  type BudgetTreatmentOptionUI,
+  type ClinicalAttachmentUI,
   type InvoiceLineItem,
+  type OdontogramAutosaveStatus,
+  type OdontogramDisplayMode,
+  type OdontogramUndoEntry,
+  type PatientBudgetUI,
   type ToothState,
   type ToothSurfaceName,
   type ToothSurfaceStatus,
 } from "@dentistes/ui";
-import { can, type ClinicalRecord, type Odontogram, type PatientInvoice } from "@dentistes/sdk";
+import { can, type ClinicalFinding, type ClinicalRecord, type Odontogram, type PatientInvoice } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 import { useUiStore } from "../lib/store";
 
@@ -75,8 +89,31 @@ export function PatientDetailPage() {
   const [filterBySelectedTooth, setFilterBySelectedTooth] = useState(false);
   const [linkRecordToTooth, setLinkRecordToTooth] = useState(true);
   const [anatomicalModalOpen, setAnatomicalModalOpen] = useState(false);
+  const [odontogramDisplayMode, setOdontogramDisplayMode] = useState<OdontogramDisplayMode>("surfaces");
 
-  const { odontogramTool, setOdontogramTool, odontogramDentition, setOdontogramDentition } = useUiStore();
+  const {
+    odontogramTool,
+    setOdontogramTool,
+    odontogramDentition,
+    setOdontogramDentition,
+    clinicBudgetSettings,
+    setClinicBudgetSettings,
+  } = useUiStore();
+
+  const clinicSettingsQuery = useQuery({
+    queryKey: ["clinic-settings", me?.active_tenant.id],
+    queryFn: async () => {
+      try {
+        const res = await sdk.clinic.getSettings();
+        setClinicBudgetSettings(res.settings);
+        return res.settings;
+      } catch {
+        return clinicBudgetSettings;
+      }
+    },
+    enabled: Boolean(me?.active_tenant.id),
+  });
+  const effectiveClinicSettings = clinicSettingsQuery.data ?? clinicBudgetSettings;
 
   const patientQuery = useQuery({
     queryKey: ["patient", id],
@@ -104,6 +141,61 @@ export function PatientDetailPage() {
     queryFn: () => sdk.listPatientInvoices(id),
     enabled: Boolean(id && me?.features?.billing_pdf),
   });
+
+  const findingsQuery = useQuery({
+    queryKey: ["patient-findings", id],
+    queryFn: () => sdk.listPatientFindings(id),
+    enabled: Boolean(id),
+  });
+
+  const budgetsQuery = useQuery({
+    queryKey: ["patient-budgets", id],
+    queryFn: () => sdk.listPatientBudgets(id),
+    enabled: Boolean(id && me?.features?.billing_pdf),
+  });
+
+  const treatmentsCatalogQuery = useQuery({
+    queryKey: ["treatments-catalog"],
+    queryFn: () => sdk.listTreatments(),
+    enabled: Boolean(me),
+  });
+
+  // Clinical findings & multi-option budgets state (F7)
+  const [newFindingTooth, setNewFindingTooth] = useState("26");
+  const [newFindingDiagnosis, setNewFindingDiagnosis] = useState("Pieza en muy mal estado (pronóstico reservado)");
+  const [newFindingSeverity, setNewFindingSeverity] = useState<"LOW" | "MEDIUM" | "HIGH">("HIGH");
+  const [newFindingNotes, setNewFindingNotes] = useState("");
+
+  const [budgetTitle, setBudgetTitle] = useState("Plan de Tratamiento por Hallazgos");
+  const [budgetSeries, setBudgetSeries] = useState(
+    () => effectiveClinicSettings.budget_default_series || "PRE",
+  );
+  const [budgetValidityDays, setBudgetValidityDays] = useState(
+    () => String(effectiveClinicSettings.budget_default_validity_days || 30),
+  );
+  const [budgetNotes, setBudgetNotes] = useState(
+    () =>
+      effectiveClinicSettings.budget_validity_terms ||
+      "Presupuesto válido durante el periodo de vigencia indicado. El paciente puede elegir una de las alternativas propuestas para cada hallazgo.",
+  );
+  const [draftFindingBlocks, setDraftFindingBlocks] = useState<BudgetFindingBlockUI[]>([]);
+  const [printingBudget, setPrintingBudget] = useState<PatientBudgetUI | null>(null);
+
+  useEffect(() => {
+    if (effectiveClinicSettings.budget_default_series) {
+      setBudgetSeries(effectiveClinicSettings.budget_default_series);
+    }
+    if (effectiveClinicSettings.budget_default_validity_days) {
+      setBudgetValidityDays(String(effectiveClinicSettings.budget_default_validity_days));
+    }
+    if (effectiveClinicSettings.budget_validity_terms) {
+      setBudgetNotes(effectiveClinicSettings.budget_validity_terms);
+    }
+  }, [
+    effectiveClinicSettings.budget_default_series,
+    effectiveClinicSettings.budget_default_validity_days,
+    effectiveClinicSettings.budget_validity_terms,
+  ]);
 
   // Clinical billing & estimate state (F6)
   const [invoiceLines, setInvoiceLines] = useState<InvoiceLineItem[]>([]);
@@ -198,16 +290,35 @@ export function PatientDetailPage() {
     },
   });
 
-  // Odontogram state (F1)
+  // Odontogram state (F1) with Autosave & Undo stack
   const [odoType, setOdoType] = useState<Odontogram["type"]>("CURRENT");
   const [teeth, setTeeth] = useState<Record<number, ToothState>>({});
+  const teethRef = useRef<Record<number, ToothState>>({});
   const [selectedTooth, setSelectedTooth] = useState<number | undefined>(16);
+  const [undoStack, setUndoStack] = useState<OdontogramUndoEntry[]>([]);
+  const [autosaveStatus, setAutosaveStatus] = useState<OdontogramAutosaveStatus>("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<string | undefined>(undefined);
+  const latestVersionRef = useRef<number | undefined>(undefined);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncedOdoKeyRef = useRef<string>("");
+
   const currentOdo = odontogramQuery.data?.odontograms.find((o) => o.type === odoType);
 
   useEffect(() => {
+    if (currentOdo?.version !== undefined) {
+      latestVersionRef.current = currentOdo.version;
+    }
+    const syncKey = `${id}:${odoType}:${currentOdo ? "loaded" : "empty"}`;
+    if (syncedOdoKeyRef.current === syncKey) {
+      return;
+    }
+    syncedOdoKeyRef.current = syncKey;
     const raw = currentOdo?.teeth_data as Record<string, ToothState> | undefined;
     if (!raw) {
+      teethRef.current = {};
       setTeeth({});
+      setUndoStack([]);
+      setAutosaveStatus("idle");
       return;
     }
     const parsed: Record<number, ToothState> = {};
@@ -215,36 +326,121 @@ export function PatientDetailPage() {
       const num = Number(k);
       if (!Number.isNaN(num)) parsed[num] = val;
     }
+    teethRef.current = parsed;
     setTeeth(parsed);
-  }, [currentOdo, odoType]);
+    setUndoStack([]);
+    setAutosaveStatus("idle");
+  }, [currentOdo, odoType, id]);
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, []);
 
   const saveOdontogramMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (vars?: { teethData?: Record<number, ToothState>; silent?: boolean }) =>
       sdk.saveOdontogram(id, odoType, {
-        teeth_data: teeth,
-        version: currentOdo?.version,
+        teeth_data: vars?.teethData ?? teethRef.current,
+        version: latestVersionRef.current ?? currentOdo?.version,
       }),
-    onSuccess: async () => {
-      notify({ tone: "success", title: "Odontograma guardado" });
+    onSuccess: async (res, vars) => {
+      if (res?.odontogram?.version !== undefined) {
+        latestVersionRef.current = res.odontogram.version;
+      }
+      setAutosaveStatus("saved");
+      setLastSavedAt(
+        new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      );
+      if (!vars?.silent) {
+        notify({ tone: "success", title: "Odontograma guardado" });
+      }
       await queryClient.invalidateQueries({ queryKey: ["patient-odontograms", id] });
     },
-    onError: (err) => {
-      notify({
-        tone: "danger",
-        title: "Error al guardar odontograma",
-        description: err instanceof Error ? err.message : undefined,
-      });
+    onError: (err, vars) => {
+      setAutosaveStatus("error");
+      if (!vars?.silent) {
+        notify({
+          tone: "danger",
+          title: "Error al guardar odontograma",
+          description: err instanceof Error ? err.message : undefined,
+        });
+      }
     },
   });
 
-  // Clinical record form (F3)
+  function scheduleOdontogramAutosave(nextTeeth: Record<number, ToothState>, delayMs = 250) {
+    if (!canWriteClinical || !id) return;
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    setAutosaveStatus("saving");
+    autosaveTimerRef.current = setTimeout(() => {
+      saveOdontogramMutation.mutate({ teethData: nextTeeth, silent: true });
+    }, delayMs);
+  }
+
+  function applyOdontogramChange(
+    label: string,
+    updater: (prev: Record<number, ToothState>) => Record<number, ToothState>,
+    delayMs = 250,
+  ) {
+    const prevSnapshot = teethRef.current;
+    const next = updater(prevSnapshot);
+    teethRef.current = next;
+    setUndoStack((stack) => pushOdontogramUndoEntry(stack, prevSnapshot, label));
+    setTeeth(next);
+    scheduleOdontogramAutosave(next, delayMs);
+  }
+
+  function handleUndoOdontogram() {
+    if (!canWriteClinical || undoStack.length === 0) return;
+    const [latestUndo, ...remainingStack] = undoStack;
+    teethRef.current = latestUndo.teeth;
+    setUndoStack(remainingStack);
+    setTeeth(latestUndo.teeth);
+    scheduleOdontogramAutosave(latestUndo.teeth, 120);
+  }
+
+  // Keyboard shortcut Ctrl+Z / Cmd+Z for Odontogram Undo when in clinical tab
+  useEffect(() => {
+    if (activeTab !== "clinical" || !canWriteClinical) return;
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+        if (undoStack.length > 0) {
+          e.preventDefault();
+          handleUndoOdontogram();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  // Clinical record form (F3) & Clinical History Attachments (Photos, X-rays, Documents)
   const [entryType, setEntryType] = useState<ClinicalRecord["entry_type"]>("PROCEDURE");
   const [entryContent, setEntryContent] = useState("");
   const [amendsEntryId, setAmendsEntryId] = useState("");
+  const [draftAttachments, setDraftAttachments] = useState<ClinicalAttachmentUI[]>([]);
+  const [previewAttachment, setPreviewAttachment] = useState<ClinicalAttachmentUI | null>(null);
+
+  // Cancellation of a clinical finding requires a clinical note
+  const [cancellingFindingId, setCancellingFindingId] = useState<string | null>(null);
+  const [cancellationClinicalNote, setCancellationClinicalNote] = useState("");
 
   const createRecordMutation = useMutation({
     mutationFn: () => {
-      const trimmed = entryContent.trim();
+      const trimmed =
+        entryContent.trim() ||
+        (draftAttachments.length > 0
+          ? `Adjunto clínico incorporado al historial: ${draftAttachments.map((a) => a.name).join(", ")}`
+          : "");
       const finalContent =
         selectedTooth && linkRecordToTooth && !trimmed.includes(`Pieza ${selectedTooth}`)
           ? `[Pieza ${selectedTooth}] ${trimmed}`
@@ -253,12 +449,14 @@ export function PatientDetailPage() {
         entry_type: entryType,
         content: finalContent,
         amends_entry_id: amendsEntryId || undefined,
+        attachments: draftAttachments.length > 0 ? draftAttachments : undefined,
       });
     },
     onSuccess: async () => {
       setEntryContent("");
       setAmendsEntryId("");
-      notify({ tone: "success", title: "Evolución clínica registrada" });
+      setDraftAttachments([]);
+      notify({ tone: "success", title: "Evolución clínica registrada en el historial" });
       await queryClient.invalidateQueries({ queryKey: ["patient-records", id] });
     },
     onError: (err) => {
@@ -270,14 +468,260 @@ export function PatientDetailPage() {
     },
   });
 
-  // Import pathologies from current odontogram to estimate/invoice (F1 -> F6 link)
+  const createFindingMutation = useMutation({
+    mutationFn: (input: {
+      tooth_number: string;
+      surfaces?: string[];
+      pathology_code?: string;
+      diagnosis: string;
+      severity?: "LOW" | "MEDIUM" | "HIGH";
+      notes?: string;
+    }) => sdk.createPatientFinding(id, input),
+    onSuccess: async () => {
+      setNewFindingNotes("");
+      notify({
+        tone: "success",
+        title: "Hallazgo clínico registrado",
+        description: "El hallazgo se ha añadido al historial clínico del paciente y al apartado de presupuestos.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["patient-findings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-records", id] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo registrar el hallazgo",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const updateFindingStatusMutation = useMutation({
+    mutationFn: (vars: { findingId: string; status: ClinicalFinding["status"]; notes?: string }) =>
+      sdk.updateFindingStatus(vars.findingId, { status: vars.status, notes: vars.notes }),
+    onSuccess: async (_, vars) => {
+      setCancellingFindingId(null);
+      setCancellationClinicalNote("");
+      notify({
+        tone: "success",
+        title:
+          vars.status === "DISCARDED"
+            ? "Hallazgo cancelado con nota clínica"
+            : "Estado del hallazgo actualizado",
+        description:
+          vars.status === "DISCARDED"
+            ? "La nota clínica de cancelación se ha registrado en el historial del paciente."
+            : undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["patient-findings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-records", id] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo actualizar el hallazgo",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const createBudgetMutation = useMutation({
+    mutationFn: () =>
+      sdk.createPatientBudget(id, {
+        series: budgetSeries,
+        title: budgetTitle,
+        validity_days: Number(budgetValidityDays) || 30,
+        notes: budgetNotes,
+        findings_blocks: draftFindingBlocks,
+      }),
+    onSuccess: async () => {
+      setDraftFindingBlocks([]);
+      notify({
+        tone: "success",
+        title: "Presupuesto con alternativas emitido",
+        description: "El cliente ya puede estudiar las opciones de tratamiento propuestas.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["patient-budgets", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-findings", id] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo emitir el presupuesto",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const respondBudgetOptionMutation = useMutation({
+    mutationFn: (vars: {
+      budgetId: string;
+      findingId: string;
+      optionId: string;
+      response: "PENDING" | "ACCEPTED" | "REJECTED";
+    }) =>
+      sdk.updateBudgetOptionResponse(vars.budgetId, {
+        finding_id: vars.findingId,
+        option_id: vars.optionId,
+        patient_response: vars.response,
+      }),
+    onSuccess: async (_, vars) => {
+      notify({
+        tone: "success",
+        title:
+          vars.response === "ACCEPTED"
+            ? "Opción de tratamiento aceptada por el cliente"
+            : vars.response === "REJECTED"
+            ? "Tratamiento descartado (el hallazgo sigue abierto)"
+            : "Opción marcada en estudio",
+        description:
+          vars.response === "REJECTED"
+            ? "El hallazgo clínico permanece activo por si deseas proponer otro presupuesto más adelante."
+            : undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["patient-budgets", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-findings", id] });
+    },
+  });
+
+  const updateBudgetStatusMutation = useMutation({
+    mutationFn: (vars: { budgetId: string; status: PatientBudgetUI["status"]; validityDays?: number }) =>
+      sdk.updateBudgetStatus(vars.budgetId, {
+        status: vars.status,
+        validity_days: vars.validityDays,
+      }),
+    onSuccess: async (_, vars) => {
+      notify({
+        tone: "success",
+        title:
+          vars.status === "REJECTED"
+            ? "Presupuesto descartado · Hallazgos siguen abiertos"
+            : "Presupuesto actualizado",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["patient-budgets", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-findings", id] });
+    },
+  });
+
+  const convertBudgetToInvoiceMutation = useMutation({
+    mutationFn: (budgetId: string) => sdk.convertBudgetToInvoice(budgetId, { series: invoiceSeries || "FAC" }),
+    onSuccess: async (res) => {
+      notify({
+        tone: "success",
+        title: `Factura ${res.invoice.series}-${res.invoice.invoice_number} emitida`,
+        description: "Los tratamientos aceptados se han facturado y el presupuesto ha quedado cerrado.",
+      });
+      await queryClient.invalidateQueries({ queryKey: ["patient-budgets", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-findings", id] });
+      await queryClient.invalidateQueries({ queryKey: ["patient-invoices", id] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo facturar el presupuesto",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  function addFindingWithThreeOptionsToDraft(finding: {
+    id: string;
+    tooth_number: string;
+    surfaces?: string[];
+    diagnosis: string;
+    notes?: string;
+  }) {
+    const block = buildThreeOptionsForFinding(finding);
+    setDraftFindingBlocks((prev) => {
+      const exists = prev.some((b) => b.finding_id === finding.id && finding.id !== "");
+      if (exists) {
+        return prev.map((b) => (b.finding_id === finding.id ? block : b));
+      }
+      return [...prev, block];
+    });
+    notify({
+      tone: "success",
+      title: `3 opciones generadas para Pieza #${finding.tooth_number}`,
+      description: "Opción 1: Extracción · Opción 2: Reconstrucción · Opción 3: Extracción + Implante.",
+    });
+  }
+
+  function addFindingSingleOptionToDraft(finding: {
+    id: string;
+    tooth_number: string;
+    surfaces?: string[];
+    diagnosis: string;
+    notes?: string;
+  }) {
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const newBlock: BudgetFindingBlockUI = {
+      finding_id: finding.id,
+      tooth_number: finding.tooth_number || "General",
+      surfaces: finding.surfaces ?? [],
+      diagnosis: finding.diagnosis,
+      notes: finding.notes,
+      options: [
+        {
+          id: `opt-${stamp}-1`,
+          option_label: "Opción 1",
+          name: `Tratamiento conservador pieza ${finding.tooth_number}`,
+          description: finding.diagnosis,
+          is_recommended: true,
+          total_cents: 6000,
+          patient_response: "PENDING",
+          items: [
+            {
+              id: `it-${stamp}-1`,
+              treatment_code: "OBTURACION_SIMPLE",
+              description: `Obturación / Reconstrucción (Pieza ${finding.tooth_number})`,
+              tooth_number: finding.tooth_number,
+              quantity: 1,
+              unit_price_cents: 6000,
+            },
+          ],
+        },
+      ],
+    };
+    setDraftFindingBlocks((prev) => [...prev, newBlock]);
+  }
+
+  // Import pathologies from current odontogram to findings & multi-option budget (F1 -> F7 link)
   function importFromOdontogram() {
+    const newBlocks: BudgetFindingBlockUI[] = [];
     const newItems: InvoiceLineItem[] = [];
+
     for (const [toothStr, t] of Object.entries(teeth)) {
       const toothNum = Number(toothStr);
+      const affectedSurfaces = Object.entries(t.surfaces || {})
+        .filter(([, st]) => st === "caries" || st === "planned")
+        .map(([surf]) => surf);
       const hasCaries = Object.values(t.surfaces || {}).some((s) => s === "caries");
       const hasPlanned = Object.values(t.surfaces || {}).some((s) => s === "planned");
-      if (hasCaries || hasPlanned) {
+
+      if (hasCaries || hasPlanned || t.general_status === "endodontics" || t.general_status === "crown") {
+        const diag =
+          t.notes?.trim() ||
+          (affectedSurfaces.length >= 3
+            ? `Pieza ${toothNum} en muy mal estado (${affectedSurfaces.length} caras afectadas)`
+            : `Patología / Caries en pieza ${toothNum}`);
+        const fId = `odo-${toothNum}-${Date.now()}`;
+        newBlocks.push(
+          buildThreeOptionsForFinding({
+            id: fId,
+            tooth_number: String(toothNum),
+            surfaces: affectedSurfaces,
+            diagnosis: diag,
+            notes: t.notes,
+          }),
+        );
+        createFindingMutation.mutate({
+          tooth_number: String(toothNum),
+          surfaces: affectedSurfaces,
+          pathology_code: affectedSurfaces.length >= 3 ? "SEVERE_DAMAGE" : "CARIES",
+          diagnosis: diag,
+          severity: affectedSurfaces.length >= 3 ? "HIGH" : "MEDIUM",
+          notes: t.notes,
+        });
         newItems.push({
           id: `imp-${toothNum}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           description: `Obturación / Tratamiento pieza ${toothNum}`,
@@ -287,6 +731,24 @@ export function PatientDetailPage() {
           taxRatePercent: 0,
         });
       } else if (t.general_status === "missing") {
+        const diag = t.notes?.trim() || `Ausencia dental / Pieza ${toothNum} irrecuperable`;
+        newBlocks.push(
+          buildThreeOptionsForFinding({
+            id: `odo-${toothNum}-${Date.now()}`,
+            tooth_number: String(toothNum),
+            surfaces: [],
+            diagnosis: diag,
+            notes: t.notes,
+          }),
+        );
+        createFindingMutation.mutate({
+          tooth_number: String(toothNum),
+          surfaces: [],
+          pathology_code: "MISSING_TOOTH",
+          diagnosis: diag,
+          severity: "MEDIUM",
+          notes: t.notes,
+        });
         newItems.push({
           id: `imp-${toothNum}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           description: `Extracción / Prótesis pieza ${toothNum}`,
@@ -297,20 +759,21 @@ export function PatientDetailPage() {
         });
       }
     }
-    if (newItems.length === 0) {
+    if (newBlocks.length === 0) {
       notify({
         tone: "info",
         title: "Sin hallazgos pendientes",
-        description: "No se han detectado piezas con caries o tratamientos planificados en el odontograma actual.",
+        description: "No se han detectado piezas con patologías o tratamientos planificados en el odontograma actual.",
       });
       return;
     }
+    setDraftFindingBlocks((prev) => [...prev, ...newBlocks]);
     setInvoiceLines((prev) => [...prev, ...newItems]);
     setActiveTab("billing");
     notify({
       tone: "success",
-      title: "Tratamientos importados",
-      description: `Se han añadido ${newItems.length} partida(s) desde el odontograma al presupuesto.`,
+      title: "Hallazgos registrados y opciones generadas",
+      description: `Se han registrado ${newBlocks.length} hallazgo(s) del odontograma con sus alternativas de tratamiento.`,
     });
   }
 
@@ -364,7 +827,7 @@ export function PatientDetailPage() {
 
   function handleToggleSurface(toothNum: number, surface: ToothSurfaceName, nextStatus: ToothSurfaceStatus) {
     setSelectedTooth(toothNum);
-    setTeeth((prev) => {
+    applyOdontogramChange(`Pieza #${toothNum} · Cara ${surface}: ${nextStatus}`, (prev) => {
       const base = prev[toothNum] ?? emptyTooth(toothNum);
       if (nextStatus === "missing") {
         return {
@@ -387,7 +850,7 @@ export function PatientDetailPage() {
   }
 
   function setToothGeneralStatus(toothNum: number, status: NonNullable<ToothState["general_status"]>) {
-    setTeeth((prev) => {
+    applyOdontogramChange(`Pieza #${toothNum} · Estado: ${status}`, (prev) => {
       const base = prev[toothNum] ?? emptyTooth(toothNum);
       return { ...prev, [toothNum]: { ...base, general_status: status } };
     });
@@ -446,6 +909,42 @@ export function PatientDetailPage() {
   const activeToothNum = selectedTooth ?? 16;
   const activeToothState = teeth[activeToothNum] ?? emptyTooth(activeToothNum);
   const activeToothInfo = getFdiToothInfo(activeToothNum);
+
+  const initialOdo = odontogramQuery.data?.odontograms.find((o) => o.type === "INITIAL");
+  const historicalOdo = odontogramQuery.data?.odontograms.find((o) => o.type === "HISTORICAL");
+  const initialToothState = (initialOdo?.teeth_data as Record<string, ToothState> | undefined)?.[
+    String(activeToothNum)
+  ];
+  const historicalToothState = (historicalOdo?.teeth_data as Record<string, ToothState> | undefined)?.[
+    String(activeToothNum)
+  ];
+
+  const selectedToothFindings = (findingsQuery.data?.findings ?? []).filter(
+    (f) => String(f.tooth_number) === String(activeToothNum),
+  );
+
+  const selectedToothPattern = new RegExp(`\\b(?:pieza|diente|peça)?\\s*#?${activeToothNum}\\b`, "i");
+  const selectedToothTimelineEntries = allRecords
+    .filter(
+      (r) =>
+        selectedToothPattern.test(r.content) ||
+        (r.attachments ?? []).some((att) => String(att.tooth_number) === String(activeToothNum)),
+    )
+    .map((r) => ({
+      id: r.id,
+      entryType: r.entry_type,
+      content: r.content,
+      doctorName: r.doctor_name ?? "Facultativo",
+      createdAt: new Date(r.created_at).toLocaleString("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      amendsEntryId: r.amends_entry_id,
+      attachments: r.attachments,
+    }));
 
   const surfaceCycle: ToothSurfaceStatus[] = ["healthy", "caries", "restored", "planned"];
   const surfaceShortLabels: Array<{ key: ToothSurfaceName; short: string; label: string }> = [
@@ -586,6 +1085,15 @@ export function PatientDetailPage() {
             </div>
 
             <PermissionGate me={me} permission="clinical:write">
+              <OdontogramAutosaveUndoBar
+                autosaveStatus={autosaveStatus}
+                lastSavedAt={lastSavedAt}
+                undoCount={undoStack.length}
+                lastUndoLabel={undoStack[0]?.label}
+                canWriteClinical={canWriteClinical}
+                onUndo={handleUndoOdontogram}
+                onRetrySave={() => saveOdontogramMutation.mutate({ teethData: teeth, silent: false })}
+              />
               <Button
                 variant="outline"
                 size="sm"
@@ -599,7 +1107,7 @@ export function PatientDetailPage() {
               <Button
                 size="sm"
                 className="min-h-[30px] px-3 py-1 text-xs"
-                onClick={() => saveOdontogramMutation.mutate()}
+                onClick={() => saveOdontogramMutation.mutate({ teethData: teeth, silent: false })}
                 loading={saveOdontogramMutation.isPending}
               >
                 <Save className="h-3.5 w-3.5" />
@@ -651,6 +1159,8 @@ export function PatientDetailPage() {
                       compact={true}
                       dentition={odontogramDentition}
                       onDentitionChange={setOdontogramDentition}
+                      displayMode={odontogramDisplayMode}
+                      onDisplayModeChange={setOdontogramDisplayMode}
                       activeTool={odontogramTool}
                       onToolChange={setOdontogramTool}
                       selectedTooth={activeToothNum}
@@ -716,9 +1226,22 @@ export function PatientDetailPage() {
                           onClick={() => {
                             const st: ToothSurfaceStatus =
                               odontogramTool === "caries" || odontogramTool === "planned" ? odontogramTool : "restored";
-                            handleToggleSurface(activeToothNum, "mesial", st);
-                            handleToggleSurface(activeToothNum, "occlusal", st);
-                            handleToggleSurface(activeToothNum, "distal", st);
+                            applyOdontogramChange(`Pieza #${activeToothNum} · Preset MOD (${st})`, (prev) => {
+                              const base = prev[activeToothNum] ?? emptyTooth(activeToothNum);
+                              return {
+                                ...prev,
+                                [activeToothNum]: {
+                                  ...base,
+                                  general_status: base.general_status === "missing" ? "present" : base.general_status,
+                                  surfaces: {
+                                    ...base.surfaces,
+                                    mesial: st,
+                                    occlusal: st,
+                                    distal: st,
+                                  },
+                                },
+                              };
+                            });
                           }}
                           className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
                           title="Aplicar en Mesial, Oclusal y Distal"
@@ -729,10 +1252,10 @@ export function PatientDetailPage() {
                           type="button"
                           disabled={!canWriteClinical}
                           onClick={() => {
-                            (["occlusal", "mesial", "distal", "vestibular", "lingual"] as ToothSurfaceName[]).forEach(
-                              (surf) => handleToggleSurface(activeToothNum, surf, "healthy"),
-                            );
-                            setToothGeneralStatus(activeToothNum, "present");
+                            applyOdontogramChange(`Pieza #${activeToothNum} · Limpiar pieza a estado sano`, (prev) => ({
+                              ...prev,
+                              [activeToothNum]: emptyTooth(activeToothNum),
+                            }));
                           }}
                           className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-red-50 hover:text-red-700"
                           title="Limpiar pieza a estado sano"
@@ -786,16 +1309,67 @@ export function PatientDetailPage() {
                         value={activeToothState.notes ?? ""}
                         onChange={(e) => {
                           const notes = e.target.value;
-                          setTeeth((prev) => {
-                            const base = prev[activeToothNum] ?? emptyTooth(activeToothNum);
-                            return { ...prev, [activeToothNum]: { ...base, notes } };
-                          });
+                          applyOdontogramChange(
+                            `Pieza #${activeToothNum} · Nota clínica`,
+                            (prev) => {
+                              const base = prev[activeToothNum] ?? emptyTooth(activeToothNum);
+                              return { ...prev, [activeToothNum]: { ...base, notes } };
+                            },
+                            600,
+                          );
                         }}
                         placeholder={`Nota rápida pieza ${activeToothNum} (sensibilidad, bolsa…)`}
-                        className="h-7 flex-1 min-w-[180px] rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none"
+                        className="h-7 flex-1 min-w-[160px] rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none"
                       />
+
+                      {canWriteClinical ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const affectedSurfaces = Object.entries(activeToothState.surfaces || {})
+                              .filter(([, st]) => st !== "healthy")
+                              .map(([surf]) => surf);
+                            const diag =
+                              activeToothState.notes?.trim() ||
+                              `Pieza ${activeToothNum} en mal estado (${activeToothInfo.name})`;
+                            createFindingMutation.mutate(
+                              {
+                                tooth_number: String(activeToothNum),
+                                surfaces: affectedSurfaces,
+                                pathology_code: "SEVERE_DAMAGE",
+                                diagnosis: diag,
+                                severity: "HIGH",
+                                notes: activeToothState.notes ?? "",
+                              },
+                              {
+                                onSuccess: (res) => {
+                                  addFindingWithThreeOptionsToDraft(res.finding);
+                                },
+                              },
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-2xs hover:bg-amber-700 transition"
+                          title="Registrar este descubrimiento en Hallazgos/Presupuestos con sus opciones de tratamiento"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Registrar hallazgo pieza #{activeToothNum}</span>
+                        </button>
+                      ) : null}
                     </div>
                   </div>
+
+                  {/* Bottom Section of Selected Tooth: Graphical Evolution of Changes + Clinical History of Selected Tooth */}
+                  <SelectedToothEvolutionAndHistoryPanel
+                    toothNumber={activeToothNum}
+                    initialToothState={initialToothState}
+                    historicalToothState={historicalToothState}
+                    currentToothState={activeToothState}
+                    findings={selectedToothFindings}
+                    records={selectedToothTimelineEntries}
+                    displayMode={odontogramDisplayMode}
+                    onSelectTooth={(num) => setSelectedTooth(num)}
+                    onPreviewAttachment={(att) => setPreviewAttachment(att)}
+                  />
                 </div>
               )}
             </FeatureGate>
@@ -872,6 +1446,7 @@ export function PatientDetailPage() {
                         compact={true}
                         selectedTooth={activeToothNum}
                         onSelectTooth={(tNum) => setSelectedTooth(tNum)}
+                        onPreviewAttachment={(att) => setPreviewAttachment(att)}
                         entries={displayedRecords.map((r) => ({
                           id: r.id,
                           entryType: r.entry_type,
@@ -879,6 +1454,7 @@ export function PatientDetailPage() {
                           doctorName: r.doctor_name,
                           createdAt: new Date(r.created_at).toLocaleString("es-ES"),
                           amendsEntryId: r.amends_entry_id,
+                          attachments: r.attachments,
                         }))}
                       />
                     )}
@@ -889,7 +1465,7 @@ export function PatientDetailPage() {
                     <form
                       onSubmit={(e: FormEvent) => {
                         e.preventDefault();
-                        if (!entryContent.trim()) return;
+                        if (!entryContent.trim() && draftAttachments.length === 0) return;
                         createRecordMutation.mutate();
                       }}
                       className="shrink-0 space-y-2 border-t border-slate-200 bg-slate-50/90 pt-2.5 -mx-3 -mb-3 px-3 pb-3 rounded-b-xl"
@@ -940,6 +1516,117 @@ export function PatientDetailPage() {
                         ) : null}
                       </div>
 
+                      {/* Attachments Toolbar: Upload images (photos / X-rays) or documents */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-100">
+                          <Plus className="h-3 w-3 text-brand-700" />
+                          <span>Adjuntar archivo</span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf,.doc,.docx"
+                            className="hidden"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files ?? []);
+                              files.forEach((file) => {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const dataUrl = String(reader.result || "");
+                                  const lower = file.name.toLowerCase();
+                                  const kind: ClinicalAttachmentUI["kind"] =
+                                    lower.includes("rx") ||
+                                    lower.includes("radio") ||
+                                    lower.includes("orto") ||
+                                    lower.includes("periapical")
+                                      ? "XRAY"
+                                      : file.type.startsWith("image/")
+                                      ? "PHOTO"
+                                      : "DOCUMENT";
+                                  setDraftAttachments((prev) => [
+                                    ...prev,
+                                    {
+                                      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                      kind,
+                                      name: file.name,
+                                      mime_type: file.type || "application/octet-stream",
+                                      data_url: dataUrl,
+                                      size_bytes: file.size,
+                                      tooth_number: linkRecordToTooth ? String(activeToothNum) : undefined,
+                                    },
+                                  ]);
+                                };
+                                reader.readAsDataURL(file);
+                              });
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftAttachments((prev) => [
+                              ...prev,
+                              buildSampleClinicalAttachment("XRAY", activeToothNum),
+                            ])
+                          }
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-brand-800 hover:bg-brand-50"
+                          title="Adjuntar radiografía periapical al historial"
+                        >
+                          + Radiografía
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftAttachments((prev) => [
+                              ...prev,
+                              buildSampleClinicalAttachment("PHOTO", activeToothNum),
+                            ])
+                          }
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-emerald-800 hover:bg-emerald-50"
+                          title="Adjuntar fotografía intraoral al historial"
+                        >
+                          + Foto clínica
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftAttachments((prev) => [
+                              ...prev,
+                              buildSampleClinicalAttachment("DOCUMENT", activeToothNum),
+                            ])
+                          }
+                          className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-100"
+                          title="Adjuntar documento o consentimiento informado al historial"
+                        >
+                          + Documento
+                        </button>
+                      </div>
+
+                      {draftAttachments.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 rounded-lg border border-brand-200 bg-white p-1.5">
+                          {draftAttachments.map((att) => (
+                            <span
+                              key={att.id}
+                              className="inline-flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-900"
+                            >
+                              <span>
+                                [{att.kind === "XRAY" ? "Rx" : att.kind === "PHOTO" ? "Foto" : "Doc"}] {att.name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDraftAttachments((prev) => prev.filter((x) => x.id !== att.id))
+                                }
+                                className="text-slate-400 hover:text-red-600"
+                                title="Quitar adjunto"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
                       <div className="flex gap-2">
                         <textarea
                           rows={2}
@@ -948,10 +1635,10 @@ export function PatientDetailPage() {
                           onChange={(e) => setEntryContent(e.target.value)}
                           placeholder={
                             linkRecordToTooth
-                              ? `Registrar evolución para [Pieza ${activeToothNum}] (hallazgos, anestesia, obturación…)`
-                              : "Motivo, hallazgos, anestesia, recomendaciones…"
+                              ? `Registrar evolución para [Pieza ${activeToothNum}] (hallazgos, anestesia, radiografía, obturación…)`
+                              : "Motivo, hallazgos, radiografías, anestesia, recomendaciones…"
                           }
-                          required
+                          required={draftAttachments.length === 0}
                           className="w-full flex-1 rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />
                         <Button
@@ -1102,183 +1789,876 @@ export function PatientDetailPage() {
           </form>
         </div>
       ) : (
-        /* VIEW 3: PRESUPUESTOS Y FACTURACIÓN */
+        /* VIEW 3: HALLAZGOS DEL ODONTOGRAMA, PRESUPUESTOS MULTI-OPCIÓN Y FACTURACIÓN */
         <div className="flex-1 min-h-0 overflow-y-auto">
           <FeatureGate me={me} feature="billing_pdf">
-            <div className="space-y-4">
-              <PermissionGate me={me} permission="billing:write">
+            <div className="grid gap-4 lg:grid-cols-12">
+              {/* LEFT COLUMN (4 cols): APARTADO DE HALLAZGOS CLÍNICOS */}
+              <div className="lg:col-span-4 space-y-4">
                 <Card
-                  title="Nuevo presupuesto o factura"
-                  description="Añade conceptos o importa automáticamente los tratamientos desde el odontograma"
+                  title="Hallazgos del Odontograma"
+                  description="Descubrimientos clínicos registrados durante la exploración dental"
                   footer={
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <Button variant="outline" size="sm" onClick={importFromOdontogram}>
-                        <Sparkles className="h-4 w-4" />
-                        Importar hallazgos del odontograma
-                      </Button>
-                      <Button
-                        onClick={() => createInvoiceMutation.mutate()}
-                        loading={createInvoiceMutation.isPending}
-                        disabled={invoiceLines.length === 0}
-                      >
-                        <Receipt className="h-4 w-4" />
-                        Emitir documento
-                      </Button>
-                    </div>
+                    <Button variant="outline" size="sm" onClick={importFromOdontogram}>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Sincronizar odontograma
+                    </Button>
                   }
                 >
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div className="w-32">
-                        <Input
-                          label="Serie"
-                          value={invoiceSeries}
-                          onChange={(e) => setInvoiceSeries(e.target.value.toUpperCase())}
-                          placeholder="FAC"
-                        />
-                      </div>
-                    </div>
+                  <div className="space-y-3">
+                    {/* Quick New Finding Form */}
+                    <PermissionGate me={me} permission="billing:write">
+                      <form
+                        onSubmit={(e: FormEvent) => {
+                          e.preventDefault();
+                          if (!newFindingDiagnosis.trim()) return;
+                          createFindingMutation.mutate({
+                            tooth_number: newFindingTooth.trim() || "General",
+                            diagnosis: newFindingDiagnosis.trim(),
+                            severity: newFindingSeverity,
+                            notes: newFindingNotes.trim(),
+                          });
+                        }}
+                        className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2.5"
+                      >
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                          Registrar nuevo hallazgo clínico
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input
+                            label="Pieza dental"
+                            value={newFindingTooth}
+                            onChange={(e) => setNewFindingTooth(e.target.value)}
+                            placeholder="26"
+                            required
+                          />
+                          <Select
+                            label="Prioridad"
+                            value={newFindingSeverity}
+                            onChange={(v) => setNewFindingSeverity(v as "LOW" | "MEDIUM" | "HIGH")}
+                            placeholder=""
+                            options={[
+                              { value: "HIGH", label: "Alta / Urgente" },
+                              { value: "MEDIUM", label: "Media" },
+                              { value: "LOW", label: "Baja / Seguimiento" },
+                            ]}
+                          />
+                        </div>
 
-                    <InvoiceLineEditor lines={invoiceLines} currency="USD" onChange={setInvoiceLines} />
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-slate-700">
+                            Diagnóstico / Descubrimiento
+                          </label>
+                          <select
+                            aria-label="Plantilla de hallazgo"
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) setNewFindingDiagnosis(e.target.value);
+                            }}
+                            className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                          >
+                            <option value="">Seleccionar plantilla rápida o escribir abajo…</option>
+                            <option value={`Pieza ${newFindingTooth} en muy mal estado (pronóstico reservado)`}>
+                              Pieza en muy mal estado (Extracción vs Reconstrucción vs Implante)
+                            </option>
+                            <option value={`Caries profunda con afectación pulpar en pieza ${newFindingTooth}`}>
+                              Caries profunda con afectación pulpar
+                            </option>
+                            <option value={`Ausencia dental en pieza ${newFindingTooth}`}>
+                              Ausencia dental a rehabilitar
+                            </option>
+                            <option value={`Fractura coronaria en pieza ${newFindingTooth}`}>
+                              Fractura coronaria
+                            </option>
+                          </select>
+                          <input
+                            type="text"
+                            value={newFindingDiagnosis}
+                            onChange={(e) => setNewFindingDiagnosis(e.target.value)}
+                            placeholder="Descripción del hallazgo clínico…"
+                            required
+                            className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs text-slate-900"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <Button
+                            type="submit"
+                            size="sm"
+                            loading={createFindingMutation.isPending}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Guardar hallazgo
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (!newFindingDiagnosis.trim()) return;
+                              createFindingMutation.mutate(
+                                {
+                                  tooth_number: newFindingTooth.trim() || "General",
+                                  diagnosis: newFindingDiagnosis.trim(),
+                                  severity: newFindingSeverity,
+                                  notes: newFindingNotes.trim(),
+                                },
+                                {
+                                  onSuccess: (res) => {
+                                    addFindingWithThreeOptionsToDraft(res.finding);
+                                  },
+                                },
+                              );
+                            }}
+                          >
+                            + Guardar y crear 3 tratamientos
+                          </Button>
+                        </div>
+                      </form>
+                    </PermissionGate>
+
+                    {/* Registered Findings List */}
+                    {findingsQuery.isLoading ? (
+                      <Skeleton className="h-28 w-full" />
+                    ) : (findingsQuery.data?.findings.length ?? 0) === 0 ? (
+                      <Alert tone="neutral">
+                        No hay hallazgos registrados todavía. Marca patologías en el odontograma o añade un hallazgo arriba.
+                      </Alert>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {(findingsQuery.data?.findings ?? []).map((f) => {
+                          const isClosed = f.status === "INVOICED" || f.status === "DISCARDED";
+                          return (
+                            <div
+                              key={f.id}
+                              className={cn(
+                                "rounded-xl border p-3 space-y-2 transition",
+                                isClosed
+                                  ? "border-slate-200 bg-slate-50/60 opacity-75"
+                                  : "border-slate-200 bg-white shadow-2xs",
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[11px] font-extrabold text-white tabular-nums">
+                                      Pieza #{f.tooth_number}
+                                    </span>
+                                    <Badge
+                                      tone={
+                                        f.status === "ACCEPTED" || f.status === "INVOICED"
+                                          ? "success"
+                                          : f.status === "IN_BUDGET"
+                                          ? "info"
+                                          : f.status === "DISCARDED"
+                                          ? "neutral"
+                                          : "warning"
+                                      }
+                                      className="text-[10px]"
+                                    >
+                                      {f.status === "OPEN"
+                                        ? "Abierto / Sin presupuestar"
+                                        : f.status === "IN_BUDGET"
+                                        ? "En presupuesto"
+                                        : f.status === "ACCEPTED"
+                                        ? "Aceptado"
+                                        : f.status === "INVOICED"
+                                        ? "Cerrado (Facturado)"
+                                        : "Cancelado con nota clínica"}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs font-bold text-slate-900 mt-1">{f.diagnosis}</p>
+                                  {f.notes ? (
+                                    <p className="text-[11px] text-slate-600 mt-0.5">
+                                      Nota clínica: {f.notes}
+                                    </p>
+                                  ) : null}
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    ✓ Añadido automáticamente al historial clínico del paciente
+                                  </p>
+                                </div>
+                              </div>
+
+                              {!isClosed ? (
+                                <PermissionGate me={me} permission="billing:write">
+                                  <div className="space-y-2 border-t border-slate-100 pt-2">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => addFindingWithThreeOptionsToDraft(f)}
+                                        className="rounded-lg bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-700 transition"
+                                        title="Generar 3 opciones: Extracción vs Reconstrucción vs Extracción + Implante"
+                                      >
+                                        + 3 Tratamientos (Extracción / Reconstrucción / Implante)
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => addFindingSingleOptionToDraft(f)}
+                                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                                      >
+                                        + 1 Tratamiento
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setCancellingFindingId((prev) => (prev === f.id ? null : f.id));
+                                          setCancellationClinicalNote("");
+                                        }}
+                                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-red-50 hover:text-red-700"
+                                      >
+                                        Cancelar con nota clínica
+                                      </button>
+                                    </div>
+
+                                    {cancellingFindingId === f.id ? (
+                                      <div className="rounded-lg border border-red-200 bg-red-50/60 p-2.5 space-y-2">
+                                        <label className="block text-[11px] font-bold text-red-900">
+                                          Nota clínica obligatoria para cancelar el hallazgo (se registrará en el historial):
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={cancellationClinicalNote}
+                                          onChange={(e) => setCancellationClinicalNote(e.target.value)}
+                                          placeholder="Ej: Descartado tras radiografía periapical sin lesión activa…"
+                                          className="h-8 w-full rounded-md border border-red-300 bg-white px-2 text-xs text-slate-900"
+                                        />
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => {
+                                              setCancellingFindingId(null);
+                                              setCancellationClinicalNote("");
+                                            }}
+                                          >
+                                            Volver
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            disabled={!cancellationClinicalNote.trim()}
+                                            loading={updateFindingStatusMutation.isPending}
+                                            onClick={() =>
+                                              updateFindingStatusMutation.mutate({
+                                                findingId: f.id,
+                                                status: "DISCARDED",
+                                                notes: cancellationClinicalNote.trim(),
+                                              })
+                                            }
+                                          >
+                                            Confirmar cancelación y anotar en historial
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </PermissionGate>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </Card>
-              </PermissionGate>
+              </div>
 
-              <Card
-                title="Historial de facturas y presupuestos emitidos"
-                description="Comprobantes sanitarios con código QR de verificación"
-              >
-                {invoicesQuery.isLoading ? (
-                  <Skeleton className="h-32 w-full" />
-                ) : (invoicesQuery.data?.invoices.length ?? 0) === 0 ? (
-                  <Alert tone="neutral">
-                    No hay facturas ni presupuestos emitidos para este paciente todavía.
-                  </Alert>
-                ) : (
-                  <div className="space-y-4">
-                    {(invoicesQuery.data?.invoices ?? []).map((inv) => {
-                      const isPending = inv.paid_amount < inv.total_amount;
-                      return (
-                        <div
-                          key={inv.id}
-                          className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-slate-900">
-                                  {inv.series}-{inv.invoice_number}
-                                </span>
-                                <Badge
-                                  tone={
-                                    inv.status === "PAID"
-                                      ? "success"
-                                      : inv.status === "PARTIAL"
-                                      ? "warning"
-                                      : "neutral"
-                                  }
-                                >
-                                  {inv.status === "PAID"
-                                    ? "Cobrado"
-                                    : inv.status === "PARTIAL"
-                                    ? "Pago parcial"
-                                    : "Pendiente de cobro"}
-                                </Badge>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                Emitida: {new Date(inv.issue_date).toLocaleString("es-ES")}
-                              </p>
-                            </div>
-
-                            <div className="text-right tabular-nums">
-                              <p className="text-sm font-bold text-slate-900">
-                                Total: {formatMoney(inv.total_amount, "USD")}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                Pagado: {formatMoney(inv.paid_amount, "USD")}
-                              </p>
-                            </div>
-                          </div>
-
-                          <QRVerifierBlock
-                            documentNumber={`${inv.series}-${inv.invoice_number}`}
-                            verificationHash={inv.verification_hash || inv.id}
-                            onDownloadPdf={() => window.print()}
+              {/* RIGHT COLUMN (8 cols): PRESUPUESTOS POR TRATAMIENTOS Y RESPUESTA DEL CLIENTE */}
+              <div className="lg:col-span-8 space-y-4">
+                {/* 1. Constructor de Presupuesto Estructurado por Hallazgos y Opciones */}
+                <PermissionGate me={me} permission="billing:write">
+                  <Card
+                    title="Confección de Presupuesto por Hallazgos y Alternativas de Tratamiento"
+                    description="Cada hallazgo se sitúa arriba y debajo se detallan los diferentes tratamientos propuestos para que el cliente elija en casa"
+                    footer={
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="text-xs text-slate-600">
+                          {draftFindingBlocks.length === 0
+                            ? "Selecciona un hallazgo de la columna izquierda para añadir sus alternativas de tratamiento."
+                            : `${draftFindingBlocks.length} hallazgo(s) incluido(s) en este presupuesto.`}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {draftFindingBlocks.length > 0 ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDraftFindingBlocks([])}
+                            >
+                              Limpiar borrador
+                            </Button>
+                          ) : null}
+                          <Button
+                            onClick={() => createBudgetMutation.mutate()}
+                            loading={createBudgetMutation.isPending}
+                            disabled={draftFindingBlocks.length === 0}
+                          >
+                            <Receipt className="h-4 w-4" />
+                            Emitir presupuesto con opciones
+                          </Button>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <div className="space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="sm:col-span-2">
+                          <Input
+                            label="Título del presupuesto"
+                            value={budgetTitle}
+                            onChange={(e) => setBudgetTitle(e.target.value)}
+                            placeholder="Plan Rehabilitación Oral"
                           />
+                        </div>
+                        <Input
+                          label="Serie"
+                          value={budgetSeries}
+                          onChange={(e) => setBudgetSeries(e.target.value.toUpperCase())}
+                          placeholder="PRE"
+                        />
+                        <Select
+                          label="Tiempo de vigencia"
+                          value={budgetValidityDays}
+                          onChange={setBudgetValidityDays}
+                          placeholder=""
+                          options={[
+                            { value: "15", label: "15 días" },
+                            { value: "30", label: "30 días (Estándar)" },
+                            { value: "45", label: "45 días" },
+                            { value: "60", label: "60 días" },
+                            { value: "90", label: "90 días" },
+                            ...(!["15", "30", "45", "60", "90"].includes(budgetValidityDays)
+                              ? [{ value: budgetValidityDays, label: `${budgetValidityDays} días (Personalizado)` }]
+                              : []),
+                          ]}
+                        />
+                      </div>
 
-                          {isPending ? (
-                            <PermissionGate me={me} permission="billing:write">
-                              {payingInvoice?.id === inv.id ? (
-                                <form
-                                  className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
-                                  onSubmit={(e: FormEvent) => {
-                                    e.preventDefault();
-                                    recordPaymentMutation.mutate(inv.id);
-                                  }}
-                                >
-                                  <div className="w-40">
-                                    <Input
-                                      label="Importe (céntimos)"
-                                      type="number"
-                                      min={1}
-                                      max={inv.total_amount - inv.paid_amount}
-                                      value={paymentAmount}
-                                      onChange={(e) => setPaymentAmount(e.target.value)}
-                                      required
-                                    />
-                                  </div>
-                                  <div className="w-44">
-                                    <Select
-                                      label="Método de pago"
-                                      value={paymentMethod}
-                                      onChange={setPaymentMethod}
-                                      placeholder=""
-                                      options={[
-                                        { value: "CASH", label: "Efectivo" },
-                                        { value: "CARD", label: "Tarjeta / TPV" },
-                                        { value: "TRANSFER", label: "Transferencia" },
-                                      ]}
-                                    />
-                                  </div>
-                                  <Button type="submit" size="sm" loading={recordPaymentMutation.isPending}>
-                                    <CheckCircle2 className="h-4 w-4" />
-                                    Confirmar cobro
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => setPayingInvoice(null)}
-                                  >
-                                    Cancelar
-                                  </Button>
-                                </form>
-                              ) : (
-                                <div className="flex justify-end">
+                      {draftFindingBlocks.length > 0 ? (
+                        <div className="space-y-4">
+                          {draftFindingBlocks.map((blk, blkIdx) => (
+                            <div
+                              key={blk.finding_id || blkIdx}
+                              className="rounded-xl border border-brand-200 bg-brand-50/30 p-3.5 space-y-3"
+                            >
+                              <div className="flex items-center justify-between gap-2 border-b border-brand-200/80 pb-2">
+                                <div>
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-800">
+                                    Hallazgo #{blkIdx + 1} · Pieza {blk.tooth_number}
+                                  </span>
+                                  <h4 className="text-sm font-bold text-slate-900">{blk.diagnosis}</h4>
+                                </div>
+                                <div className="flex items-center gap-2">
                                   <Button
                                     size="sm"
-                                    variant="secondary"
+                                    variant="outline"
                                     onClick={() => {
-                                      setPayingInvoice(inv);
-                                      setPaymentAmount(String(inv.total_amount - inv.paid_amount));
+                                      setDraftFindingBlocks((prev) =>
+                                        prev.map((b, idx) => {
+                                          if (idx !== blkIdx) return b;
+                                          const nextNum = b.options.length + 1;
+                                          const newOpt: BudgetTreatmentOptionUI = {
+                                            id: `opt-${Date.now()}-${nextNum}`,
+                                            option_label: `Opción ${nextNum}`,
+                                            name: `Alternativa de tratamiento ${nextNum}`,
+                                            is_recommended: false,
+                                            total_cents: 6000,
+                                            patient_response: "PENDING",
+                                            items: [
+                                              {
+                                                id: `it-${Date.now()}-${nextNum}`,
+                                                description: `Tratamiento pieza ${b.tooth_number}`,
+                                                tooth_number: b.tooth_number,
+                                                quantity: 1,
+                                                unit_price_cents: 6000,
+                                              },
+                                            ],
+                                          };
+                                          return { ...b, options: [...b.options, newOpt] };
+                                        }),
+                                      );
                                     }}
                                   >
-                                    Registrar cobro
+                                    + Añadir otra opción de tratamiento
                                   </Button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setDraftFindingBlocks((prev) =>
+                                        prev.filter((_, idx) => idx !== blkIdx),
+                                      )
+                                    }
+                                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                    title="Quitar hallazgo del borrador"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
                                 </div>
-                              )}
-                            </PermissionGate>
-                          ) : null}
+                              </div>
+
+                              {/* Treatment Alternatives Editor under this Finding */}
+                              <div className="grid gap-3 md:grid-cols-3">
+                                {blk.options.map((opt, optIdx) => (
+                                  <div
+                                    key={opt.id}
+                                    className="rounded-xl border border-slate-200 bg-white p-3 space-y-2 shadow-2xs"
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-[11px] font-extrabold uppercase text-brand-700">
+                                        {opt.option_label}
+                                      </span>
+                                      <label className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+                                        <input
+                                          type="checkbox"
+                                          checked={opt.is_recommended}
+                                          onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setDraftFindingBlocks((prev) =>
+                                              prev.map((b, i) =>
+                                                i !== blkIdx
+                                                  ? b
+                                                  : {
+                                                      ...b,
+                                                      options: b.options.map((o, j) =>
+                                                        j === optIdx
+                                                          ? { ...o, is_recommended: checked }
+                                                          : o,
+                                                      ),
+                                                    },
+                                              ),
+                                            );
+                                          }}
+                                        />
+                                        Recomendado
+                                      </label>
+                                    </div>
+
+                                    <input
+                                      type="text"
+                                      value={opt.name}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setDraftFindingBlocks((prev) =>
+                                          prev.map((b, i) =>
+                                            i !== blkIdx
+                                              ? b
+                                              : {
+                                                  ...b,
+                                                  options: b.options.map((o, j) =>
+                                                    j === optIdx ? { ...o, name: val } : o,
+                                                  ),
+                                                },
+                                          ),
+                                        );
+                                      }}
+                                      className="h-8 w-full rounded-md border border-slate-300 px-2 text-xs font-bold text-slate-900"
+                                    />
+
+                                    <div className="space-y-1.5">
+                                      {opt.items.map((it, itIdx) => (
+                                        <div key={it.id} className="flex items-center gap-1 text-xs">
+                                          <input
+                                            type="text"
+                                            value={it.description}
+                                            onChange={(e) => {
+                                              const desc = e.target.value;
+                                              setDraftFindingBlocks((prev) =>
+                                                prev.map((b, i) =>
+                                                  i !== blkIdx
+                                                    ? b
+                                                    : {
+                                                        ...b,
+                                                        options: b.options.map((o, j) =>
+                                                          j !== optIdx
+                                                            ? o
+                                                            : {
+                                                                ...o,
+                                                                items: o.items.map((item, k) =>
+                                                                  k === itIdx
+                                                                    ? { ...item, description: desc }
+                                                                    : item,
+                                                                ),
+                                                              },
+                                                        ),
+                                                      },
+                                                ),
+                                              );
+                                            }}
+                                            className="h-7 flex-1 min-w-0 rounded border border-slate-200 px-1.5 text-[11px]"
+                                          />
+                                          <input
+                                            type="number"
+                                            step="1"
+                                            min={0}
+                                            value={Math.round(it.unit_price_cents / 100)}
+                                            onChange={(e) => {
+                                              const cents = Math.round(
+                                                (Number(e.target.value) || 0) * 100,
+                                              );
+                                              setDraftFindingBlocks((prev) =>
+                                                prev.map((b, i) =>
+                                                  i !== blkIdx
+                                                    ? b
+                                                    : {
+                                                        ...b,
+                                                        options: b.options.map((o, j) => {
+                                                          if (j !== optIdx) return o;
+                                                          const nextItems = o.items.map(
+                                                            (item, k) =>
+                                                              k === itIdx
+                                                                ? {
+                                                                    ...item,
+                                                                    unit_price_cents: cents,
+                                                                  }
+                                                                : item,
+                                                          );
+                                                          const nextTotal = nextItems.reduce(
+                                                            (s, x) =>
+                                                              s +
+                                                              (x.quantity || 1) * x.unit_price_cents,
+                                                            0,
+                                                          );
+                                                          return {
+                                                            ...o,
+                                                            items: nextItems,
+                                                            total_cents: nextTotal,
+                                                          };
+                                                        }),
+                                                      },
+                                                ),
+                                              );
+                                            }}
+                                            className="h-7 w-16 rounded border border-slate-200 px-1.5 text-right text-[11px] tabular-nums"
+                                          />
+                                        </div>
+                                      ))}
+
+                                      {/* Add procedure from Treatments Catalog */}
+                                      {(treatmentsCatalogQuery.data?.treatments.length ?? 0) > 0 ? (
+                                        <select
+                                          aria-label="Añadir acto clínico del catálogo"
+                                          value=""
+                                          onChange={(e) => {
+                                            const trt = treatmentsCatalogQuery.data?.treatments.find(
+                                              (t) => t.id === e.target.value,
+                                            );
+                                            if (!trt) return;
+                                            const priceCents = Math.round(
+                                              (trt.default_price || 50) * 100,
+                                            );
+                                            setDraftFindingBlocks((prev) =>
+                                              prev.map((b, i) =>
+                                                i !== blkIdx
+                                                  ? b
+                                                  : {
+                                                      ...b,
+                                                      options: b.options.map((o, j) => {
+                                                        if (j !== optIdx) return o;
+                                                        const nextItems = [
+                                                          ...o.items,
+                                                          {
+                                                            id: `it-${Date.now()}`,
+                                                            treatment_code: trt.code,
+                                                            description: `${trt.name} (Pieza ${b.tooth_number})`,
+                                                            tooth_number: b.tooth_number,
+                                                            quantity: 1,
+                                                            unit_price_cents: priceCents,
+                                                          },
+                                                        ];
+                                                        return {
+                                                          ...o,
+                                                          items: nextItems,
+                                                          total_cents: nextItems.reduce(
+                                                            (s, x) =>
+                                                              s +
+                                                              (x.quantity || 1) * x.unit_price_cents,
+                                                            0,
+                                                          ),
+                                                        };
+                                                      }),
+                                                    },
+                                              ),
+                                            );
+                                          }}
+                                          className="h-7 w-full rounded border border-dashed border-slate-300 bg-slate-50 px-1.5 text-[11px] text-slate-600"
+                                        >
+                                          <option value="">+ Añadir acto del catálogo…</option>
+                                          {(treatmentsCatalogQuery.data?.treatments ?? []).map(
+                                            (t) => (
+                                              <option key={t.id} value={t.id}>
+                                                {t.name} ({t.default_price} €)
+                                              </option>
+                                            ),
+                                          )}
+                                        </select>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </Card>
+                      ) : null}
+                    </div>
+                  </Card>
+                </PermissionGate>
+
+                {/* 2. Presupuestos Emitidos y Registro de Aceptación del Cliente por Tratamiento */}
+                <Card
+                  title="Presupuestos del Cliente y Respuesta por Tratamiento"
+                  description="Registra qué opción de tratamiento acepta o descarta el paciente cuando regresa con su decisión"
+                >
+                  {budgetsQuery.isLoading ? (
+                    <Skeleton className="h-32 w-full" />
+                  ) : (budgetsQuery.data?.budgets.length ?? 0) === 0 ? (
+                    <Alert tone="neutral">
+                      Todavía no hay presupuestos estructurados por tratamientos para este cliente.
+                    </Alert>
+                  ) : (
+                    <div className="space-y-4">
+                      {(budgetsQuery.data?.budgets ?? []).map((bud) => (
+                        <PatientBudgetCard
+                          key={bud.id}
+                          budget={bud}
+                          currency="EUR"
+                          canWrite={can(me, "billing:write")}
+                          loading={
+                            respondBudgetOptionMutation.isPending ||
+                            updateBudgetStatusMutation.isPending ||
+                            convertBudgetToInvoiceMutation.isPending
+                          }
+                          onRespondOption={(budgetId, findingId, optionId, response) =>
+                            respondBudgetOptionMutation.mutate({
+                              budgetId,
+                              findingId,
+                              optionId,
+                              response,
+                            })
+                          }
+                          onUpdateStatus={(budgetId, status, validityDays) =>
+                            updateBudgetStatusMutation.mutate({
+                              budgetId,
+                              status,
+                              validityDays,
+                            })
+                          }
+                          onConvertToInvoice={(budgetId) =>
+                            convertBudgetToInvoiceMutation.mutate(budgetId)
+                          }
+                          onPrintFormat={(b) => setPrintingBudget(b)}
+                          onCreateNewBudgetForFinding={(finding) =>
+                            addFindingWithThreeOptionsToDraft(finding)
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
+                </Card>
+
+                {/* 3. Facturación Directa e Historial de Facturas (FAC-X) */}
+                <PermissionGate me={me} permission="billing:write">
+                  <Card
+                    title="Nuevo presupuesto o factura directa"
+                    description="Añade conceptos sueltos o importa partidas rápidas desde el odontograma"
+                    footer={
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Button variant="outline" size="sm" onClick={importFromOdontogram}>
+                          <Sparkles className="h-4 w-4" />
+                          Importar hallazgos del odontograma
+                        </Button>
+                        <Button
+                          onClick={() => createInvoiceMutation.mutate()}
+                          loading={createInvoiceMutation.isPending}
+                          disabled={invoiceLines.length === 0}
+                        >
+                          <Receipt className="h-4 w-4" />
+                          Emitir documento
+                        </Button>
+                      </div>
+                    }
+                  >
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="w-32">
+                          <Input
+                            label="Serie"
+                            value={invoiceSeries}
+                            onChange={(e) => setInvoiceSeries(e.target.value.toUpperCase())}
+                            placeholder="FAC"
+                          />
+                        </div>
+                      </div>
+
+                      <InvoiceLineEditor lines={invoiceLines} currency="USD" onChange={setInvoiceLines} />
+                    </div>
+                  </Card>
+                </PermissionGate>
+
+                <Card
+                  title="Historial de facturas y presupuestos emitidos"
+                  description="Comprobantes sanitarios con código QR de verificación"
+                >
+                  {invoicesQuery.isLoading ? (
+                    <Skeleton className="h-32 w-full" />
+                  ) : (invoicesQuery.data?.invoices.length ?? 0) === 0 ? (
+                    <Alert tone="neutral">
+                      No hay facturas ni presupuestos emitidos para este paciente todavía.
+                    </Alert>
+                  ) : (
+                    <div className="space-y-4">
+                      {(invoicesQuery.data?.invoices ?? []).map((inv) => {
+                        const isPending = inv.paid_amount < inv.total_amount;
+                        return (
+                          <div
+                            key={inv.id}
+                            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-slate-900">
+                                    {inv.series}-{inv.invoice_number}
+                                  </span>
+                                  <Badge
+                                    tone={
+                                      inv.status === "PAID"
+                                        ? "success"
+                                        : inv.status === "PARTIAL"
+                                        ? "warning"
+                                        : "neutral"
+                                    }
+                                  >
+                                    {inv.status === "PAID"
+                                      ? "Cobrado"
+                                      : inv.status === "PARTIAL"
+                                      ? "Pago parcial"
+                                      : "Pendiente de cobro"}
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  Emitida: {new Date(inv.issue_date).toLocaleString("es-ES")}
+                                </p>
+                              </div>
+
+                              <div className="text-right tabular-nums">
+                                <p className="text-sm font-bold text-slate-900">
+                                  Total: {formatMoney(inv.total_amount, "USD")}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  Pagado: {formatMoney(inv.paid_amount, "USD")}
+                                </p>
+                              </div>
+                            </div>
+
+                            <QRVerifierBlock
+                              documentNumber={`${inv.series}-${inv.invoice_number}`}
+                              verificationHash={inv.verification_hash || inv.id}
+                              onDownloadPdf={() => window.print()}
+                            />
+
+                            {isPending ? (
+                              <PermissionGate me={me} permission="billing:write">
+                                {payingInvoice?.id === inv.id ? (
+                                  <form
+                                    className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                                    onSubmit={(e: FormEvent) => {
+                                      e.preventDefault();
+                                      recordPaymentMutation.mutate(inv.id);
+                                    }}
+                                  >
+                                    <div className="w-40">
+                                      <Input
+                                        label="Importe (céntimos)"
+                                        type="number"
+                                        min={1}
+                                        max={inv.total_amount - inv.paid_amount}
+                                        value={paymentAmount}
+                                        onChange={(e) => setPaymentAmount(e.target.value)}
+                                        required
+                                      />
+                                    </div>
+                                    <div className="w-44">
+                                      <Select
+                                        label="Método de pago"
+                                        value={paymentMethod}
+                                        onChange={setPaymentMethod}
+                                        placeholder=""
+                                        options={[
+                                          { value: "CASH", label: "Efectivo" },
+                                          { value: "CARD", label: "Tarjeta / TPV" },
+                                          { value: "TRANSFER", label: "Transferencia" },
+                                        ]}
+                                      />
+                                    </div>
+                                    <Button type="submit" size="sm" loading={recordPaymentMutation.isPending}>
+                                      <CheckCircle2 className="h-4 w-4" />
+                                      Confirmar cobro
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setPayingInvoice(null)}
+                                    >
+                                      Cancelar
+                                    </Button>
+                                  </form>
+                                ) : (
+                                  <div className="flex justify-end">
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      onClick={() => {
+                                        setPayingInvoice(inv);
+                                        setPaymentAmount(String(inv.total_amount - inv.paid_amount));
+                                      }}
+                                    >
+                                      Registrar cobro
+                                    </Button>
+                                  </div>
+                                )}
+                              </PermissionGate>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              </div>
             </div>
           </FeatureGate>
         </div>
       )}
+
+      {/* Modal: Formato Imprimible de Presupuesto con Alternativas para el Cliente */}
+      <Modal
+        open={Boolean(printingBudget)}
+        onClose={() => setPrintingBudget(null)}
+        maxWidth="max-w-4xl"
+        title={
+          printingBudget
+            ? `Formato de Presupuesto ${printingBudget.series}-${printingBudget.budget_number}`
+            : "Formato de Presupuesto"
+        }
+        description="Documento comparativo de hallazgos y tratamientos propuestos para entregar al paciente"
+      >
+        {printingBudget ? (
+          <BudgetPrintFormatDocument
+            budget={printingBudget}
+            patientName={`${patient.first_name} ${patient.last_name}`}
+            patientDni={patient.dni_nie}
+            clinicName={me?.active_tenant.name ?? "Clínica Dental"}
+            clinicLogoUrl={effectiveClinicSettings.logo_url}
+            clinicTaxId={me?.active_tenant.tax_id}
+            clinicContactLine={effectiveClinicSettings.clinic_contact_line}
+            validityTerms={effectiveClinicSettings.budget_validity_terms}
+            currency={me?.active_tenant.billing_currency ?? "EUR"}
+            onPrint={() => window.print()}
+          />
+        ) : null}
+      </Modal>
 
       {/* Modal: Visor Anatómico Multi-Ángulo de la Pieza Seleccionada */}
       <Modal
@@ -1295,6 +2675,54 @@ export function PatientDetailPage() {
           onToggleSurface={(surf, next) => handleToggleSurface(activeToothNum, surf, next)}
           onUpdateGeneralStatus={(st) => setToothGeneralStatus(activeToothNum, st)}
         />
+      </Modal>
+
+      {/* Modal: Visor de Adjuntos del Historial Clínico (Radiografías, Fotos, Documentos) */}
+      <Modal
+        open={Boolean(previewAttachment)}
+        onClose={() => setPreviewAttachment(null)}
+        title={previewAttachment ? previewAttachment.name : "Adjunto Clínico"}
+        description={
+          previewAttachment
+            ? `${
+                previewAttachment.kind === "XRAY"
+                  ? "Radiografía dental"
+                  : previewAttachment.kind === "PHOTO"
+                  ? "Fotografía clínica"
+                  : "Documento del historial"
+              }${previewAttachment.tooth_number ? ` · Pieza #${previewAttachment.tooth_number}` : ""}`
+            : undefined
+        }
+      >
+        {previewAttachment ? (
+          <div className="space-y-4">
+            {previewAttachment.kind === "XRAY" ||
+            previewAttachment.kind === "PHOTO" ||
+            previewAttachment.mime_type.startsWith("image/") ? (
+              <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-950 p-4">
+                <img
+                  src={previewAttachment.data_url}
+                  alt={previewAttachment.name}
+                  className="max-h-[420px] w-auto rounded-lg object-contain"
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700">
+                <p className="font-bold text-slate-900">{previewAttachment.name}</p>
+                <p className="mt-1 text-slate-500">Tipo MIME: {previewAttachment.mime_type}</p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <a
+                href={previewAttachment.data_url}
+                download={previewAttachment.name}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              >
+                Descargar archivo
+              </a>
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

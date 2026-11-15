@@ -314,6 +314,33 @@ func (s *Server) handleCancelClinicAccount(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]string{"status": "CANCELED"})
 }
 
+func (s *Server) handleGetClinicSettings(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	settings, err := s.store.GetClinicBudgetSettings(r.Context(), tx, claims.TenantID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not load clinic settings", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"settings": settings})
+}
+
+func (s *Server) handleUpdateClinicSettings(w http.ResponseWriter, r *http.Request) {
+	var in store.ClinicBudgetSettings
+	if err := decodeJSON(r, &in); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
+		return
+	}
+	claims := claimsFrom(r.Context())
+	tx := txFrom(r.Context())
+	updated, err := s.store.UpdateClinicBudgetSettings(r.Context(), tx, claims.TenantID, in)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not update clinic settings", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"settings": updated})
+}
+
 func (s *Server) handlePortal(w http.ResponseWriter, r *http.Request) {
 	if !s.stripe.Enabled() {
 		writeError(w, http.StatusServiceUnavailable, "STRIPE_DISABLED", "billing is not configured", nil)

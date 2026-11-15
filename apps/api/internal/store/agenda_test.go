@@ -266,4 +266,80 @@ func TestCalculateAvailableSlots(t *testing.T) {
 			t.Fatalf("expected first slot at 10:00 due to doc-1 overlap at 09:00-10:00, got %s", slotsDoc1Busy[0].StartTime)
 		}
 	})
+
+	t.Run("Cabinet equipment and allowed treatments strictly gate available slots", func(t *testing.T) {
+		monday := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
+		equippedCabinets := []Cabinet{
+			{
+				ID:                "cab-surg",
+				Name:              "Gabinete 1 (Quirófano)",
+				Equipment:         "Motor quirúrgico, lámpara scialítica, Rx intraoral",
+				AllowedCategories: []string{"cirugia", "implantes"},
+				AllowedTreatments: []string{"Implante unitario", "Elevación de seno"},
+				Availability: []CabinetDayAvailability{
+					{DayOfWeek: 1, IsOpen: true, StartTime: "09:00", EndTime: "14:00"},
+				},
+			},
+			{
+				ID:                "cab-hygiene",
+				Name:              "Gabinete 2 (Higiene)",
+				Equipment:         "Ultrasonidos piezoeléctrico, aeropulidor bicarbonato",
+				AllowedCategories: []string{"higiene", "prevencion"},
+				AllowedTreatments: []string{"Limpieza dental", "Blanqueamiento"},
+				Availability: []CabinetDayAvailability{
+					{DayOfWeek: 1, IsOpen: true, StartTime: "09:00", EndTime: "14:00"},
+				},
+			},
+		}
+
+		// Searching for "Limpieza dental" must ONLY return slots in Gabinete 2 (Higiene)
+		slotsHygiene := CalculateAvailableSlotsWithContext(CalculateSlotsContext{
+			Cabinets:     equippedCabinets,
+			Appointments: nil,
+			Filter: AvailableSlotSearchFilter{
+				TreatmentType:     "Limpieza dental",
+				TreatmentCategory: "higiene",
+				DurationMinutes:   30,
+				StartDate:         monday,
+				Days:              1,
+			},
+		})
+
+		if len(slotsHygiene) == 0 {
+			t.Fatal("expected slots for Limpieza dental in cab-hygiene, got none")
+		}
+		for _, s := range slotsHygiene {
+			if s.CabinetID != "cab-hygiene" {
+				t.Fatalf("expected only cab-hygiene, got %s", s.CabinetID)
+			}
+			if s.CabinetEquipment != "Ultrasonidos piezoeléctrico, aeropulidor bicarbonato" {
+				t.Fatalf("expected cabinet equipment populated, got %s", s.CabinetEquipment)
+			}
+		}
+
+		// Searching for "Implante unitario" must ONLY return slots in Gabinete 1 (Quirófano)
+		slotsImplant := CalculateAvailableSlotsWithContext(CalculateSlotsContext{
+			Cabinets:     equippedCabinets,
+			Appointments: nil,
+			Filter: AvailableSlotSearchFilter{
+				TreatmentType:     "Implante unitario",
+				TreatmentCategory: "implantes",
+				DurationMinutes:   60,
+				StartDate:         monday,
+				Days:              1,
+			},
+		})
+
+		if len(slotsImplant) == 0 {
+			t.Fatal("expected slots for Implante unitario in cab-surg, got none")
+		}
+		for _, s := range slotsImplant {
+			if s.CabinetID != "cab-surg" {
+				t.Fatalf("expected only cab-surg, got %s", s.CabinetID)
+			}
+			if s.CabinetEquipment != "Motor quirúrgico, lámpara scialítica, Rx intraoral" {
+				t.Fatalf("expected cabinet equipment populated, got %s", s.CabinetEquipment)
+			}
+		}
+	})
 }
