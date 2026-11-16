@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config-161}"
+
 REGISTRY="${REGISTRY:-155.133.27.1:5000}"
 TAG="${TAG:-latest}"
 NAMESPACE="${NAMESPACE:-dentistes}"
