@@ -41,7 +41,6 @@ import {
   Textarea,
   ToothAnatomicalViewer,
   buildSampleClinicalAttachment,
-  buildThreeOptionsForFinding,
   cn,
   emptyTooth,
   formatMoney,
@@ -60,7 +59,7 @@ import {
   type ToothSurfaceName,
   type ToothSurfaceStatus,
 } from "@dentistes/ui";
-import { can, type ClinicalFinding, type ClinicalRecord, type Odontogram, type PatientInvoice } from "@dentistes/sdk";
+import { can, type ClinicalFinding, type ClinicalRecord, type FindingMaster, type Odontogram, type PatientInvoice } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 import { useUiStore } from "../lib/store";
 
@@ -160,9 +159,20 @@ export function PatientDetailPage() {
     enabled: Boolean(me),
   });
 
+  const findingsCatalogQuery = useQuery({
+    queryKey: ["findings-catalog"],
+    queryFn: () => sdk.listFindingsCatalog(),
+    enabled: Boolean(me?.active_tenant.id),
+  });
+  const masterFindings = useMemo(
+    () => (findingsCatalogQuery.data?.findings ?? []).filter((f) => f.is_active !== false),
+    [findingsCatalogQuery.data?.findings],
+  );
+
   // Clinical findings & multi-option budgets state (F7)
   const [newFindingTooth, setNewFindingTooth] = useState("26");
-  const [newFindingDiagnosis, setNewFindingDiagnosis] = useState("Pieza en muy mal estado (pronóstico reservado)");
+  const [selectedFindingCode, setSelectedFindingCode] = useState<string>("");
+  const [newFindingDiagnosis, setNewFindingDiagnosis] = useState("Caries profunda con pulpitis");
   const [newFindingSeverity, setNewFindingSeverity] = useState<"LOW" | "MEDIUM" | "HIGH">("HIGH");
   const [newFindingNotes, setNewFindingNotes] = useState("");
 
@@ -624,25 +634,100 @@ export function PatientDetailPage() {
     },
   });
 
-  function addFindingWithThreeOptionsToDraft(finding: {
+  function addFindingProtocolToDraft(finding: {
     id: string;
     tooth_number: string;
     surfaces?: string[];
+    pathology_code?: string;
     diagnosis: string;
     notes?: string;
   }) {
-    const block = buildThreeOptionsForFinding(finding);
+    const tooth = finding.tooth_number || "General";
+    const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const treatments = treatmentsCatalogQuery.data?.treatments ?? [];
+
+    // Buscar protocolo configurado en la tabla maestra
+    let protocol = masterFindings.find(
+      (m) => finding.pathology_code && m.code.toUpperCase() === finding.pathology_code.toUpperCase(),
+    );
+    if (!protocol) {
+      protocol = masterFindings.find(
+        (m) =>
+          m.name.toLowerCase() === finding.diagnosis.toLowerCase() ||
+          finding.diagnosis.toLowerCase().includes(m.name.toLowerCase()) ||
+          m.name.toLowerCase().includes(finding.diagnosis.toLowerCase()),
+      );
+    }
+
+    const items: Array<{
+      id: string;
+      treatment_code: string;
+      description: string;
+      tooth_number: string;
+      quantity: number;
+      unit_price_cents: number;
+    }> = [];
+
+    if (protocol && protocol.default_treatment_codes && protocol.default_treatment_codes.length > 0) {
+      protocol.default_treatment_codes.forEach((trtCode, idx) => {
+        const trt = treatments.find((t) => t.code === trtCode);
+        const name = trt ? trt.name : trtCode;
+        const priceCents = trt ? Math.round(trt.default_price * 100) : 6000;
+        items.push({
+          id: `it-${stamp}-${idx + 1}`,
+          treatment_code: trtCode,
+          description: `${name} (Pieza ${tooth})`,
+          tooth_number: tooth,
+          quantity: 1,
+          unit_price_cents: priceCents,
+        });
+      });
+    } else {
+      // Tratamiento conservador de respaldo
+      items.push({
+        id: `it-${stamp}-1`,
+        treatment_code: "OBTURACION_SIMPLE",
+        description: `Obturación / Reconstrucción (Pieza ${tooth})`,
+        tooth_number: tooth,
+        quantity: 1,
+        unit_price_cents: 6000,
+      });
+    }
+
+    const totalCents = items.reduce((sum, it) => sum + it.unit_price_cents * it.quantity, 0);
+
+    const newBlock: BudgetFindingBlockUI = {
+      finding_id: finding.id,
+      tooth_number: tooth,
+      surfaces: finding.surfaces ?? [],
+      diagnosis: finding.diagnosis,
+      notes: finding.notes,
+      options: [
+        {
+          id: `opt-${stamp}-1`,
+          option_label: "Opción recomendada (Protocolo clínico)",
+          name: protocol ? `Protocolo: ${protocol.name}` : `Tratamiento pieza ${tooth}`,
+          description: protocol?.description || finding.diagnosis,
+          is_recommended: true,
+          total_cents: totalCents,
+          patient_response: "PENDING",
+          items,
+        },
+      ],
+    };
+
     setDraftFindingBlocks((prev) => {
       const exists = prev.some((b) => b.finding_id === finding.id && finding.id !== "");
       if (exists) {
-        return prev.map((b) => (b.finding_id === finding.id ? block : b));
+        return prev.map((b) => (b.finding_id === finding.id ? newBlock : b));
       }
-      return [...prev, block];
+      return [...prev, newBlock];
     });
+
     notify({
       tone: "success",
-      title: `3 opciones generadas para Pieza #${finding.tooth_number}`,
-      description: "Opción 1: Extracción · Opción 2: Reconstrucción · Opción 3: Extracción + Implante.",
+      title: `Protocolo asignado a Pieza #${tooth}`,
+      description: `${items.length} tratamiento(s) añadidos al presupuesto según el protocolo clínico de la clínica.`,
     });
   }
 
@@ -699,62 +784,63 @@ export function PatientDetailPage() {
       const hasPlanned = Object.values(t.surfaces || {}).some((s) => s === "planned");
 
       if (hasCaries || hasPlanned || t.general_status === "endodontics" || t.general_status === "crown") {
+        const isSevere = affectedSurfaces.length >= 3 || t.general_status === "endodontics";
+        const pathologyCode = isSevere ? "CARIES_PROFUNDA" : "CARIES_ESMALTE";
         const diag =
           t.notes?.trim() ||
-          (affectedSurfaces.length >= 3
-            ? `Pieza ${toothNum} en muy mal estado (${affectedSurfaces.length} caras afectadas)`
-            : `Patología / Caries en pieza ${toothNum}`);
+          (isSevere
+            ? `Caries profunda / Afectación en pieza ${toothNum} (${affectedSurfaces.length} caras)`
+            : `Caries de esmalte en pieza ${toothNum}`);
         const fId = `odo-${toothNum}-${Date.now()}`;
-        newBlocks.push(
-          buildThreeOptionsForFinding({
-            id: fId,
-            tooth_number: String(toothNum),
-            surfaces: affectedSurfaces,
-            diagnosis: diag,
-            notes: t.notes,
-          }),
-        );
+        addFindingProtocolToDraft({
+          id: fId,
+          tooth_number: String(toothNum),
+          surfaces: affectedSurfaces,
+          pathology_code: pathologyCode,
+          diagnosis: diag,
+          notes: t.notes,
+        });
         createFindingMutation.mutate({
           tooth_number: String(toothNum),
           surfaces: affectedSurfaces,
-          pathology_code: affectedSurfaces.length >= 3 ? "SEVERE_DAMAGE" : "CARIES",
+          pathology_code: pathologyCode,
           diagnosis: diag,
-          severity: affectedSurfaces.length >= 3 ? "HIGH" : "MEDIUM",
+          severity: isSevere ? "HIGH" : "LOW",
           notes: t.notes,
         });
         newItems.push({
           id: `imp-${toothNum}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          description: `Obturación / Tratamiento pieza ${toothNum}`,
+          description: `Tratamiento según protocolo pieza ${toothNum}`,
           toothNumber: String(toothNum),
           quantity: 1,
           unitPriceCents: 6000,
           taxRatePercent: 0,
         });
       } else if (t.general_status === "missing") {
-        const diag = t.notes?.trim() || `Ausencia dental / Pieza ${toothNum} irrecuperable`;
-        newBlocks.push(
-          buildThreeOptionsForFinding({
-            id: `odo-${toothNum}-${Date.now()}`,
-            tooth_number: String(toothNum),
-            surfaces: [],
-            diagnosis: diag,
-            notes: t.notes,
-          }),
-        );
+        const diag = t.notes?.trim() || `Ausencia dental / Edentulismo en pieza ${toothNum}`;
+        const fId = `odo-${toothNum}-${Date.now()}`;
+        addFindingProtocolToDraft({
+          id: fId,
+          tooth_number: String(toothNum),
+          surfaces: [],
+          pathology_code: "EDENTULISMO_UNITARIO",
+          diagnosis: diag,
+          notes: t.notes,
+        });
         createFindingMutation.mutate({
           tooth_number: String(toothNum),
           surfaces: [],
-          pathology_code: "MISSING_TOOTH",
+          pathology_code: "EDENTULISMO_UNITARIO",
           diagnosis: diag,
           severity: "MEDIUM",
           notes: t.notes,
         });
         newItems.push({
           id: `imp-${toothNum}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          description: `Extracción / Prótesis pieza ${toothNum}`,
+          description: `Rehabilitación sobre implante pieza ${toothNum}`,
           toothNumber: String(toothNum),
           quantity: 1,
-          unitPriceCents: 5000,
+          unitPriceCents: 75000,
           taxRatePercent: 0,
         });
       }
@@ -1331,21 +1417,25 @@ export function PatientDetailPage() {
                             const affectedSurfaces = Object.entries(activeToothState.surfaces || {})
                               .filter(([, st]) => st !== "healthy")
                               .map(([surf]) => surf);
+                            const isSevere = affectedSurfaces.length >= 3;
+                            const pathologyCode = isSevere ? "CARIES_PROFUNDA" : "CARIES_ESMALTE";
                             const diag =
                               activeToothState.notes?.trim() ||
-                              `Pieza ${activeToothNum} en mal estado (${activeToothInfo.name})`;
+                              (isSevere
+                                ? `Caries profunda en pieza ${activeToothNum} (${activeToothInfo.name})`
+                                : `Caries de esmalte en pieza ${activeToothNum} (${activeToothInfo.name})`);
                             createFindingMutation.mutate(
                               {
                                 tooth_number: String(activeToothNum),
                                 surfaces: affectedSurfaces,
-                                pathology_code: "SEVERE_DAMAGE",
+                                pathology_code: pathologyCode,
                                 diagnosis: diag,
-                                severity: "HIGH",
+                                severity: isSevere ? "HIGH" : "LOW",
                                 notes: activeToothState.notes ?? "",
                               },
                               {
                                 onSuccess: (res) => {
-                                  addFindingWithThreeOptionsToDraft(res.finding);
+                                  addFindingProtocolToDraft(res.finding);
                                 },
                               },
                             );
@@ -1852,29 +1942,28 @@ export function PatientDetailPage() {
 
                         <div className="space-y-1">
                           <label className="text-xs font-medium text-slate-700">
-                            Diagnóstico / Descubrimiento
+                            Diagnóstico / Descubrimiento clínico
                           </label>
                           <select
-                            aria-label="Plantilla de hallazgo"
-                            value=""
+                            aria-label="Catálogo de hallazgos y protocolos clínicos"
+                            value={selectedFindingCode}
                             onChange={(e) => {
-                              if (e.target.value) setNewFindingDiagnosis(e.target.value);
+                              const code = e.target.value;
+                              setSelectedFindingCode(code);
+                              const fnd = masterFindings.find((m) => m.code === code);
+                              if (fnd) {
+                                setNewFindingDiagnosis(fnd.name);
+                                setNewFindingSeverity(fnd.default_severity || "MEDIUM");
+                              }
                             }}
                             className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700"
                           >
-                            <option value="">Seleccionar plantilla rápida o escribir abajo…</option>
-                            <option value={`Pieza ${newFindingTooth} en muy mal estado (pronóstico reservado)`}>
-                              Pieza en muy mal estado (Extracción vs Reconstrucción vs Implante)
-                            </option>
-                            <option value={`Caries profunda con afectación pulpar en pieza ${newFindingTooth}`}>
-                              Caries profunda con afectación pulpar
-                            </option>
-                            <option value={`Ausencia dental en pieza ${newFindingTooth}`}>
-                              Ausencia dental a rehabilitar
-                            </option>
-                            <option value={`Fractura coronaria en pieza ${newFindingTooth}`}>
-                              Fractura coronaria
-                            </option>
+                            <option value="">Seleccionar del catálogo de hallazgos y protocolos…</option>
+                            {masterFindings.map((m) => (
+                              <option key={m.id || m.code} value={m.code}>
+                                {m.name} ({m.default_treatment_codes?.length ?? 0} tratamientos configurados)
+                              </option>
+                            ))}
                           </select>
                           <input
                             type="text"
@@ -1905,18 +1994,19 @@ export function PatientDetailPage() {
                                 {
                                   tooth_number: newFindingTooth.trim() || "General",
                                   diagnosis: newFindingDiagnosis.trim(),
+                                  pathology_code: selectedFindingCode || undefined,
                                   severity: newFindingSeverity,
                                   notes: newFindingNotes.trim(),
                                 },
                                 {
                                   onSuccess: (res) => {
-                                    addFindingWithThreeOptionsToDraft(res.finding);
+                                    addFindingProtocolToDraft(res.finding);
                                   },
                                 },
                               );
                             }}
                           >
-                            + Guardar y crear 3 tratamientos
+                            + Guardar y presupuestar según protocolo
                           </Button>
                         </div>
                       </form>
@@ -1990,18 +2080,19 @@ export function PatientDetailPage() {
                                     <div className="flex flex-wrap items-center gap-1.5">
                                       <button
                                         type="button"
-                                        onClick={() => addFindingWithThreeOptionsToDraft(f)}
-                                        className="rounded-lg bg-brand-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-700 transition"
-                                        title="Generar 3 opciones: Extracción vs Reconstrucción vs Extracción + Implante"
+                                        onClick={() => addFindingProtocolToDraft(f)}
+                                        className="rounded-lg bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-teal-700 transition"
+                                        title="Generar los tratamientos del protocolo clínico asignado al presupuesto"
                                       >
-                                        + 3 Tratamientos (Extracción / Reconstrucción / Implante)
+                                        + Presupuestar según protocolo
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => addFindingSingleOptionToDraft(f)}
                                         className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                                        title="Añadir tratamiento manual al presupuesto"
                                       >
-                                        + 1 Tratamiento
+                                        + 1 Tratamiento libre
                                       </button>
                                       <button
                                         type="button"
@@ -2453,7 +2544,7 @@ export function PatientDetailPage() {
                           }
                           onPrintFormat={(b) => setPrintingBudget(b)}
                           onCreateNewBudgetForFinding={(finding) =>
-                            addFindingWithThreeOptionsToDraft(finding)
+                            addFindingProtocolToDraft(finding)
                           }
                         />
                       ))}

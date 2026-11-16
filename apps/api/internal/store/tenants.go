@@ -157,6 +157,9 @@ func (s *Store) CreateTenantWithBilling(ctx context.Context, tx pgx.Tx, name, su
 	if err != nil {
 		return nil, err
 	}
+	_ = s.SeedDefaultSpecialties(ctx, tx, t.ID)
+	_ = s.SeedDefaultTreatments(ctx, tx, t.ID)
+	_ = s.SeedDefaultFindings(ctx, tx, t.ID)
 	return &t, nil
 }
 

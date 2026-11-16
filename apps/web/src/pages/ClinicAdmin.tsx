@@ -7,6 +7,7 @@ import {
   CalendarX,
   Check,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Edit2,
   Layers,
@@ -43,6 +44,7 @@ import {
   type Cabinet,
   type CabinetDayAvailability,
   type DentalChair,
+  type FindingMaster,
   type Specialty,
   type StaffAbsence,
   type StaffAbsenceStatus,
@@ -259,6 +261,131 @@ export function ClinicAdminPage() {
       notify({
         tone: "danger",
         title: "No se pudo eliminar la especialidad",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  // Findings master state & query
+  const findingsQuery = useQuery({
+    queryKey: ["findings-catalog"],
+    queryFn: () => sdk.listFindingsCatalog(),
+    enabled: Boolean(me?.active_tenant.id),
+  });
+
+  const rawFindings = findingsQuery.data?.findings ?? [];
+  const activeFindings = useMemo(() => rawFindings.filter((f) => f.is_active !== false), [rawFindings]);
+
+  const [findingModalOpen, setFindingModalOpen] = useState(false);
+  const [editingFinding, setEditingFinding] = useState<FindingMaster | null>(null);
+  const [findingToDelete, setFindingToDelete] = useState<FindingMaster | null>(null);
+  const [findingSearch, setFindingSearch] = useState("");
+  const [findingForm, setFindingForm] = useState<{
+    name: string;
+    code: string;
+    description: string;
+    category: string;
+    default_severity: "LOW" | "MEDIUM" | "HIGH";
+    color_code: string;
+    default_treatment_codes: string[];
+  }>({
+    name: "",
+    code: "",
+    description: "",
+    category: "CONSERVADORA",
+    default_severity: "MEDIUM",
+    color_code: "#0D9488",
+    default_treatment_codes: [],
+  });
+
+  const filteredFindings = useMemo(() => {
+    const q = findingSearch.trim().toLowerCase();
+    if (!q) return activeFindings;
+    return activeFindings.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.code.toLowerCase().includes(q) ||
+        f.category.toLowerCase().includes(q) ||
+        (f.description && f.description.toLowerCase().includes(q)),
+    );
+  }, [activeFindings, findingSearch]);
+
+  function openCreateFinding() {
+    setEditingFinding(null);
+    setFindingForm({
+      name: "",
+      code: "",
+      description: "",
+      category: activeSpecialties[0]?.code ?? "GENERAL",
+      default_severity: "MEDIUM",
+      color_code: "#0D9488",
+      default_treatment_codes: [],
+    });
+    setFindingModalOpen(true);
+  }
+
+  function openEditFinding(f: FindingMaster) {
+    setEditingFinding(f);
+    setFindingForm({
+      name: f.name,
+      code: f.code,
+      description: f.description || "",
+      category: f.category || "GENERAL",
+      default_severity: f.default_severity || "MEDIUM",
+      color_code: f.color_code || "#0D9488",
+      default_treatment_codes: f.default_treatment_codes ? [...f.default_treatment_codes] : [],
+    });
+    setFindingModalOpen(true);
+  }
+
+  const saveFindingMutation = useMutation({
+    mutationFn: async () => {
+      if (editingFinding) {
+        return sdk.updateFindingCatalog(editingFinding.id, {
+          name: findingForm.name.trim(),
+          description: findingForm.description.trim(),
+          category: findingForm.category,
+          default_severity: findingForm.default_severity,
+          color_code: findingForm.color_code,
+          default_treatment_codes: findingForm.default_treatment_codes,
+        });
+      }
+      return sdk.createFindingCatalog({
+        name: findingForm.name.trim(),
+        code: findingForm.code.trim() || undefined,
+        description: findingForm.description.trim(),
+        category: findingForm.category,
+        default_severity: findingForm.default_severity,
+        color_code: findingForm.color_code,
+        default_treatment_codes: findingForm.default_treatment_codes,
+      });
+    },
+    onSuccess: async () => {
+      setFindingModalOpen(false);
+      setEditingFinding(null);
+      notify({ tone: "success", title: editingFinding ? "Hallazgo clínico actualizado" : "Hallazgo clínico creado" });
+      await queryClient.invalidateQueries({ queryKey: ["findings-catalog"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo guardar el hallazgo",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const deleteFindingMutation = useMutation({
+    mutationFn: (id: string) => sdk.deleteFindingCatalog(id),
+    onSuccess: async () => {
+      setFindingToDelete(null);
+      notify({ tone: "success", title: "Hallazgo clínico desactivado (borrado lógico)" });
+      await queryClient.invalidateQueries({ queryKey: ["findings-catalog"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo eliminar el hallazgo",
         description: err instanceof Error ? err.message : undefined,
       });
     },
@@ -1351,6 +1478,138 @@ export function ClinicAdminPage() {
                 </div>
               ),
             },
+            {
+              id: "findings",
+              label: "Hallazgos y Protocolos",
+              content: (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Catálogo de Hallazgos y Protocolos Clínicos</h3>
+                      <p className="text-sm text-slate-500">
+                        Tabla maestra de diagnósticos con tratamientos asociados por defecto para emisión automatizada de presupuestos.
+                      </p>
+                    </div>
+                    <Button onClick={openCreateFinding}>
+                      <Plus className="h-4 w-4" />
+                      Nuevo hallazgo
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 max-w-sm">
+                    <Input
+                      placeholder="Buscar hallazgo, código o categoría..."
+                      value={findingSearch}
+                      onChange={(e) => setFindingSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {findingsQuery.isLoading ? (
+                    <div className="py-8 text-center text-sm text-slate-500">Cargando catálogo de hallazgos...</div>
+                  ) : filteredFindings.length === 0 ? (
+                    <Card>
+                      <div className="py-8 text-center">
+                        <Sparkles className="mx-auto h-8 w-8 text-slate-400" />
+                        <p className="mt-2 text-sm font-medium text-slate-900">No se encontraron hallazgos clínicos</p>
+                        <p className="text-xs text-slate-500">
+                          {findingSearch ? "Prueba con otro término de búsqueda" : "Crea tu primer hallazgo o protocolo clínico"}
+                        </p>
+                      </div>
+                    </Card>
+                  ) : (
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      <table className="w-full text-left text-sm text-slate-600">
+                        <thead className="border-b border-slate-100 bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3">Diagnóstico / Hallazgo</th>
+                            <th className="px-4 py-3">Código</th>
+                            <th className="px-4 py-3">Especialidad</th>
+                            <th className="px-4 py-3">Severidad</th>
+                            <th className="px-4 py-3">Protocolo de tratamientos por defecto</th>
+                            <th className="px-4 py-3 text-right">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredFindings.map((fnd) => (
+                            <tr key={fnd.id || fnd.code} className="hover:bg-slate-50/60 transition-colors">
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <span
+                                    className="h-3 w-3 shrink-0 rounded-full"
+                                    style={{ backgroundColor: fnd.color_code || "#0D9488" }}
+                                    title={fnd.color_code}
+                                  />
+                                  <div>
+                                    <div className="font-medium text-slate-900">{fnd.name}</div>
+                                    {fnd.description && (
+                                      <div className="text-xs text-slate-400 max-w-xs truncate">{fnd.description}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 font-mono text-xs text-slate-500">
+                                {fnd.code}
+                              </td>
+                              <td className="px-4 py-3.5 text-xs text-slate-700">
+                                <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                                  {specialtiesMap.get(fnd.category)?.name || fnd.category}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <Badge tone={fnd.default_severity === "HIGH" ? "danger" : fnd.default_severity === "MEDIUM" ? "warning" : "success"}>
+                                  {fnd.default_severity === "HIGH" ? "Alta" : fnd.default_severity === "MEDIUM" ? "Media" : "Baja"}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex flex-wrap items-center gap-1.5 max-w-md">
+                                  {fnd.default_treatment_codes && fnd.default_treatment_codes.length > 0 ? (
+                                    fnd.default_treatment_codes.map((code) => {
+                                      const trt = (treatmentsQuery.data?.treatments ?? []).find((t) => t.code === code);
+                                      return (
+                                        <span
+                                          key={code}
+                                          className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-800 border border-teal-200"
+                                        >
+                                          <span>{trt?.name || code}</span>
+                                          {trt ? <span className="text-[10px] text-teal-600 font-mono">({formatMoney(trt.default_price)})</span> : null}
+                                        </span>
+                                      );
+                                    })
+                                  ) : (
+                                    <span className="text-xs italic text-slate-400">Sin tratamientos predeterminados</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Editar hallazgo y protocolo"
+                                    onClick={() => openEditFinding(fnd)}
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-slate-400 hover:text-critical"
+                                    title="Desactivar hallazgo (borrado lógico)"
+                                    onClick={() => setFindingToDelete(fnd)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
           ]}
         />
 
@@ -1742,6 +2001,157 @@ export function ClinicAdminPage() {
           title={`¿Eliminar especialidad "${specialtyToDelete?.name}"?`}
           description="La especialidad se desactivará mediante un borrado lógico. No se eliminarán ni alterarán los tratamientos o gabinetes históricos asociados."
           confirmLabel="Sí, eliminar especialidad"
+        />
+
+        {/* Modal Hallazgo Clínico y Protocolo */}
+        <Modal
+          open={findingModalOpen}
+          onClose={() => setFindingModalOpen(false)}
+          title={editingFinding ? "Editar hallazgo clínico y protocolo" : "Nuevo hallazgo diagnóstico y protocolo"}
+          description="Configura el diagnóstico, su severidad clínica y los tratamientos que se generarán por defecto al presupuestar."
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setFindingModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                loading={saveFindingMutation.isPending}
+                onClick={() => saveFindingMutation.mutate()}
+                disabled={!findingForm.name.trim()}
+              >
+                Guardar hallazgo
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 py-2">
+            <Input
+              label="Nombre del hallazgo / Diagnóstico"
+              placeholder="Ej. Caries de esmalte oclusal"
+              value={findingForm.name}
+              onChange={(e) => setFindingForm({ ...findingForm, name: e.target.value })}
+              required
+            />
+            {!editingFinding && (
+              <Input
+                label="Código identificador (opcional)"
+                placeholder="Ej. CARIES_OCLUSAL"
+                value={findingForm.code}
+                onChange={(e) => setFindingForm({ ...findingForm, code: e.target.value })}
+              />
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Select
+                label="Especialidad / Área clínica"
+                value={findingForm.category}
+                onChange={(val) => setFindingForm({ ...findingForm, category: val })}
+                options={activeSpecialties.map((s) => ({ value: s.code, label: s.name }))}
+              />
+              <Select
+                label="Severidad predeterminada"
+                value={findingForm.default_severity}
+                onChange={(val) =>
+                  setFindingForm({
+                    ...findingForm,
+                    default_severity: val as "LOW" | "MEDIUM" | "HIGH",
+                  })
+                }
+                options={[
+                  { value: "LOW", label: "Baja (Leve / Preventivo)" },
+                  { value: "MEDIUM", label: "Media (Restauración necesaria)" },
+                  { value: "HIGH", label: "Alta (Urgente / Compleja)" },
+                ]}
+              />
+            </div>
+
+            <div>
+              <Input
+                label="Color identificativo"
+                type="color"
+                value={findingForm.color_code}
+                onChange={(e) => setFindingForm({ ...findingForm, color_code: e.target.value })}
+              />
+            </div>
+
+            <Input
+              label="Descripción u observaciones clínicas"
+              placeholder="Ej. Lesión incipiente sin compromiso pulpar..."
+              value={findingForm.description}
+              onChange={(e) => setFindingForm({ ...findingForm, description: e.target.value })}
+            />
+
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Tratamientos del protocolo por defecto
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Selecciona los tratamientos de tu catálogo que se añadirán automáticamente al presupuesto cuando se detecte este hallazgo.
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-teal-700">
+                  {findingForm.default_treatment_codes.length} seleccionados
+                </span>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-lg border border-slate-200 bg-slate-50/50 p-2">
+                {(treatmentsQuery.data?.treatments ?? [])
+                  .filter((t) => t.is_active !== false && Boolean(t.code))
+                  .map((t) => {
+                    const treatmentCode = t.code!;
+                    const isSelected = findingForm.default_treatment_codes.includes(treatmentCode);
+                    return (
+                      <button
+                        key={t.id || treatmentCode}
+                        type="button"
+                        onClick={() => {
+                          setFindingForm((prev) => {
+                            const current = prev.default_treatment_codes;
+                            const next = current.includes(treatmentCode)
+                              ? current.filter((c) => c !== treatmentCode)
+                              : [...current, treatmentCode];
+                            return { ...prev, default_treatment_codes: next };
+                          });
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs text-left transition",
+                          isSelected
+                            ? "border-teal-500 bg-teal-50 text-teal-900 font-medium"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100/70",
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "h-3 w-3 rounded flex items-center justify-center text-[9px] border",
+                              isSelected ? "border-teal-600 bg-teal-600 text-white" : "border-slate-300 bg-white",
+                            )}
+                          >
+                            {isSelected ? "✓" : ""}
+                          </span>
+                          <span>{t.name}</span>
+                          <span className="font-mono text-[10px] text-slate-400">({treatmentCode})</span>
+                        </div>
+                        <span className="font-semibold text-slate-900">{formatMoney(t.default_price)}</span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        </Modal>
+
+        <ConfirmDialog
+          open={Boolean(findingToDelete)}
+          onClose={() => setFindingToDelete(null)}
+          onConfirm={() => findingToDelete && deleteFindingMutation.mutate(findingToDelete.id)}
+          loading={deleteFindingMutation.isPending}
+          danger
+          title={`¿Desactivar hallazgo "${findingToDelete?.name}"?`}
+          description="El hallazgo se desactivará mediante un borrado lógico. Los presupuestos y evoluciones clínicas históricas no se verán alterados."
+          confirmLabel="Sí, desactivar hallazgo"
         />
 
         {/* Modal Butaca Física */}

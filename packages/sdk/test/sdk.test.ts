@@ -648,6 +648,109 @@ describe("Dentistes SDK Unit Tests", () => {
     assert.equal(del.ok, true);
   });
 
+  test("DentistesClient findings master APIs", async () => {
+    const calls: Array<{ url: string; method: string; body?: any }> = [];
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(init.body.toString()) : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/v1/findings/catalog") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            findings: [
+              {
+                id: "fnd_1",
+                code: "CARIES_ESMALTE",
+                name: "Caries superficial / esmalte",
+                description: "Lesión inicial",
+                category: "CONSERVADORA",
+                default_severity: "LOW",
+                color_code: "#3B82F6",
+                default_treatment_codes: ["OBTURACION_SIMPLE"],
+                is_active: true,
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v1/findings/catalog") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            finding: {
+              id: "fnd_2",
+              code: body.code ?? "PERIO_AVANZADA",
+              name: body.name,
+              description: body.description ?? "",
+              category: body.category ?? "PERIODONCIA",
+              default_severity: body.default_severity ?? "HIGH",
+              color_code: body.color_code ?? "#10B981",
+              default_treatment_codes: body.default_treatment_codes ?? [],
+              is_active: true,
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      if (url.includes("/v1/findings/catalog/fnd_2") && method === "PUT") {
+        return new Response(
+          JSON.stringify({
+            finding: {
+              id: "fnd_2",
+              code: "PERIO_AVANZADA",
+              name: body.name,
+              description: body.description ?? "",
+              category: body.category ?? "PERIODONCIA",
+              default_severity: body.default_severity ?? "HIGH",
+              color_code: body.color_code ?? "#10B981",
+              default_treatment_codes: body.default_treatment_codes ?? [],
+              is_active: body.is_active ?? true,
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v1/findings/catalog/fnd_2") && method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "auth-token",
+      fetch: mockFetch,
+    });
+
+    const list = await client.listFindingsCatalog({ include_deleted: false });
+    assert.equal(list.findings.length, 1);
+    assert.equal(list.findings[0].code, "CARIES_ESMALTE");
+    assert.deepEqual(list.findings[0].default_treatment_codes, ["OBTURACION_SIMPLE"]);
+
+    const created = await client.createFindingCatalog({
+      code: "PERIO_AVANZADA",
+      name: "Periodontitis Grado 3",
+      category: "PERIODONCIA",
+      default_severity: "HIGH",
+      color_code: "#10B981",
+      default_treatment_codes: ["CURETAJE_CUADRANTE", "MANTENIMIENTO_PERIODONTAL"],
+    });
+    assert.equal(created.finding.name, "Periodontitis Grado 3");
+    assert.equal(created.finding.default_severity, "HIGH");
+    assert.deepEqual(created.finding.default_treatment_codes, ["CURETAJE_CUADRANTE", "MANTENIMIENTO_PERIODONTAL"]);
+
+    const updated = await client.updateFindingCatalog("fnd_2", {
+      name: "Periodontitis Grado 3 Severa",
+    });
+    assert.equal(updated.finding.name, "Periodontitis Grado 3 Severa");
+
+    const del = await client.deleteFindingCatalog("fnd_2");
+    assert.equal(del.ok, true);
+  });
+
   test("DentistesClient patient invoices and payments APIs", async () => {
     const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

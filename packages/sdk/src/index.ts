@@ -646,6 +646,22 @@ export interface Specialty {
   updated_at?: string;
 }
 
+export interface FindingMaster {
+  id: string;
+  tenant_id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  default_severity: "LOW" | "MEDIUM" | "HIGH";
+  color_code: string;
+  default_treatment_codes: string[];
+  is_active: boolean;
+  deleted_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface MasterTreatment {
   code: string;
   name: string;
@@ -1418,6 +1434,43 @@ export class DentistesClient {
 
   deleteSpecialty(id: string): Promise<{ ok: boolean }> {
     return this.request(`/v1/specialties/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  listFindingsCatalog(params: { all?: boolean; include_deleted?: boolean } = {}): Promise<{ findings: FindingMaster[] }> {
+    const includeDeleted = params.all || params.include_deleted;
+    const q = includeDeleted ? "?include_deleted=true" : "";
+    return this.request(`/v1/findings/catalog${q}`);
+  }
+
+  createFindingCatalog(input: {
+    code?: string;
+    name: string;
+    description?: string;
+    category?: string;
+    default_severity?: "LOW" | "MEDIUM" | "HIGH";
+    color_code?: string;
+    default_treatment_codes?: string[];
+  }): Promise<{ finding: FindingMaster }> {
+    return this.request("/v1/findings/catalog", { method: "POST", body: input });
+  }
+
+  updateFindingCatalog(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      category?: string;
+      default_severity?: "LOW" | "MEDIUM" | "HIGH";
+      color_code?: string;
+      default_treatment_codes?: string[];
+      is_active?: boolean;
+    },
+  ): Promise<{ finding: FindingMaster }> {
+    return this.request(`/v1/findings/catalog/${encodeURIComponent(id)}`, { method: "PUT", body: input });
+  }
+
+  deleteFindingCatalog(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/findings/catalog/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   listDoctors(): Promise<{ doctors: Doctor[] }> {

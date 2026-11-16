@@ -215,6 +215,13 @@ func (s *Server) Router() http.Handler {
 					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteSpecialty)
 				})
 
+				r.Route("/findings/catalog", func(r chi.Router) {
+					r.With(s.requirePermission("patients:read")).Get("/", s.handleListFindingsMaster)
+					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateFindingMaster)
+					r.With(s.requirePermission("settings:manage")).Put("/{id}", s.handleUpdateFindingMaster)
+					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteFindingMaster)
+				})
+
 				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/doctors", s.handleListDoctors)
 				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/assistants", s.handleListAssistants)
 
