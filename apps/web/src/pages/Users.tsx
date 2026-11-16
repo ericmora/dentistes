@@ -20,20 +20,35 @@ export const ASSIGNABLE_ROLES = [
   },
   {
     value: "DENTIST",
-    label: "Profesional de clínica",
-    description: "Acceso operativo a agenda, pacientes, odontograma e historial",
+    label: "Odontólogo / Doctor",
+    description: "Doctor responsable con agenda, odontograma e historial clínico",
+  },
+  {
+    value: "HYGIENIST",
+    label: "Higienista dental",
+    description: "Tratamientos autónomos de higiene, profilaxis y prevención",
+  },
+  {
+    value: "ASSISTANT",
+    label: "Auxiliar / Asistente de gabinete",
+    description: "Trabajo a cuatro manos, apoyo en consulta y preparación de butacas",
+  },
+  {
+    value: "RECEPTIONIST",
+    label: "Recepción y atención al paciente",
+    description: "Gestión de agenda, citas, cobros y presupuestos",
   },
 ] as const;
 
 export function normalizeUserRole(role: string): string {
-  if (role === "ADMIN" || role === "OWNER") return role;
+  if (role === "ADMIN" || role === "OWNER" || role === "HYGIENIST" || role === "ASSISTANT" || role === "RECEPTIONIST") return role;
   return "DENTIST";
 }
 
 export function getRoleDisplayName(role: string): string {
   if (role === "OWNER") return "Propietario";
   const match = ASSIGNABLE_ROLES.find((r) => r.value === role);
-  return match ? match.label : "Profesional de clínica";
+  return match ? match.label : role;
 }
 
 export function UsersPage() {

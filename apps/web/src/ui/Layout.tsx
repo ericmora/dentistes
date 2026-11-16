@@ -51,7 +51,6 @@ export function Layout({ children }: { children: ReactNode }) {
   const navItems = [
     { to: "/agenda", label: "Agenda", icon: Calendar },
     { to: "/patients", label: "Pacientes", icon: Users },
-    { to: "/waiting-list", label: "Lista de espera", icon: Clock },
     ...(isClinicAdmin ? [{ to: "/settings", label: "Administración", icon: Settings }] : []),
   ];
 

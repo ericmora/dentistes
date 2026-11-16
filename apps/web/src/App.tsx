@@ -52,7 +52,7 @@ export function App() {
                 <Routes>
                   <Route path="/" element={<Navigate to="/agenda" replace />} />
                   <Route path="/agenda" element={<AgendaPage />} />
-                  <Route path="/waiting-list" element={<WaitingListPage />} />
+                  <Route path="/waiting-list" element={<Navigate to="/agenda?tab=waiting-list" replace />} />
                   <Route path="/patients" element={<PatientsPage />} />
                   <Route path="/patients/:id" element={<PatientDetailPage />} />
                   <Route path="/billing" element={<BillingPage />} />

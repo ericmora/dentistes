@@ -1,6 +1,25 @@
 import { useState, useMemo, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Building2, Clock, Edit2, Layers, Plus, Sparkles, Stethoscope, Tag, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Armchair,
+  Building2,
+  CalendarX,
+  Check,
+  CheckCircle2,
+  Clock,
+  Edit2,
+  Layers,
+  Plus,
+  ShieldAlert,
+  Sparkles,
+  Stethoscope,
+  Tag,
+  Trash2,
+  User,
+  Users,
+  XCircle,
+} from "lucide-react";
 import {
   Alert,
   Badge,
@@ -19,10 +38,20 @@ import {
   cn,
   type ClinicBudgetSettingsUI,
 } from "@dentistes/ui";
-import { defaultCabinetAvailability, type Cabinet, type CabinetDayAvailability, type Treatment, type Specialty } from "@dentistes/sdk";
+import {
+  defaultCabinetAvailability,
+  type Cabinet,
+  type CabinetDayAvailability,
+  type DentalChair,
+  type Specialty,
+  type StaffAbsence,
+  type StaffAbsenceStatus,
+  type StaffAbsenceType,
+  type Treatment,
+} from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 import { useUiStore } from "../lib/store";
-import { UsersPage } from "./Users";
+import { UsersPage, getRoleDisplayName } from "./Users";
 import { BillingPage } from "./Billing";
 
 const FALLBACK_SPECIALTIES: Specialty[] = [
@@ -58,6 +87,27 @@ export function ClinicAdminPage() {
   const [cabinetModalOpen, setCabinetModalOpen] = useState(false);
   const [editingCabinet, setEditingCabinet] = useState<Cabinet | null>(null);
   const [cabinetAvailability, setCabinetAvailability] = useState<CabinetDayAvailability[]>(defaultCabinetAvailability());
+  const [cabinetChairId, setCabinetChairId] = useState("");
+  const [cabinetDoctorId, setCabinetDoctorId] = useState("");
+  const [cabinetAssistantId, setCabinetAssistantId] = useState("");
+
+  // Dental Chairs (Butacas físicas) state
+  const [chairModalOpen, setChairModalOpen] = useState(false);
+  const [editingChair, setEditingChair] = useState<DentalChair | null>(null);
+  const [chairToDelete, setChairToDelete] = useState<DentalChair | null>(null);
+  const [chairName, setChairName] = useState("");
+  const [chairColor, setChairColor] = useState("#0D9488");
+  const [chairEquipment, setChairEquipment] = useState("");
+  const [chairAllowedCategories, setChairAllowedCategories] = useState<string[]>([]);
+  const [chairIsActive, setChairIsActive] = useState(true);
+
+  // Staff Absences (Vacaciones y Bajas) state
+  const [absenceModalOpen, setAbsenceModalOpen] = useState(false);
+  const [absenceUserId, setAbsenceUserId] = useState("");
+  const [absenceType, setAbsenceType] = useState<StaffAbsenceType>("VACATION");
+  const [absenceStartDate, setAbsenceStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [absenceEndDate, setAbsenceEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [absenceNotes, setAbsenceNotes] = useState("");
 
   // Treatments state
   const [treatmentModalOpen, setTreatmentModalOpen] = useState(false);
@@ -76,6 +126,36 @@ export function ClinicAdminPage() {
     queryKey: ["cabinets"],
     queryFn: () => sdk.listCabinets(),
     enabled: Boolean(me?.features?.agenda),
+  });
+
+  const chairsQuery = useQuery({
+    queryKey: ["chairs"],
+    queryFn: () => sdk.listChairs(),
+    enabled: Boolean(me?.features?.agenda),
+  });
+
+  const doctorsQuery = useQuery({
+    queryKey: ["doctors"],
+    queryFn: () => sdk.listDoctors(),
+    enabled: Boolean(me?.active_tenant.id),
+  });
+
+  const assistantsQuery = useQuery({
+    queryKey: ["assistants"],
+    queryFn: () => sdk.listAssistants(),
+    enabled: Boolean(me?.active_tenant.id),
+  });
+
+  const absencesQuery = useQuery({
+    queryKey: ["absences"],
+    queryFn: () => sdk.listAbsences(),
+    enabled: Boolean(me?.active_tenant.id),
+  });
+
+  const usersQuery = useQuery({
+    queryKey: ["tenant-users"],
+    queryFn: () => sdk.users.list(),
+    enabled: Boolean(me?.active_tenant.id),
   });
 
   const treatmentsQuery = useQuery({
@@ -295,6 +375,9 @@ export function ClinicAdminPage() {
     setCabinetEquipment("");
     setCabinetAllowedCategories([]);
     setCabinetAvailability(defaultCabinetAvailability());
+    setCabinetChairId("");
+    setCabinetDoctorId("");
+    setCabinetAssistantId("");
     setCabinetModalOpen(true);
   }
 
@@ -305,7 +388,40 @@ export function ClinicAdminPage() {
     setCabinetEquipment(cab.equipment || "");
     setCabinetAllowedCategories(cab.allowed_categories || []);
     setCabinetAvailability(cab.availability && cab.availability.length > 0 ? cab.availability : defaultCabinetAvailability());
+    setCabinetChairId(cab.chair_id || "");
+    setCabinetDoctorId(cab.doctor_id || "");
+    setCabinetAssistantId(cab.assistant_id || "");
     setCabinetModalOpen(true);
+  }
+
+  function openCreateChair() {
+    setEditingChair(null);
+    setChairName("");
+    setChairColor("#0D9488");
+    setChairEquipment("");
+    setChairAllowedCategories([]);
+    setChairIsActive(true);
+    setChairModalOpen(true);
+  }
+
+  function openEditChair(chair: DentalChair) {
+    setEditingChair(chair);
+    setChairName(chair.name);
+    setChairColor(chair.color_code || "#0D9488");
+    setChairEquipment(chair.equipment || "");
+    setChairAllowedCategories(chair.allowed_categories || []);
+    setChairIsActive(chair.is_active);
+    setChairModalOpen(true);
+  }
+
+  function openCreateAbsence(defaultUserId?: string) {
+    const today = new Date().toISOString().slice(0, 10);
+    setAbsenceUserId(defaultUserId || (usersQuery.data?.users?.[0]?.user_id ?? ""));
+    setAbsenceType("VACATION");
+    setAbsenceStartDate(today);
+    setAbsenceEndDate(today);
+    setAbsenceNotes("");
+    setAbsenceModalOpen(true);
   }
 
   function formatCabinetScheduleSummary(avail?: CabinetDayAvailability[]): string {
@@ -329,6 +445,9 @@ export function ClinicAdminPage() {
         equipment: cabinetEquipment.trim(),
         allowed_categories: cabinetAllowedCategories,
         availability: cabinetAvailability,
+        chair_id: cabinetChairId || undefined,
+        doctor_id: cabinetDoctorId || undefined,
+        assistant_id: cabinetAssistantId || undefined,
       };
       if (editingCabinet) {
         return sdk.updateCabinet(editingCabinet.id, payload);
@@ -345,6 +464,113 @@ export function ClinicAdminPage() {
       notify({
         tone: "danger",
         title: "No se pudo guardar el gabinete",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const saveChairMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        name: chairName.trim(),
+        color_code: chairColor,
+        equipment: chairEquipment.trim(),
+        allowed_categories: chairAllowedCategories,
+        is_active: chairIsActive,
+      };
+      if (editingChair) {
+        return sdk.updateChair(editingChair.id, payload);
+      }
+      return sdk.createChair(payload);
+    },
+    onSuccess: async () => {
+      setChairModalOpen(false);
+      setEditingChair(null);
+      notify({ tone: "success", title: editingChair ? "Butaca física actualizada" : "Butaca física creada con éxito" });
+      await queryClient.invalidateQueries({ queryKey: ["chairs"] });
+      await queryClient.invalidateQueries({ queryKey: ["cabinets"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo guardar la butaca",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const deleteChairMutation = useMutation({
+    mutationFn: (id: string) => sdk.deleteChair(id),
+    onSuccess: async () => {
+      setChairToDelete(null);
+      notify({ tone: "success", title: "Butaca física desactivada" });
+      await queryClient.invalidateQueries({ queryKey: ["chairs"] });
+      await queryClient.invalidateQueries({ queryKey: ["cabinets"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo desactivar la butaca",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const saveAbsenceMutation = useMutation({
+    mutationFn: async () => {
+      return sdk.createAbsence({
+        user_id: absenceUserId || undefined,
+        absence_type: absenceType,
+        start_date: absenceStartDate,
+        end_date: absenceEndDate,
+        notes: absenceNotes.trim() || undefined,
+      });
+    },
+    onSuccess: async (res) => {
+      setAbsenceModalOpen(false);
+      const isAutoApproved = res.absence.status === "APPROVED";
+      notify({
+        tone: "success",
+        title: isAutoApproved
+          ? "Ausencia registrada y aprobada automáticamente"
+          : "Ausencia registrada (pendiente de aprobación)",
+        description:
+          res.absence.auto_rescheduled_count > 0
+            ? `Se han reagendado automáticamente ${res.absence.auto_rescheduled_count} citas afectadas del doctor.`
+            : undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["absences"] });
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo registrar la ausencia",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const updateAbsenceStatusMutation = useMutation({
+    mutationFn: (input: { id: string; status: StaffAbsenceStatus }) =>
+      sdk.updateAbsenceStatus(input.id, input.status),
+    onSuccess: async (res, variables) => {
+      const isApproved = variables.status === "APPROVED";
+      notify({
+        tone: isApproved ? "success" : "info",
+        title: isApproved ? "Ausencia aprobada con éxito" : "Ausencia rechazada",
+        description:
+          res.absence.auto_rescheduled_count > 0
+            ? `Se han reagendado automáticamente ${res.absence.auto_rescheduled_count} citas de pacientes.`
+            : undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["absences"] });
+      await queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo actualizar el estado de la ausencia",
         description: err instanceof Error ? err.message : undefined,
       });
     },
@@ -499,9 +725,9 @@ export function ClinicAdminPage() {
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h3 className="text-base font-semibold text-slate-900">Gabinetes dentales y disponibilidad</h3>
+                      <h3 className="text-base font-semibold text-slate-900">Gabinetes dentales y equipos de trabajo</h3>
                       <p className="text-sm text-slate-500">
-                        Gestiona los boxes de la clínica, colores distintivos y los horarios o franjas bloqueadas por día de la semana.
+                        Cada gabinete combina un equipo humano (Doctor y Auxiliar) con una butaca física y un horario semanal de disponibilidad.
                       </p>
                     </div>
                     <Button onClick={openCreateCabinet}>
@@ -513,25 +739,54 @@ export function ClinicAdminPage() {
                   <Card>
                     <div className="divide-y divide-slate-100">
                       {(cabinetsQuery.data?.cabinets ?? []).map((cab) => (
-                        <div key={cab.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                        <div key={cab.id} className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-start gap-3">
                             <span
                               className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full"
                               style={{ backgroundColor: cab.color_code || "#0D9488" }}
                               title={cab.color_code}
                             />
-                            <div>
+                            <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-slate-900">{cab.name}</span>
-                                <Badge tone="info" className="text-[10px]">Box Activo</Badge>
+                                <Badge tone="info" className="text-[10px]">Equipo de trabajo</Badge>
+                                {cab.chair_name && (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                    🪑 {cab.chair_name}
+                                  </span>
+                                )}
                               </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600">
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="font-semibold text-slate-700">Doctor:</span>
+                                  {cab.doctor_name ? (
+                                    <span className="font-medium text-teal-800 bg-teal-50 px-1.5 py-0.2 rounded border border-teal-200">
+                                      Dr(a). {cab.doctor_name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic">Sin doctor asignado</span>
+                                  )}
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="font-semibold text-slate-700">Auxiliar:</span>
+                                  {cab.assistant_name ? (
+                                    <span className="font-medium text-indigo-800 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
+                                      Aux. {cab.assistant_name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400 italic">Sin auxiliar asignado</span>
+                                  )}
+                                </span>
+                              </div>
+
                               {cab.equipment && (
-                                <p className="mt-0.5 text-xs text-slate-700">
+                                <p className="text-xs text-slate-700">
                                   <span className="font-semibold text-slate-600">Equipación:</span> {cab.equipment}
                                 </p>
                               )}
                               {cab.allowed_categories && cab.allowed_categories.length > 0 && (
-                                <div className="mt-1 flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-1">
                                   {cab.allowed_categories.map((c) => {
                                     const spec = specialtiesMap.get(c);
                                     return (
@@ -549,7 +804,7 @@ export function ClinicAdminPage() {
                                   })}
                                 </div>
                               )}
-                              <p className="mt-1 text-xs text-slate-500 flex items-center gap-1.5">
+                              <p className="text-xs text-slate-500 flex items-center gap-1.5">
                                 <Clock className="h-3 w-3 text-slate-400" />
                                 <span>{formatCabinetScheduleSummary(cab.availability)}</span>
                               </p>
@@ -560,11 +815,11 @@ export function ClinicAdminPage() {
                               variant="outline"
                               size="sm"
                               className="text-xs"
-                              title="Configurar horario y disponibilidad"
+                              title="Configurar equipo y disponibilidad"
                               onClick={() => openEditCabinet(cab)}
                             >
                               <Edit2 className="h-3.5 w-3.5 mr-1 text-slate-600" />
-                              Editar horario
+                              Editar equipo
                             </Button>
                             <Button
                               variant="ghost"
@@ -585,6 +840,303 @@ export function ClinicAdminPage() {
                       )}
                     </div>
                   </Card>
+                </div>
+              ),
+            },
+            {
+              id: "chairs",
+              label: "Butacas (Sillones)",
+              content: (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Butacas dentales (Sillones físicos)</h3>
+                      <p className="text-sm text-slate-500">
+                        Inventario de sillones e infraestructura física de la clínica. Cada butaca física puede asignarse a un gabinete de trabajo.
+                      </p>
+                    </div>
+                    <Button onClick={openCreateChair}>
+                      <Plus className="h-4 w-4" />
+                      Nueva butaca
+                    </Button>
+                  </div>
+
+                  <Card>
+                    <div className="divide-y divide-slate-100">
+                      {(chairsQuery.data?.chairs ?? []).map((chair) => {
+                        const linkedCabinet = (cabinetsQuery.data?.cabinets ?? []).find(
+                          (c) => c.chair_id === chair.id,
+                        );
+                        return (
+                          <div key={chair.id} className="flex flex-col gap-2 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-start gap-3">
+                              <span
+                                className="mt-1 h-3.5 w-3.5 shrink-0 rounded-full"
+                                style={{ backgroundColor: chair.color_code || "#0D9488" }}
+                                title={chair.color_code}
+                              />
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-slate-900">{chair.name}</span>
+                                  {chair.is_active ? (
+                                    <Badge tone="success" className="text-[10px]">Operativa</Badge>
+                                  ) : (
+                                    <Badge tone="neutral" className="text-[10px]">Inactiva</Badge>
+                                  )}
+                                  {linkedCabinet ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                                      Asignada a: {linkedCabinet.name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] text-slate-400 italic">Libre (sin asignar)</span>
+                                  )}
+                                </div>
+                                {chair.equipment && (
+                                  <p className="text-xs text-slate-700">
+                                    <span className="font-semibold text-slate-600">Equipamiento técnico:</span> {chair.equipment}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 self-end sm:self-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs"
+                                onClick={() => openEditChair(chair)}
+                              >
+                                <Edit2 className="h-3.5 w-3.5 mr-1 text-slate-600" />
+                                Editar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-slate-400 hover:text-critical"
+                                title="Desactivar butaca física"
+                                onClick={() => setChairToDelete(chair)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(chairsQuery.data?.chairs ?? []).length === 0 && (
+                        <div className="py-8 text-center text-sm text-slate-500">
+                          No hay butacas físicas registradas. Pulsa en "Nueva butaca" para añadir la primera.
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+              ),
+            },
+            {
+              id: "absences",
+              label: "Vacaciones y Bajas",
+              content: (
+                <div className="space-y-6">
+                  {/* Auto-approval policy card */}
+                  <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-slate-900">
+                            Aprobación automática de ausencias y vacaciones
+                          </h3>
+                          <Badge
+                            tone={clinicSettingsQuery.data?.auto_approve_absences ? "success" : "neutral"}
+                            className="text-[10px]"
+                          >
+                            {clinicSettingsQuery.data?.auto_approve_absences ? "Activada" : "Desactivada"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                          Si está activado, las vacaciones y bajas médicas quedan aprobadas al instante.
+                          Al aprobarse la ausencia de un <strong>Doctor</strong>, el sistema <strong>reagendará automáticamente</strong> todas las citas de sus pacientes afectadas al siguiente hueco disponible en la agenda. Para los <strong>Auxiliares</strong>, las citas se mantendrán porque el facultativo continuará atendiendo.
+                        </p>
+                      </div>
+
+                      <Button
+                        variant={clinicSettingsQuery.data?.auto_approve_absences ? "outline" : "primary"}
+                        size="sm"
+                        loading={saveClinicSettingsMutation.isPending}
+                        onClick={() => {
+                          const current = clinicSettingsQuery.data ?? clinicBudgetSettings;
+                          saveClinicSettingsMutation.mutate({
+                            ...current,
+                            auto_approve_absences: !current.auto_approve_absences,
+                          });
+                        }}
+                      >
+                        {clinicSettingsQuery.data?.auto_approve_absences
+                          ? "Desactivar auto-aprobación"
+                          : "Activar auto-aprobación"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Absences list & actions */}
+                  <div className="space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-base font-semibold text-slate-900">
+                          Registro de ausencias, vacaciones y bajas
+                        </h3>
+                        <p className="text-sm text-slate-500">
+                          Gestiona los períodos no laborables del personal médico y auxiliar para evitar colisiones de agenda.
+                        </p>
+                      </div>
+                      <Button onClick={() => openCreateAbsence()}>
+                        <Plus className="h-4 w-4" />
+                        Registrar ausencia o baja
+                      </Button>
+                    </div>
+
+                    <Card>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs text-slate-600">
+                          <thead className="border-b border-slate-100 bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            <tr>
+                              <th className="px-4 py-3">Profesional</th>
+                              <th className="px-4 py-3">Tipo</th>
+                              <th className="px-4 py-3">Periodo</th>
+                              <th className="px-4 py-3">Motivo / Notas</th>
+                              <th className="px-4 py-3">Estado</th>
+                              <th className="px-4 py-3">Impacto / Citas</th>
+                              <th className="px-4 py-3 text-right">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {(absencesQuery.data?.absences ?? []).map((abs) => {
+                              const isDoc =
+                                abs.user_role === "DENTIST" ||
+                                abs.user_role === "HYGIENIST" ||
+                                abs.user_role === "OWNER" ||
+                                abs.user_role === "ADMIN";
+                              return (
+                                <tr key={abs.id} className="hover:bg-slate-50/60 transition-colors">
+                                  <td className="px-4 py-3.5">
+                                    <div className="font-semibold text-slate-900">
+                                      {abs.user_name || "Profesional de clínica"}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500">
+                                      {getRoleDisplayName(abs.user_role || "DENTIST")}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3.5">
+                                    <Badge
+                                      tone={
+                                        abs.absence_type === "VACATION"
+                                          ? "info"
+                                          : abs.absence_type === "SICK_LEAVE"
+                                          ? "warning"
+                                          : "neutral"
+                                      }
+                                      className="text-[10px]"
+                                    >
+                                      {abs.absence_type === "VACATION"
+                                        ? "Vacaciones"
+                                        : abs.absence_type === "SICK_LEAVE"
+                                        ? "Baja médica"
+                                        : "Asuntos propios"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3.5 tabular-nums whitespace-nowrap">
+                                    <div className="font-medium text-slate-800">
+                                      {abs.start_date} al {abs.end_date}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3.5 max-w-xs truncate" title={abs.notes || ""}>
+                                    {abs.notes || <span className="text-slate-400 italic">Sin observaciones</span>}
+                                  </td>
+                                  <td className="px-4 py-3.5 whitespace-nowrap">
+                                    <Badge
+                                      tone={
+                                        abs.status === "APPROVED"
+                                          ? "success"
+                                          : abs.status === "REJECTED"
+                                          ? "danger"
+                                          : "warning"
+                                      }
+                                      className="text-[10px]"
+                                    >
+                                      {abs.status === "APPROVED"
+                                        ? "Aprobada"
+                                        : abs.status === "REJECTED"
+                                        ? "Rechazada"
+                                        : "Pendiente"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3.5 whitespace-nowrap">
+                                    {abs.status === "APPROVED" ? (
+                                      isDoc ? (
+                                        abs.auto_rescheduled_count > 0 ? (
+                                          <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                            ✓ {abs.auto_rescheduled_count} citas reagendadas
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-400 text-[11px]">0 citas afectadas</span>
+                                        )
+                                      ) : (
+                                        <span className="text-slate-400 text-[11px] italic">
+                                          Sin reagendar (Auxiliar)
+                                        </span>
+                                      )
+                                    ) : abs.status === "PENDING" ? (
+                                      <span className="text-amber-700 text-[11px]">
+                                        {isDoc ? "Reagendará citas al aprobar" : "No afecta a las citas"}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 text-[11px]">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                                    {abs.status === "PENDING" ? (
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <Button
+                                          size="sm"
+                                          className="text-xs px-2.5 py-1"
+                                          loading={updateAbsenceStatusMutation.isPending}
+                                          onClick={() =>
+                                            updateAbsenceStatusMutation.mutate({ id: abs.id, status: "APPROVED" })
+                                          }
+                                        >
+                                          <Check className="h-3 w-3 mr-1" />
+                                          Aprobar
+                                        </Button>
+                                        <Button
+                                          variant="destructive"
+                                          size="sm"
+                                          className="text-xs px-2 py-1"
+                                          loading={updateAbsenceStatusMutation.isPending}
+                                          onClick={() =>
+                                            updateAbsenceStatusMutation.mutate({ id: abs.id, status: "REJECTED" })
+                                          }
+                                        >
+                                          <Trash2 className="h-3 w-3 mr-1" />
+                                          Rechazar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 text-[11px]">Procesada</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {(absencesQuery.data?.absences ?? []).length === 0 && (
+                              <tr>
+                                <td colSpan={7} className="py-8 text-center text-slate-500">
+                                  No hay ausencias o vacaciones registradas.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </Card>
+                  </div>
                 </div>
               ),
             },
@@ -838,6 +1390,65 @@ export function ClinicAdminPage() {
                 value={cabinetColor}
                 onChange={(e) => setCabinetColor(e.target.value)}
               />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Butaca física (Sillón / Box)
+                </label>
+                <select
+                  aria-label="Butaca física"
+                  value={cabinetChairId}
+                  onChange={(e) => setCabinetChairId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">Sin butaca asignada</option>
+                  {(chairsQuery.data?.chairs ?? []).map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      🪑 {ch.name} {!ch.is_active ? "(Inactiva)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Doctor / Facultativo
+                </label>
+                <select
+                  aria-label="Doctor asignado"
+                  value={cabinetDoctorId}
+                  onChange={(e) => setCabinetDoctorId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">Sin doctor asignado</option>
+                  {(doctorsQuery.data?.doctors ?? []).map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      👨‍⚕️ Dr(a). {doc.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Auxiliar de gabinete
+                </label>
+                <select
+                  aria-label="Auxiliar asignado"
+                  value={cabinetAssistantId}
+                  onChange={(e) => setCabinetAssistantId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+                >
+                  <option value="">Sin auxiliar asignado</option>
+                  {(assistantsQuery.data?.assistants ?? []).map((ast) => (
+                    <option key={ast.id} value={ast.id}>
+                      🤝 Aux. {ast.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <Input
@@ -1131,6 +1742,188 @@ export function ClinicAdminPage() {
           title={`¿Eliminar especialidad "${specialtyToDelete?.name}"?`}
           description="La especialidad se desactivará mediante un borrado lógico. No se eliminarán ni alterarán los tratamientos o gabinetes históricos asociados."
           confirmLabel="Sí, eliminar especialidad"
+        />
+
+        {/* Modal Butaca Física */}
+        <Modal
+          open={chairModalOpen}
+          onClose={() => setChairModalOpen(false)}
+          title={editingChair ? "Editar butaca física" : "Nueva butaca física (Sillón dental)"}
+          description="Registra o actualiza los datos técnicos del sillón y su equipamiento instalado."
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setChairModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                loading={saveChairMutation.isPending}
+                onClick={() => saveChairMutation.mutate()}
+                disabled={!chairName.trim()}
+              >
+                Guardar butaca
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 py-2">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Nombre de la butaca"
+                placeholder="Ej. Sillón 1 (Sala A - Kavo Primus)"
+                value={chairName}
+                onChange={(e) => setChairName(e.target.value)}
+                required
+              />
+              <Input
+                label="Color identificativo"
+                type="color"
+                value={chairColor}
+                onChange={(e) => setChairColor(e.target.value)}
+              />
+            </div>
+
+            <Input
+              label="Equipamiento técnico instalado"
+              placeholder="Ej. Motor de implantes, Rx intraoral, lámpara scialítica LED, ultrasonidos..."
+              value={chairEquipment}
+              onChange={(e) => setChairEquipment(e.target.value)}
+            />
+
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-1">
+              <input
+                type="checkbox"
+                checked={chairIsActive}
+                onChange={(e) => setChairIsActive(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span>Butaca operativa y activa para asignación a gabinetes</span>
+            </label>
+          </div>
+        </Modal>
+
+        {/* Modal Registrar Ausencia o Baja */}
+        <Modal
+          open={absenceModalOpen}
+          onClose={() => setAbsenceModalOpen(false)}
+          title="Registrar ausencia o baja médica"
+          description="Planifica períodos de vacaciones, permisos o bajas médicas del equipo."
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setAbsenceModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                loading={saveAbsenceMutation.isPending}
+                onClick={() => saveAbsenceMutation.mutate()}
+                disabled={!absenceUserId || !absenceStartDate || !absenceEndDate}
+              >
+                Registrar ausencia
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Profesional / Miembro del equipo
+              </label>
+              <select
+                aria-label="Profesional para la ausencia"
+                value={absenceUserId}
+                onChange={(e) => setAbsenceUserId(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+              >
+                {(usersQuery.data?.users ?? []).map((u) => (
+                  <option key={u.user_id} value={u.user_id}>
+                    {u.full_name} · {getRoleDisplayName(u.role)} ({u.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1">
+                Tipo de ausencia
+              </label>
+              <select
+                aria-label="Tipo de ausencia"
+                value={absenceType}
+                onChange={(e) => setAbsenceType(e.target.value as StaffAbsenceType)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
+              >
+                <option value="VACATION">Vacaciones anuales</option>
+                <option value="SICK_LEAVE">Baja médica / Incapacidad temporal</option>
+                <option value="PERSONAL">Asuntos propios / Permiso retribuido</option>
+              </select>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Fecha de inicio"
+                type="date"
+                value={absenceStartDate}
+                onChange={(e) => setAbsenceStartDate(e.target.value)}
+                required
+              />
+              <Input
+                label="Fecha de fin"
+                type="date"
+                value={absenceEndDate}
+                onChange={(e) => setAbsenceEndDate(e.target.value)}
+                required
+              />
+            </div>
+
+            <Input
+              label="Motivo u observaciones (opcional)"
+              placeholder="Ej. Vacaciones de verano, reposo médico..."
+              value={absenceNotes}
+              onChange={(e) => setAbsenceNotes(e.target.value)}
+            />
+
+            {(() => {
+              const selectedUser = (usersQuery.data?.users ?? []).find(
+                (u) => u.user_id === absenceUserId,
+              );
+              const isDoctor =
+                selectedUser?.role === "DENTIST" ||
+                selectedUser?.role === "HYGIENIST" ||
+                selectedUser?.role === "OWNER" ||
+                selectedUser?.role === "ADMIN";
+              return isDoctor ? (
+                <div className="rounded-lg border border-teal-200 bg-teal-50/70 p-3 text-xs text-teal-900 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5 text-teal-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Reagendamiento automático para Doctores activado</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-teal-700">
+                    Al aprobarse esta ausencia, las citas de pacientes que colisionen en el período seleccionado serán <strong>reagendadas de forma automática</strong> a las siguientes fechas disponibles.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
+                  <div className="font-semibold flex items-center gap-1.5 text-slate-800">
+                    <Users className="h-4 w-4 text-slate-500" />
+                    <span>Ausencia de personal Auxiliar</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-slate-600">
+                    Las citas agendadas no se reagendarán automáticamente porque el doctor continuará atendiendo la consulta.
+                  </p>
+                </div>
+              );
+            })()}
+          </div>
+        </Modal>
+
+        <ConfirmDialog
+          open={Boolean(chairToDelete)}
+          onClose={() => setChairToDelete(null)}
+          onConfirm={() => chairToDelete && deleteChairMutation.mutate(chairToDelete.id)}
+          loading={deleteChairMutation.isPending}
+          danger
+          title={`¿Desactivar butaca física "${chairToDelete?.name}"?`}
+          description="La butaca pasará a estar inactiva y no podrá asignarse a nuevos gabinetes. Las citas y el historial no se verán alterados."
+          confirmLabel="Sí, desactivar butaca"
         />
 
         <ConfirmDialog

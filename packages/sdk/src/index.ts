@@ -40,6 +40,7 @@ export interface ClinicBudgetSettings {
   margin_left_mm?: number;
   margin_right_mm?: number;
   hide_header_logo_on_print?: boolean;
+  auto_approve_absences?: boolean;
 }
 
 export function defaultClinicBudgetSettings(): ClinicBudgetSettings {
@@ -58,6 +59,7 @@ export function defaultClinicBudgetSettings(): ClinicBudgetSettings {
     margin_left_mm: 15,
     margin_right_mm: 15,
     hide_header_logo_on_print: false,
+    auto_approve_absences: false,
   };
 }
 
@@ -540,6 +542,28 @@ export interface Appointment {
   is_forced?: boolean;
   notes?: string;
   version: number;
+  assistant_id?: string;
+  assistant_name?: string;
+  chair_id?: string;
+  chair_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StaffAbsenceType = "VACATION" | "SICK_LEAVE" | "PERSONAL";
+export type StaffAbsenceStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface StaffAbsence {
+  id: string;
+  user_id: string;
+  user_name?: string;
+  user_role?: string;
+  absence_type: StaffAbsenceType;
+  start_date: string;
+  end_date: string;
+  status: StaffAbsenceStatus;
+  auto_rescheduled_count: number;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -1262,6 +1286,36 @@ export class DentistesClient {
     });
   }
 
+  listChairs(): Promise<{ chairs: DentalChair[] }> {
+    return this.request("/v1/chairs");
+  }
+
+  createChair(input: {
+    name: string;
+    color_code?: string;
+    equipment?: string;
+    allowed_categories?: string[];
+  }): Promise<{ chair: DentalChair }> {
+    return this.request("/v1/chairs", { method: "POST", body: input });
+  }
+
+  updateChair(
+    id: string,
+    input: {
+      name?: string;
+      color_code?: string;
+      equipment?: string;
+      allowed_categories?: string[];
+      is_active?: boolean;
+    },
+  ): Promise<{ chair: DentalChair }> {
+    return this.request(`/v1/chairs/${encodeURIComponent(id)}`, { method: "PUT", body: input });
+  }
+
+  deleteChair(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/chairs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
   listCabinets(): Promise<{ cabinets: Cabinet[] }> {
     return this.request("/v1/cabinets");
   }
@@ -1273,6 +1327,9 @@ export class DentistesClient {
     allowed_categories?: string[];
     allowed_treatments?: string[];
     availability?: CabinetDayAvailability[];
+    chair_id?: string;
+    doctor_id?: string;
+    assistant_id?: string;
   }): Promise<{ cabinet: Cabinet }> {
     return this.request("/v1/cabinets", { method: "POST", body: input });
   }
@@ -1286,6 +1343,9 @@ export class DentistesClient {
       allowed_categories?: string[];
       allowed_treatments?: string[];
       availability?: CabinetDayAvailability[];
+      chair_id?: string;
+      doctor_id?: string;
+      assistant_id?: string;
     }
   ): Promise<{ cabinet: Cabinet }> {
     return this.request(`/v1/cabinets/${encodeURIComponent(id)}`, { method: "PUT", body: input });
@@ -1362,6 +1422,40 @@ export class DentistesClient {
 
   listDoctors(): Promise<{ doctors: Doctor[] }> {
     return this.request("/v1/doctors");
+  }
+
+  listAssistants(): Promise<{ assistants: Doctor[] }> {
+    return this.request("/v1/assistants");
+  }
+
+  listAbsences(params: { status?: string; user_id?: string; start_date?: string; end_date?: string } = {}): Promise<{
+    absences: StaffAbsence[];
+  }> {
+    const query = new URLSearchParams();
+    if (params.status) query.set("status", params.status);
+    if (params.user_id) query.set("user_id", params.user_id);
+    if (params.start_date) query.set("start_date", params.start_date);
+    if (params.end_date) query.set("end_date", params.end_date);
+    const suffix = query.toString() ? `?${query}` : "";
+    return this.request(`/v1/absences${suffix}`);
+  }
+
+  createAbsence(input: {
+    user_id?: string;
+    absence_type: StaffAbsenceType;
+    start_date: string;
+    end_date: string;
+    notes?: string;
+    auto_approve?: boolean;
+  }): Promise<{ absence: StaffAbsence }> {
+    return this.request("/v1/absences", { method: "POST", body: input });
+  }
+
+  updateAbsenceStatus(id: string, status: StaffAbsenceStatus): Promise<{ absence: StaffAbsence }> {
+    return this.request(`/v1/absences/${encodeURIComponent(id)}/status`, {
+      method: "PUT",
+      body: { status },
+    });
   }
 
   listAppointments(params: { start?: string; end?: string; cabinet_id?: string; doctor_id?: string } = {}): Promise<{
@@ -1488,6 +1582,7 @@ export class DentistesClient {
     patient_id: string;
     doctor_id: string;
     cabinet_id: string;
+    assistant_id?: string;
     start_time: string;
     end_time: string;
     treatment_type: string;
@@ -1502,6 +1597,7 @@ export class DentistesClient {
     input: {
       doctor_id: string;
       cabinet_id: string;
+      assistant_id?: string;
       start_time: string;
       end_time: string;
       treatment_type: string;

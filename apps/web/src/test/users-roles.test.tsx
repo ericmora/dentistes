@@ -39,34 +39,45 @@ vi.mock("../lib/session", () => ({
   }),
 }));
 
-describe("Team & Roles Simplification (UsersPage)", () => {
+describe("Team & Roles Management (UsersPage)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("defines exactly 2 assignable roles: Administrador and Profesional de clínica", () => {
-    expect(ASSIGNABLE_ROLES.length).toBe(2);
-    expect(ASSIGNABLE_ROLES.map((r) => r.value)).toEqual(["ADMIN", "DENTIST"]);
+  it("defines clinic assignable roles including Admin, Dentist, Hygienist, Assistant, and Receptionist", () => {
+    expect(ASSIGNABLE_ROLES.length).toBe(5);
+    expect(ASSIGNABLE_ROLES.map((r) => r.value)).toEqual([
+      "ADMIN",
+      "DENTIST",
+      "HYGIENIST",
+      "ASSISTANT",
+      "RECEPTIONIST",
+    ]);
     expect(ASSIGNABLE_ROLES.map((r) => r.label)).toEqual([
       "Administrador",
-      "Profesional de clínica",
+      "Odontólogo / Doctor",
+      "Higienista dental",
+      "Auxiliar / Asistente de gabinete",
+      "Recepción y atención al paciente",
     ]);
   });
 
-  it("normalizes existing legacy roles (HYGIENIST, RECEPTIONIST) to Profesional de clínica", () => {
+  it("normalizes existing roles and preserves ASSISTANT, HYGIENIST, RECEPTIONIST", () => {
     expect(normalizeUserRole("ADMIN")).toBe("ADMIN");
     expect(normalizeUserRole("OWNER")).toBe("OWNER");
     expect(normalizeUserRole("DENTIST")).toBe("DENTIST");
-    expect(normalizeUserRole("HYGIENIST")).toBe("DENTIST");
-    expect(normalizeUserRole("RECEPTIONIST")).toBe("DENTIST");
+    expect(normalizeUserRole("HYGIENIST")).toBe("HYGIENIST");
+    expect(normalizeUserRole("ASSISTANT")).toBe("ASSISTANT");
+    expect(normalizeUserRole("RECEPTIONIST")).toBe("RECEPTIONIST");
+    expect(normalizeUserRole("UNKNOWN_ROLE")).toBe("DENTIST");
 
     expect(getRoleDisplayName("ADMIN")).toBe("Administrador");
-    expect(getRoleDisplayName("DENTIST")).toBe("Profesional de clínica");
-    expect(getRoleDisplayName("HYGIENIST")).toBe("Profesional de clínica");
+    expect(getRoleDisplayName("DENTIST")).toBe("Odontólogo / Doctor");
+    expect(getRoleDisplayName("ASSISTANT")).toBe("Auxiliar / Asistente de gabinete");
     expect(getRoleDisplayName("OWNER")).toBe("Propietario");
   });
 
-  it("renders users list with simplified role selectors and Propietario badge", async () => {
+  it("renders users list with role selectors and Propietario badge", async () => {
     mockList.mockResolvedValue({
       users: [
         {
@@ -138,14 +149,15 @@ describe("Team & Roles Simplification (UsersPage)", () => {
     fireEvent.change(nameInput, { target: { value: "Carlos Higienista" } });
     fireEvent.change(passInput, { target: { value: "SuperSegura123!" } });
 
-    // Role default is Profesional de clínica (DENTIST)
+    // Role default is DENTIST
     expect(roleSelect).toHaveValue("DENTIST");
 
-    // Options only contain the 2 simplified roles
+    // Options contain all 5 assignable roles
     const options = Array.from(roleSelect.querySelectorAll("option"));
-    expect(options.length).toBe(2);
-    expect(options[0]).toHaveValue("ADMIN");
-    expect(options[1]).toHaveValue("DENTIST");
+    expect(options.length).toBe(5);
+    expect(options.map((o) => o.value)).toEqual(["ADMIN", "DENTIST", "HYGIENIST", "ASSISTANT", "RECEPTIONIST"]);
+
+    fireEvent.change(roleSelect, { target: { value: "ASSISTANT" } });
 
     const submitBtn = screen.getByRole("button", { name: /Añadir miembro/i });
     fireEvent.click(submitBtn);
@@ -155,7 +167,7 @@ describe("Team & Roles Simplification (UsersPage)", () => {
         email: "nuevo@clinica.com",
         full_name: "Carlos Higienista",
         password: "SuperSegura123!",
-        role: "DENTIST",
+        role: "ASSISTANT",
       });
     });
   });

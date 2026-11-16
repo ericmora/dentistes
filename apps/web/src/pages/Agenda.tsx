@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -33,8 +33,10 @@ import {
   Badge,
   Button,
   Combobox,
+  EmptyState,
   FeatureGate,
   Input,
+  Modal,
   MultiCabinetTimeline,
   PermissionGate,
   Select,
@@ -50,6 +52,7 @@ import {
   type AppointmentStatus,
   type AvailableSlot,
   type WaitingCandidateMatch,
+  type WaitingListEntry,
 } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 import { useAppointmentStream } from "../lib/useAppointmentStream";
@@ -134,10 +137,27 @@ export function AgendaPage() {
   const [finderShift, setFinderShift] = useState<"all" | "morning" | "afternoon">("all");
   const [finderStartDate, setFinderStartDate] = useState(todayISO());
 
+  // Integrated Waiting List State
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [waitingListOpen, setWaitingListOpen] = useState(
+    () => searchParams.get("tab") === "waiting-list" || searchParams.has("waiting_list"),
+  );
+  const [waitingStatusFilter, setWaitingStatusFilter] = useState<string>("WAITING");
+  const [newWaitingModalOpen, setNewWaitingModalOpen] = useState(false);
+  const [waitingForm, setWaitingForm] = useState({
+    patient_id: "",
+    treatment_type: DENTAL_TREATMENTS_MASTER[0].name,
+    estimated_duration_minutes: String(DENTAL_TREATMENTS_MASTER[0].default_duration_minutes),
+    preferred_time_slot: "ANY" as WaitingListEntry["preferred_time_slot"],
+    urgency_level: "NORMAL" as WaitingListEntry["urgency_level"],
+    notes: "",
+  });
+
   const defaultTreatment = DENTAL_TREATMENTS_MASTER[0];
   const [newForm, setNewForm] = useState({
     patient_id: "",
     doctor_id: "",
+    assistant_id: "",
     cabinet_id: "",
     slot: "09:00",
     duration: String(defaultTreatment.default_duration_minutes),
@@ -221,6 +241,18 @@ export function AgendaPage() {
     enabled: agendaEnabled,
   });
 
+  const assistantsQuery = useQuery({
+    queryKey: ["assistants"],
+    queryFn: () => sdk.listAssistants(),
+    enabled: agendaEnabled,
+  });
+
+  const absencesQuery = useQuery({
+    queryKey: ["absences", date],
+    queryFn: () => sdk.listAbsences(),
+    enabled: agendaEnabled,
+  });
+
   const patientsQuery = useQuery({
     queryKey: ["patients", "agenda-select"],
     queryFn: () => sdk.listPatients({ limit: 100 }),
@@ -258,6 +290,7 @@ export function AgendaPage() {
       return sdk.createAppointment({
         patient_id: newForm.patient_id,
         doctor_id: newForm.doctor_id,
+        assistant_id: newForm.assistant_id || undefined,
         cabinet_id: newForm.cabinet_id,
         start_time: start,
         end_time: end,
@@ -349,6 +382,68 @@ export function AgendaPage() {
     },
   });
 
+  const waitingListQuery = useQuery({
+    queryKey: ["waiting-list", waitingStatusFilter],
+    queryFn: () => sdk.listWaitingList((waitingStatusFilter || undefined) as WaitingListEntry["status"] | undefined),
+    enabled: agendaEnabled,
+  });
+
+  const allWaitingEntries = waitingListQuery.data?.entries ?? [];
+  const pendingWaitingCount = useMemo(
+    () => allWaitingEntries.filter((e) => e.status === "WAITING").length,
+    [allWaitingEntries],
+  );
+
+  const createWaitingMutation = useMutation({
+    mutationFn: () =>
+      sdk.createWaitingListEntry({
+        patient_id: waitingForm.patient_id,
+        treatment_type: waitingForm.treatment_type,
+        estimated_duration_minutes: Number(waitingForm.estimated_duration_minutes) || 30,
+        preferred_time_slot: waitingForm.preferred_time_slot,
+        urgency_level: waitingForm.urgency_level,
+        notes: waitingForm.notes,
+      }),
+    onSuccess: async () => {
+      setNewWaitingModalOpen(false);
+      setWaitingForm({
+        patient_id: "",
+        treatment_type: availableTreatments[0]?.name || DENTAL_TREATMENTS_MASTER[0].name,
+        estimated_duration_minutes: String(availableTreatments[0]?.default_duration_minutes || 30),
+        preferred_time_slot: "ANY",
+        urgency_level: "NORMAL",
+        notes: "",
+      });
+      notify({ tone: "success", title: "Paciente añadido a la lista de espera" });
+      await queryClient.invalidateQueries({ queryKey: ["waiting-list"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo añadir a la lista",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  function handleAssignWaitingEntryToAgenda(entry: WaitingListEntry) {
+    setWaitingListOpen(false);
+    openNewAt(cabinetFilter || allCabinets[0]?.id || "", "09:00", entry.estimated_duration_minutes);
+    setNewForm((prev) => ({
+      ...prev,
+      patient_id: entry.patient_id,
+      treatment_type: entry.treatment_type,
+      duration: String(entry.estimated_duration_minutes),
+      is_forced: entry.urgency_level === "URGENT",
+      notes: `[Desde Lista de Espera · ${entry.urgency_level}] ${entry.notes || ""}`.trim(),
+    }));
+    notify({
+      tone: "info",
+      title: "Paciente asignado al formulario de cita",
+      description: `Selecciona gabinete y hora para agendar a ${entry.patient_name}`,
+    });
+  }
+
   const allCabinets = cabinetsQuery.data?.cabinets ?? [];
   const cabinets = cabinetFilter ? allCabinets.filter((c) => c.id === cabinetFilter) : allCabinets;
   const doctors = doctorsQuery.data?.doctors ?? [];
@@ -366,6 +461,8 @@ export function AgendaPage() {
         id: appt.id,
         patientName: appt.patient_name,
         doctorName: appt.doctor_name,
+        assistantName: appt.assistant_name,
+        chairName: appt.chair_name,
         treatmentType: appt.treatment_type,
         startTime: hhmm(appt.start_time),
         endTime: hhmm(appt.end_time),
@@ -377,12 +474,14 @@ export function AgendaPage() {
   }, [activeAppointments]);
 
   function openNewAt(cabinetId: string, slot: string, suggestedDuration?: number) {
+    const cab = allCabinets.find((c) => c.id === cabinetId);
     setSelectedAppt(null);
     setMatches([]);
     setNewForm((prev) => ({
       ...prev,
       cabinet_id: cabinetId || allCabinets[0]?.id || "",
-      doctor_id: prev.doctor_id || doctors[0]?.id || "",
+      doctor_id: cab?.doctor_id || prev.doctor_id || doctors[0]?.id || "",
+      assistant_id: cab?.assistant_id || prev.assistant_id || "",
       slot,
       duration: suggestedDuration ? String(suggestedDuration) : prev.duration,
       is_forced: false,
@@ -515,6 +614,23 @@ export function AgendaPage() {
               )}
             </Button>
 
+            {/* Lista de Espera de la Agenda */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setWaitingListOpen(true)}
+              className="min-h-[32px] px-2.5 py-1 text-xs border-amber-200 bg-amber-50/70 text-amber-900 hover:bg-amber-100"
+              title="Lista de espera de pacientes para huecos y cancelaciones"
+            >
+              <Clock className="h-3.5 w-3.5 text-amber-700" />
+              <span>Lista de espera</span>
+              {pendingWaitingCount > 0 ? (
+                <span className="ml-1 rounded-full bg-amber-600 px-1.5 py-0.2 text-[10px] font-bold text-white">
+                  {pendingWaitingCount}
+                </span>
+              ) : null}
+            </Button>
+
             {/* Buscar Hueco Disponible */}
             <Button
               variant="outline"
@@ -555,12 +671,36 @@ export function AgendaPage() {
               </Alert>
             ) : (
               <MultiCabinetTimeline
-                cabinets={cabinets.map((c) => ({
-                  id: c.id,
-                  name: c.name,
-                  colorCode: c.color_code,
-                  availability: c.availability,
-                }))}
+                cabinets={cabinets.map((c) => {
+                  const docAbsence = absencesQuery.data?.absences?.find(
+                    (a) =>
+                      a.status === "APPROVED" &&
+                      a.user_id === c.doctor_id &&
+                      date >= a.start_date &&
+                      date <= a.end_date,
+                  );
+                  const astAbsence = absencesQuery.data?.absences?.find(
+                    (a) =>
+                      a.status === "APPROVED" &&
+                      a.user_id === c.assistant_id &&
+                      date >= a.start_date &&
+                      date <= a.end_date,
+                  );
+                  return {
+                    id: c.id,
+                    name: c.name,
+                    colorCode: c.color_code,
+                    availability: c.availability,
+                    chairName: c.chair_name,
+                    doctorName: c.doctor_name,
+                    assistantName: c.assistant_name,
+                    isDoctorAbsent: Boolean(docAbsence),
+                    isAssistantAbsent: Boolean(astAbsence),
+                    absenceReason: docAbsence
+                      ? `${docAbsence.absence_type === "VACATION" ? "Vacaciones" : docAbsence.absence_type === "SICK_LEAVE" ? "Baja médica" : "Ausencia"}${docAbsence.notes ? `: ${docAbsence.notes}` : ""}`
+                      : undefined,
+                  };
+                })}
                 dayOfWeek={(new Date(`${date}T12:00:00`).getDay() || 7)}
                 slots={SLOTS}
                 slotHeight={isTimelineExpanded ? 68 : 28}
@@ -613,10 +753,10 @@ export function AgendaPage() {
                   </button>
                 </div>
 
-                {/* Informative Doctor & Cabinet Context (Read-only, without actions) */}
+                {/* Informative Doctor, Assistant, Cabinet & Chair Context */}
                 <div className="grid grid-cols-2 gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 p-2.5 text-xs">
                   <div className="space-y-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gabinete</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gabinete / Butaca</span>
                     <div className="flex items-center gap-1.5 font-semibold text-slate-800 truncate">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-slate-300"
@@ -624,14 +764,24 @@ export function AgendaPage() {
                       />
                       <span className="truncate">{selectedCabinet?.name ?? selectedAppt.cabinet_name}</span>
                     </div>
+                    {(selectedAppt.chair_name || selectedCabinet?.chair_name) && (
+                      <p className="text-[10px] text-slate-500 truncate">
+                        🪑 {selectedAppt.chair_name || selectedCabinet?.chair_name}
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-0.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Doctor asignado</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Doctor / Auxiliar</span>
                     <div className="flex items-center gap-1.5 font-semibold text-slate-800 truncate">
                       <Stethoscope className="h-3.5 w-3.5 shrink-0 text-brand-600" />
                       <span className="truncate">Dr(a). {selectedAppt.doctor_name || "Sin asignar"}</span>
                     </div>
+                    {selectedAppt.assistant_name && (
+                      <p className="text-[10px] text-slate-500 truncate">
+                        🤝 Aux. {selectedAppt.assistant_name}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -889,20 +1039,44 @@ export function AgendaPage() {
                     }))}
                   />
 
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-3">
                     <Select
                       label="Gabinete dental"
                       value={newForm.cabinet_id}
-                      onChange={(v) => setNewForm({ ...newForm, cabinet_id: v })}
+                      onChange={(v) => {
+                        const cab = allCabinets.find((c) => c.id === v);
+                        setNewForm({
+                          ...newForm,
+                          cabinet_id: v,
+                          doctor_id: cab?.doctor_id || newForm.doctor_id,
+                          assistant_id: cab?.assistant_id || newForm.assistant_id,
+                        });
+                      }}
                       placeholder=""
-                      options={allCabinets.map((c) => ({ value: c.id, label: c.name }))}
+                      options={allCabinets.map((c) => ({
+                        value: c.id,
+                        label: `${c.name}${c.chair_name ? ` (🪑 ${c.chair_name})` : ""}`,
+                      }))}
                     />
                     <Select
-                      label="Profesional asignado"
+                      label="Doctor asignado"
                       value={newForm.doctor_id}
                       onChange={(v) => setNewForm({ ...newForm, doctor_id: v })}
                       placeholder=""
                       options={doctors.map((d) => ({ value: d.id, label: d.full_name }))}
+                    />
+                    <Select
+                      label="Auxiliar asignado"
+                      value={newForm.assistant_id}
+                      onChange={(v) => setNewForm({ ...newForm, assistant_id: v })}
+                      placeholder="Sin auxiliar"
+                      options={[
+                        { value: "", label: "Sin auxiliar" },
+                        ...(assistantsQuery.data?.assistants ?? []).map((a) => ({
+                          value: a.id,
+                          label: `Aux. ${a.full_name}`,
+                        })),
+                      ]}
                     />
                   </div>
 
@@ -1069,13 +1243,19 @@ export function AgendaPage() {
 
                 {/* Quick Module Links */}
                 <div className="grid grid-cols-2 gap-1.5 border-t border-slate-100 pt-2.5">
-                  <Link
-                    to="/waiting-list"
-                    className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  <button
+                    type="button"
+                    onClick={() => setWaitingListOpen(true)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition"
                   >
-                    <Clock className="h-3.5 w-3.5 text-brand-700" />
-                    Lista de espera
-                  </Link>
+                    <Clock className="h-3.5 w-3.5 text-amber-700" />
+                    <span>Lista de espera</span>
+                    {pendingWaitingCount > 0 ? (
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.2 text-[10px] font-bold text-amber-800">
+                        {pendingWaitingCount}
+                      </span>
+                    ) : null}
+                  </button>
                   <Link
                     to="/patients"
                     className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
@@ -1416,6 +1596,299 @@ export function AgendaPage() {
               </div>
             </div>
           </div>
+        ) : null}
+
+        {/* Modal: Lista de Espera Integrada en la Agenda */}
+        {waitingListOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+            <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+                    <Clock className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">Lista de espera de la agenda</h2>
+                    <p className="text-xs text-slate-500">
+                      Gestiona los pacientes en espera para asignar citas directamente a huecos libres o cancelaciones de la agenda.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <PermissionGate me={me} permission="appointments:write">
+                    <Button
+                      size="sm"
+                      onClick={() => setNewWaitingModalOpen(true)}
+                      className="gap-1 text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Inscribir paciente
+                    </Button>
+                  </PermissionGate>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWaitingListOpen(false);
+                      if (searchParams.has("tab") || searchParams.has("waiting_list")) {
+                        searchParams.delete("tab");
+                        searchParams.delete("waiting_list");
+                        setSearchParams(searchParams);
+                      }
+                    }}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Cerrar lista de espera"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Toolbar: Filtros */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-5 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-600">Filtrar por estado:</span>
+                  <div className="flex flex-wrap rounded-lg border border-slate-200 bg-white p-0.5">
+                    {[
+                      { value: "WAITING", label: `En espera (${allWaitingEntries.filter((e) => e.status === "WAITING").length})` },
+                      { value: "OFFERED", label: "Ofertada (15m)" },
+                      { value: "SCHEDULED", label: "Programada" },
+                      { value: "CANCELLED", label: "Cancelada" },
+                      { value: "", label: "Todas" },
+                    ].map((st) => (
+                      <button
+                        key={st.value}
+                        type="button"
+                        onClick={() => setWaitingStatusFilter(st.value)}
+                        className={cn(
+                          "rounded-md px-2.5 py-1 text-xs font-medium transition",
+                          waitingStatusFilter === st.value
+                            ? "bg-slate-900 text-white font-semibold"
+                            : "text-slate-600 hover:text-slate-900",
+                        )}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <span className="text-xs text-slate-500">
+                  {allWaitingEntries.length} {allWaitingEntries.length === 1 ? "solicitud" : "solicitudes"}
+                </span>
+              </div>
+
+              {/* Content List */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                {waitingListQuery.isLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-20 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : allWaitingEntries.length === 0 ? (
+                  <EmptyState
+                    title="No hay pacientes en esta sección de la lista de espera"
+                    description="Inscribe pacientes para que puedas asignarlos de forma ágil cuando surjan cancelaciones o huecos libres."
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    {allWaitingEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs hover:border-slate-300 transition"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900">{entry.patient_name}</span>
+                              <Badge
+                                tone={
+                                  entry.urgency_level === "URGENT"
+                                    ? "danger"
+                                    : entry.urgency_level === "HIGH"
+                                    ? "warning"
+                                    : "neutral"
+                                }
+                              >
+                                {entry.urgency_level === "URGENT"
+                                  ? "Urgente"
+                                  : entry.urgency_level === "HIGH"
+                                  ? "Alta"
+                                  : "Normal"}
+                              </Badge>
+                              <Badge
+                                tone={
+                                  entry.status === "WAITING"
+                                    ? "info"
+                                    : entry.status === "OFFERED"
+                                    ? "warning"
+                                    : entry.status === "SCHEDULED"
+                                    ? "success"
+                                    : "neutral"
+                                }
+                              >
+                                {entry.status === "WAITING"
+                                  ? "En espera"
+                                  : entry.status === "OFFERED"
+                                  ? "Reserva 15 min"
+                                  : entry.status === "SCHEDULED"
+                                  ? "Agendada"
+                                  : "Cancelada"}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                              <span>🦷 {entry.treatment_type}</span>
+                              <span>⏱️ {entry.estimated_duration_minutes} min</span>
+                              <span>
+                                🕒 Horario:{" "}
+                                {entry.preferred_time_slot === "MORNING"
+                                  ? "Mañanas"
+                                  : entry.preferred_time_slot === "AFTERNOON"
+                                  ? "Tardes"
+                                  : "Cualquier franja"}
+                              </span>
+                              {entry.patient_phone ? (
+                                <span>📞 {entry.patient_phone}</span>
+                              ) : null}
+                            </div>
+                            {entry.notes ? (
+                              <p className="mt-1 text-xs text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                💬 {entry.notes}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-center">
+                            {entry.status === "WAITING" ? (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => holdMutation.mutate(entry.id)}
+                                  className="text-xs"
+                                  title="Bloquea temporalmente durante 15 minutos mientras contactas por WhatsApp"
+                                >
+                                  Reservar 15m
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleAssignWaitingEntryToAgenda(entry)}
+                                  className="gap-1 text-xs bg-brand-600 hover:bg-brand-700"
+                                >
+                                  <span>Asignar en agenda</span>
+                                  <ArrowRight className="h-3 w-3" />
+                                </Button>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Modal: Inscribir Paciente en Lista de Espera */}
+        {newWaitingModalOpen ? (
+          <Modal
+            open={newWaitingModalOpen}
+            onClose={() => setNewWaitingModalOpen(false)}
+            title="Inscribir en lista de espera"
+            description="Registra un paciente en la lista de espera para asignarle huecos libres en la agenda."
+          >
+            <form
+              className="space-y-4"
+              onSubmit={(e: FormEvent) => {
+                e.preventDefault();
+                createWaitingMutation.mutate();
+              }}
+            >
+              <Combobox
+                label="Paciente"
+                value={waitingForm.patient_id}
+                onChange={(v) => setWaitingForm({ ...waitingForm, patient_id: v })}
+                placeholder="Buscar paciente…"
+                options={(patientsQuery.data?.patients ?? []).map((p) => ({
+                  value: p.id,
+                  label: `${p.last_name}, ${p.first_name}`,
+                  hint: p.phone,
+                }))}
+              />
+              <Select
+                label="Tratamiento dental"
+                value={waitingForm.treatment_type}
+                onChange={(v) => {
+                  const t = availableTreatments.find((x) => x.name === v);
+                  setWaitingForm({
+                    ...waitingForm,
+                    treatment_type: v,
+                    estimated_duration_minutes: t ? String(t.default_duration_minutes) : waitingForm.estimated_duration_minutes,
+                  });
+                }}
+                placeholder=""
+                options={availableTreatments.map((t) => ({
+                  value: t.name,
+                  label: `${t.name} (${t.default_duration_minutes} min)`,
+                }))}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Input
+                  label="Duración estimada (min)"
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={waitingForm.estimated_duration_minutes}
+                  onChange={(e) => setWaitingForm({ ...waitingForm, estimated_duration_minutes: e.target.value })}
+                />
+                <Select
+                  label="Preferencia horaria"
+                  value={waitingForm.preferred_time_slot}
+                  onChange={(v) => setWaitingForm({ ...waitingForm, preferred_time_slot: v as WaitingListEntry["preferred_time_slot"] })}
+                  placeholder=""
+                  options={[
+                    { value: "ANY", label: "Cualquier horario" },
+                    { value: "MORNING", label: "Solo mañanas" },
+                    { value: "AFTERNOON", label: "Solo tardes" },
+                  ]}
+                />
+              </div>
+              <Select
+                label="Nivel de urgencia"
+                value={waitingForm.urgency_level}
+                onChange={(v) => setWaitingForm({ ...waitingForm, urgency_level: v as WaitingListEntry["urgency_level"] })}
+                placeholder=""
+                options={[
+                  { value: "NORMAL", label: "Normal" },
+                  { value: "HIGH", label: "Alta" },
+                  { value: "URGENT", label: "Urgente (Dolor o emergencia)" },
+                ]}
+              />
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Notas / Observaciones</label>
+                <textarea
+                  rows={2}
+                  value={waitingForm.notes}
+                  onChange={(e) => setWaitingForm({ ...waitingForm, notes: e.target.value })}
+                  placeholder="Disponibilidad, motivo o cualquier dato de contacto adicional…"
+                  className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setNewWaitingModalOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  loading={createWaitingMutation.isPending}
+                  disabled={!waitingForm.patient_id}
+                >
+                  Inscribir paciente
+                </Button>
+              </div>
+            </form>
+          </Modal>
         ) : null}
       </div>
     </FeatureGate>

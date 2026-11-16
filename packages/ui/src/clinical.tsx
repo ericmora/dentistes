@@ -2529,6 +2529,8 @@ export interface AppointmentCardData {
   highRisk?: boolean;
   isForced?: boolean;
   notes?: string;
+  assistantName?: string;
+  chairName?: string;
 }
 
 const TIMELINE_SLOT_HEIGHT = 68;
@@ -2677,6 +2679,12 @@ export interface CabinetColumn {
   id: string;
   name: string;
   colorCode?: string;
+  chairName?: string;
+  doctorName?: string;
+  assistantName?: string;
+  isDoctorAbsent?: boolean;
+  isAssistantAbsent?: boolean;
+  absenceReason?: string;
   availability?: CabinetDayAvailability[];
 }
 
@@ -2822,17 +2830,34 @@ export function MultiCabinetTimeline({
               <div
                 key={cab.id}
                 className={cn(
-                  "flex items-center justify-between gap-2 border-l border-slate-200 font-semibold text-slate-800",
-                  isCompactTimeline ? "px-2.5 py-2 text-xs" : "px-3 py-3 text-sm",
+                  "flex flex-col justify-center border-l border-slate-200 text-slate-800",
+                  isCompactTimeline ? "px-2.5 py-1.5" : "px-3 py-2",
                 )}
               >
-                <span className="flex items-center gap-1.5 truncate">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cab.colorCode ?? "#0D9488" }} />
-                  <span className="truncate">{cab.name}</span>
-                </span>
-                <span className="rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-slate-600">
-                  {count}
-                </span>
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="flex items-center gap-1.5 truncate">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cab.colorCode ?? "#0D9488" }} />
+                    <span className="truncate font-semibold text-xs text-slate-900">{cab.name}</span>
+                  </span>
+                  <span className="rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] font-bold tabular-nums text-slate-600">
+                    {count}
+                  </span>
+                </div>
+                {(cab.chairName || cab.doctorName || cab.assistantName) && (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-500 font-normal">
+                    {cab.chairName && <span className="font-medium text-slate-600">🪑 {cab.chairName}</span>}
+                    {cab.doctorName && (
+                      <span className={cn("rounded px-1 py-0.2 font-medium", cab.isDoctorAbsent ? "bg-red-50 text-red-700 border border-red-200" : "bg-teal-50 text-teal-800")}>
+                        {cab.isDoctorAbsent ? `⚠️ ${cab.doctorName} (Ausente)` : cab.doctorName}
+                      </span>
+                    )}
+                    {cab.assistantName && (
+                      <span className={cn("rounded px-1 py-0.2 font-medium", cab.isAssistantAbsent ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600")}>
+                        {cab.isAssistantAbsent ? `🧤 ${cab.assistantName} (Ausente)` : `🧤 ${cab.assistantName}`}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -2912,6 +2937,25 @@ export function MultiCabinetTimeline({
                       }
                     }
                   }
+                }
+
+                if (cab.isDoctorAbsent && isEmpty) {
+                  return (
+                    <div
+                      key={cellKey}
+                      onClick={() => onSelectSlot?.(cab.id, slot, 30)}
+                      style={{ height: `${slotHeight}px` }}
+                      className="relative border-l border-slate-100 p-0.5 bg-red-50/40 select-none overflow-hidden cursor-pointer group/blocked hover:bg-red-100/50 transition-colors"
+                      title={`Doctor ausente (${cab.absenceReason || "Vacaciones / Baja"}). Clic para forzar cita de urgencia.`}
+                    >
+                      <div className="flex h-full w-full items-center justify-center rounded border border-dashed border-red-200 bg-white/50 px-1 text-[10px] font-medium text-red-700">
+                        <span className="truncate flex items-center gap-1">
+                          <Lock className="h-2.5 w-2.5 shrink-0 text-red-400" />
+                          <span>{cab.absenceReason || "Doctor ausente"}</span>
+                        </span>
+                      </div>
+                    </div>
+                  );
                 }
 
                 if (isSlotBlocked && isEmpty) {
@@ -4125,6 +4169,7 @@ export interface ClinicBudgetSettingsUI {
   margin_left_mm?: number;
   margin_right_mm?: number;
   hide_header_logo_on_print?: boolean;
+  auto_approve_absences?: boolean;
 }
 
 export const DEFAULT_CLINIC_BUDGET_SETTINGS: ClinicBudgetSettingsUI = {
@@ -4142,6 +4187,7 @@ export const DEFAULT_CLINIC_BUDGET_SETTINGS: ClinicBudgetSettingsUI = {
   margin_left_mm: 15,
   margin_right_mm: 15,
   hide_header_logo_on_print: false,
+  auto_approve_absences: false,
 };
 
 export const SAMPLE_CLINIC_LOGO_DATA_URL =

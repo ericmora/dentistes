@@ -1161,4 +1161,93 @@ describe("Dentistes SDK Unit Tests", () => {
     assert.equal(capturedMethod, "POST");
     assert.equal(cronRes.emails_dispatched, 2);
   });
+
+  test("DentistesClient chairs, assistants and staff absences APIs", async () => {
+    const calls: Array<{ url: string; method: string; body?: any }> = [];
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(init.body.toString()) : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/v1/chairs") && method === "GET") {
+        return new Response(JSON.stringify({
+          chairs: [{ id: "chair_1", name: "Butaca 1", color_code: "#0D9488", is_active: true, created_at: "2026-11-16T00:00:00Z" }]
+        }), { status: 200 });
+      }
+      if (url.includes("/v1/chairs") && method === "POST") {
+        return new Response(JSON.stringify({
+          chair: { id: "chair_2", name: body.name, color_code: body.color_code || "#0D9488", is_active: true, created_at: "2026-11-16T00:00:00Z" }
+        }), { status: 201 });
+      }
+      if (url.includes("/v1/chairs/chair_2") && method === "PUT") {
+        return new Response(JSON.stringify({
+          chair: { id: "chair_2", name: body.name, color_code: body.color_code || "#0D9488", is_active: true, created_at: "2026-11-16T00:00:00Z" }
+        }), { status: 200 });
+      }
+      if (url.includes("/v1/chairs/chair_2") && method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.includes("/v1/assistants") && method === "GET") {
+        return new Response(JSON.stringify({
+          assistants: [{ id: "asst_1", full_name: "Marta Auxiliar", role: "ASSISTANT" }]
+        }), { status: 200 });
+      }
+      if (url.includes("/v1/absences") && method === "GET") {
+        return new Response(JSON.stringify({
+          absences: [{ id: "abs_1", user_id: "doc_1", absence_type: "VACATION", start_date: "2026-11-20", end_date: "2026-11-25", status: "PENDING", auto_rescheduled_count: 0 }]
+        }), { status: 200 });
+      }
+      if (url.includes("/v1/absences") && method === "POST") {
+        return new Response(JSON.stringify({
+          absence: { id: "abs_2", user_id: body.user_id, absence_type: body.absence_type, start_date: body.start_date, end_date: body.end_date, status: body.auto_approve ? "APPROVED" : "PENDING", auto_rescheduled_count: 0 }
+        }), { status: 201 });
+      }
+      if (url.includes("/v1/absences/abs_1/status") && method === "PUT") {
+        return new Response(JSON.stringify({
+          absence: { id: "abs_1", user_id: "doc_1", absence_type: "VACATION", start_date: "2026-11-20", end_date: "2026-11-25", status: body.status, auto_rescheduled_count: 3 }
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "token",
+      fetch: mockFetch,
+    });
+
+    const chairsRes = await client.listChairs();
+    assert.equal(chairsRes.chairs.length, 1);
+    assert.equal(chairsRes.chairs[0].name, "Butaca 1");
+
+    const createdChair = await client.createChair({ name: "Butaca 2" });
+    assert.equal(createdChair.chair.name, "Butaca 2");
+
+    const updatedChair = await client.updateChair("chair_2", { name: "Butaca 2 (Modificada)" });
+    assert.equal(updatedChair.chair.name, "Butaca 2 (Modificada)");
+
+    const deletedChair = await client.deleteChair("chair_2");
+    assert.equal(deletedChair.ok, true);
+
+    const asstsRes = await client.listAssistants();
+    assert.equal(asstsRes.assistants.length, 1);
+    assert.equal(asstsRes.assistants[0].full_name, "Marta Auxiliar");
+
+    const absencesRes = await client.listAbsences();
+    assert.equal(absencesRes.absences.length, 1);
+    assert.equal(absencesRes.absences[0].status, "PENDING");
+
+    const createdAbsence = await client.createAbsence({
+      user_id: "doc_1",
+      absence_type: "VACATION",
+      start_date: "2026-11-20",
+      end_date: "2026-11-25",
+    });
+    assert.equal(createdAbsence.absence.absence_type, "VACATION");
+
+    const approvedAbsence = await client.updateAbsenceStatus("abs_1", "APPROVED");
+    assert.equal(approvedAbsence.absence.status, "APPROVED");
+    assert.equal(approvedAbsence.absence.auto_rescheduled_count, 3);
+  });
 });
