@@ -287,10 +287,13 @@ export function AgendaPage() {
   const createMutation = useMutation({
     mutationFn: () => {
       const { start, end } = slotToRange(date, newForm.slot, Number(newForm.duration) || 30);
+      const cab = allCabinets.find((c) => c.id === newForm.cabinet_id);
+      const docId = cab?.doctor_id || newForm.doctor_id;
+      const asstId = cab?.assistant_id || newForm.assistant_id || undefined;
       return sdk.createAppointment({
         patient_id: newForm.patient_id,
-        doctor_id: newForm.doctor_id,
-        assistant_id: newForm.assistant_id || undefined,
+        doctor_id: docId,
+        assistant_id: asstId,
         cabinet_id: newForm.cabinet_id,
         start_time: start,
         end_time: end,
@@ -320,8 +323,10 @@ export function AgendaPage() {
         Math.round((new Date(input.appt.end_time).getTime() - new Date(input.appt.start_time).getTime()) / 60_000),
       );
       const { start, end } = slotToRange(date, input.targetSlot, durMin);
+      const targetCab = allCabinets.find((c) => c.id === input.cabinetId);
       return sdk.updateAppointment(input.appt.id, {
-        doctor_id: input.appt.doctor_id,
+        doctor_id: targetCab?.doctor_id || input.appt.doctor_id,
+        assistant_id: targetCab?.assistant_id ?? undefined,
         cabinet_id: input.cabinetId,
         start_time: start,
         end_time: end,
@@ -474,14 +479,14 @@ export function AgendaPage() {
   }, [activeAppointments]);
 
   function openNewAt(cabinetId: string, slot: string, suggestedDuration?: number) {
-    const cab = allCabinets.find((c) => c.id === cabinetId);
+    const cab = allCabinets.find((c) => c.id === cabinetId) || allCabinets[0];
     setSelectedAppt(null);
     setMatches([]);
     setNewForm((prev) => ({
       ...prev,
-      cabinet_id: cabinetId || allCabinets[0]?.id || "",
-      doctor_id: cab?.doctor_id || prev.doctor_id || doctors[0]?.id || "",
-      assistant_id: cab?.assistant_id || prev.assistant_id || "",
+      cabinet_id: cab?.id || cabinetId || "",
+      doctor_id: cab?.doctor_id || "",
+      assistant_id: cab?.assistant_id || "",
       slot,
       duration: suggestedDuration ? String(suggestedDuration) : prev.duration,
       is_forced: false,
@@ -491,6 +496,9 @@ export function AgendaPage() {
   }
 
   const selectedCabinet = allCabinets.find((c) => c.id === selectedAppt?.cabinet_id);
+  const selectedNewCabinet = allCabinets.find((c) => c.id === newForm.cabinet_id);
+  const effectiveDoctorId = selectedNewCabinet?.doctor_id || newForm.doctor_id;
+  const effectiveAssistantId = selectedNewCabinet?.assistant_id || newForm.assistant_id || undefined;
   const inChairCount = activeAppointments.filter((a) => a.status === "IN_CABINET" || a.status === "WAITING_ROOM").length;
   const confirmedCount = activeAppointments.filter((a) => a.status === "CONFIRMED").length;
 
@@ -1041,7 +1049,7 @@ export function AgendaPage() {
                     }))}
                   />
 
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="space-y-2">
                     <Select
                       label="Gabinete dental"
                       value={newForm.cabinet_id}
@@ -1050,36 +1058,73 @@ export function AgendaPage() {
                         setNewForm({
                           ...newForm,
                           cabinet_id: v,
-                          doctor_id: cab?.doctor_id || newForm.doctor_id,
-                          assistant_id: cab?.assistant_id || newForm.assistant_id,
+                          doctor_id: cab?.doctor_id || "",
+                          assistant_id: cab?.assistant_id || "",
                         });
                       }}
-                      placeholder=""
+                      placeholder="Seleccionar gabinete…"
                       options={allCabinets.map((c) => ({
                         value: c.id,
                         label: `${c.name}${c.chair_name ? ` (🪑 ${c.chair_name})` : ""}`,
                       }))}
                     />
-                    <Select
-                      label="Doctor asignado"
-                      value={newForm.doctor_id}
-                      onChange={(v) => setNewForm({ ...newForm, doctor_id: v })}
-                      placeholder=""
-                      options={doctors.map((d) => ({ value: d.id, label: d.full_name }))}
-                    />
-                    <Select
-                      label="Auxiliar asignado"
-                      value={newForm.assistant_id}
-                      onChange={(v) => setNewForm({ ...newForm, assistant_id: v })}
-                      placeholder="Sin auxiliar"
-                      options={[
-                        { value: "", label: "Sin auxiliar" },
-                        ...(assistantsQuery.data?.assistants ?? []).map((a) => ({
-                          value: a.id,
-                          label: `Aux. ${a.full_name}`,
-                        })),
-                      ]}
-                    />
+
+                    {/* Integrated Cabinet Team & Physical Chair (Butaca) */}
+                    {selectedNewCabinet && (
+                      <div className="rounded-xl border border-slate-200/90 bg-slate-50/80 p-2.5 text-xs">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            Recursos del Gabinete (Butaca + Equip mèdic)
+                          </span>
+                          <span
+                            className="h-2.5 w-2.5 rounded-full ring-1 ring-slate-300"
+                            style={{ backgroundColor: selectedNewCabinet.color_code || "#0D9488" }}
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="space-y-0.5 min-w-0">
+                            <span className="text-[10px] font-medium text-slate-400">Butaca dental</span>
+                            <p className="font-semibold text-slate-800 truncate text-[11px]" title={selectedNewCabinet.chair_name || "Butaca principal"}>
+                              🪑 {selectedNewCabinet.chair_name || "Butaca principal"}
+                            </p>
+                          </div>
+                          <div className="space-y-0.5 min-w-0">
+                            <span className="text-[10px] font-medium text-slate-400">Doctor/a</span>
+                            <p className="font-semibold text-slate-800 truncate text-[11px] flex items-center gap-1" title={selectedNewCabinet.doctor_name || "Sense doctor assignat"}>
+                              <Stethoscope className="h-3 w-3 text-brand-600 shrink-0" />
+                              <span className="truncate">
+                                {selectedNewCabinet.doctor_name
+                                  ? (selectedNewCabinet.doctor_name.startsWith("Dr")
+                                      ? selectedNewCabinet.doctor_name
+                                      : `Dr(a). ${selectedNewCabinet.doctor_name}`)
+                                  : "Sense doctor"}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="space-y-0.5 min-w-0">
+                            <span className="text-[10px] font-medium text-slate-400">Auxiliar</span>
+                            <p className="font-semibold text-slate-800 truncate text-[11px]" title={selectedNewCabinet.assistant_name ? `Aux. ${selectedNewCabinet.assistant_name}` : "Sense auxiliar"}>
+                              {selectedNewCabinet.assistant_name ? `🤝 Aux. ${selectedNewCabinet.assistant_name}` : "Sense auxiliar"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedNewCabinet && !selectedNewCabinet.doctor_id && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 space-y-1.5">
+                        <p className="font-medium">
+                          ⚠️ Aquest gabinet no té cap doctor assignat per defecte a la configuració.
+                        </p>
+                        <Select
+                          label="Assignar doctor per a aquesta cita"
+                          value={newForm.doctor_id}
+                          onChange={(v) => setNewForm({ ...newForm, doctor_id: v })}
+                          placeholder="Seleccionar doctor…"
+                          options={doctors.map((d) => ({ value: d.id, label: d.full_name }))}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <Select
@@ -1159,7 +1204,7 @@ export function AgendaPage() {
                     type="submit"
                     size="sm"
                     loading={createMutation.isPending}
-                    disabled={!newForm.patient_id || !newForm.cabinet_id || !newForm.doctor_id}
+                    disabled={!newForm.patient_id || !newForm.cabinet_id || !effectiveDoctorId}
                     className="w-full"
                   >
                     Confirmar cita
