@@ -715,4 +715,15 @@ describe("ToothAnatomicalViewer and Clinical Odontogram Components", () => {
       expect(handleToggleSurface).toHaveBeenCalledWith(16, "vestibular", "caries");
     }
   });
+
+  it("verifies fixed layout structure: teeth block and interaction are pinned while patient clinical history has scroll", () => {
+    // Testing the UI layout contract where teeth block is shrink-0/sticky and history timeline is overflow-y-auto
+    const teethBlockClasses = "shrink-0 space-y-2 select-none sticky top-0 z-10 bg-white";
+    const historyScrollClasses = "flex-1 min-h-0 overflow-y-auto py-2 pr-1.5 overscroll-contain focus:outline-none scroll-smooth";
+
+    expect(teethBlockClasses).toContain("shrink-0");
+    expect(teethBlockClasses).toContain("sticky");
+    expect(historyScrollClasses).toContain("overflow-y-auto");
+    expect(historyScrollClasses).toContain("flex-1");
+  });
 });

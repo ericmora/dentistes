@@ -1132,47 +1132,49 @@ export function PatientDetailPage() {
       {activeTab === "clinical" ? (
         /* DEFAULT VIEW: UNIFIED SINGLE-SCREEN ODONTOGRAM + CLINICAL HISTORY COCKPIT (NO SCROLL) */
         <div className="grid flex-1 min-h-0 gap-3 lg:grid-cols-12">
-          {/* LEFT PANE (7 cols): Interactive Compact Odontogram + Inline Active Piece Inspector */}
-          <div className="lg:col-span-7 flex flex-col min-h-0 justify-between rounded-xl border border-slate-200 bg-white p-3 shadow-2xs overflow-y-auto">
+          {/* LEFT PANE (7 cols): Interactive Compact Odontogram + Inline Active Piece Inspector (FIXED, NO SCROLL) */}
+          <div className="lg:col-span-7 flex flex-col min-h-0 rounded-xl border border-slate-200 bg-white p-3 shadow-2xs overflow-hidden">
             <FeatureGate me={me} feature="odontogram">
               {!canReadClinical ? (
                 <Alert tone="warning" title="Acceso restringido">
                   Solo el personal facultativo puede consultar el odontograma detallado.
                 </Alert>
               ) : (
-                <div className="flex flex-col h-full justify-between gap-2">
-                  {/* Compact Odontogram Header + Interactive Grid */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-800">
-                        Odontograma interactivo (FDI / ISO 3950)
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        {currentOdo
-                          ? `v${currentOdo.version} · ${new Date(currentOdo.updated_at).toLocaleDateString("es-ES")}`
-                          : "Sin guardar"}
-                      </span>
+                <div className="flex flex-col h-full min-h-0 justify-between gap-2">
+                  {/* BLOQUE FIJO: Los dientes y la interacción con los dientes */}
+                  <div className="shrink-0 space-y-2 select-none sticky top-0 z-10 bg-white">
+                    {/* Compact Odontogram Header + Interactive Grid */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-800">
+                          Odontograma interactivo (FDI / ISO 3950)
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {currentOdo
+                            ? `v${currentOdo.version} · ${new Date(currentOdo.updated_at).toLocaleDateString("es-ES")}`
+                            : "Sin guardar"}
+                        </span>
+                      </div>
+
+                      <OdontogramGrid
+                        teeth={teeth}
+                        compact={true}
+                        dentition={odontogramDentition}
+                        onDentitionChange={setOdontogramDentition}
+                        displayMode={odontogramDisplayMode}
+                        onDisplayModeChange={setOdontogramDisplayMode}
+                        activeTool={odontogramTool}
+                        onToolChange={setOdontogramTool}
+                        selectedTooth={activeToothNum}
+                        onSelectTooth={(num) => setSelectedTooth(num)}
+                        onToggleSurface={handleToggleSurface}
+                        onSetGeneralStatus={setToothGeneralStatus}
+                        historyCounts={historyCounts}
+                      />
                     </div>
 
-                    <OdontogramGrid
-                      teeth={teeth}
-                      compact={true}
-                      dentition={odontogramDentition}
-                      onDentitionChange={setOdontogramDentition}
-                      displayMode={odontogramDisplayMode}
-                      onDisplayModeChange={setOdontogramDisplayMode}
-                      activeTool={odontogramTool}
-                      onToolChange={setOdontogramTool}
-                      selectedTooth={activeToothNum}
-                      onSelectTooth={(num) => setSelectedTooth(num)}
-                      onToggleSurface={handleToggleSurface}
-                      onSetGeneralStatus={setToothGeneralStatus}
-                      historyCounts={historyCounts}
-                    />
-                  </div>
-
-                  {/* Inline Compact Piece Inspector Bar (No Page Scroll Required) */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
+                    {/* Inline Compact Piece Inspector Bar (Interacción con los dientes fija) */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2.5 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-700 text-xs font-extrabold tabular-nums text-white shadow-2xs">
@@ -1357,19 +1359,22 @@ export function PatientDetailPage() {
                       ) : null}
                     </div>
                   </div>
+                </div>
 
                   {/* Bottom Section of Selected Tooth: Graphical Evolution of Changes + Clinical History of Selected Tooth */}
-                  <SelectedToothEvolutionAndHistoryPanel
-                    toothNumber={activeToothNum}
-                    initialToothState={initialToothState}
-                    historicalToothState={historicalToothState}
-                    currentToothState={activeToothState}
-                    findings={selectedToothFindings}
-                    records={selectedToothTimelineEntries}
-                    displayMode={odontogramDisplayMode}
-                    onSelectTooth={(num) => setSelectedTooth(num)}
-                    onPreviewAttachment={(att) => setPreviewAttachment(att)}
-                  />
+                  <div className="flex-1 min-h-0 overflow-y-auto pt-1 rounded-lg">
+                    <SelectedToothEvolutionAndHistoryPanel
+                      toothNumber={activeToothNum}
+                      initialToothState={initialToothState}
+                      historicalToothState={historicalToothState}
+                      currentToothState={activeToothState}
+                      findings={selectedToothFindings}
+                      records={selectedToothTimelineEntries}
+                      displayMode={odontogramDisplayMode}
+                      onSelectTooth={(num) => setSelectedTooth(num)}
+                      onPreviewAttachment={(att) => setPreviewAttachment(att)}
+                    />
+                  </div>
                 </div>
               )}
             </FeatureGate>
@@ -1423,8 +1428,8 @@ export function PatientDetailPage() {
                     </div>
                   </div>
 
-                  {/* Scrollable Internal Timeline (Page itself never scrolls!) */}
-                  <div className="flex-1 min-h-0 overflow-y-auto py-2 pr-1">
+                  {/* Scrollable Internal Timeline (El scroll está sobre el histórico del paciente) */}
+                  <div className="flex-1 min-h-0 overflow-y-auto py-2 pr-1.5 overscroll-contain focus:outline-none scroll-smooth">
                     {recordsQuery.isLoading ? (
                       <div className="space-y-2">
                         <Skeleton className="h-16 w-full" />
