@@ -54,8 +54,8 @@ export function OnboardingCompletePage() {
                   <p className="text-xs text-slate-600">Ya tienes acceso completo al Plan Base Esencial.</p>
                 </div>
               </div>
-              <Link to="/" className="block">
-                <Button className="w-full">Ir al panel de la clínica</Button>
+              <Link to="/agenda" className="block">
+                <Button className="w-full">Ir a la Agenda de la clínica</Button>
               </Link>
             </div>
           ) : (

@@ -3,7 +3,6 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Calendar,
   Clock,
-  LayoutDashboard,
   Settings,
   Users,
   Building2,
@@ -52,7 +51,6 @@ export function Layout({ children }: { children: ReactNode }) {
     can(me, "billing:manage");
 
   const navItems = [
-    { to: "/", label: "Resumen", icon: LayoutDashboard },
     { to: "/agenda", label: "Agenda", icon: Calendar },
     { to: "/patients", label: "Pacientes", icon: Users },
     { to: "/waiting-list", label: "Lista de espera", icon: Clock },
@@ -99,9 +97,9 @@ export function Layout({ children }: { children: ReactNode }) {
           {/* Left: Brand logo & Clinic Pill */}
           <div className="flex items-center gap-2.5 sm:gap-3">
             <Link
-              to="/"
+              to="/agenda"
               className="flex items-center gap-2 rounded-lg transition-transform hover:scale-[1.01] active:scale-[0.99]"
-              title="Dentistes — Inicio"
+              title="Dentistes — Agenda"
             >
               <BrandLogo size="sm" />
             </Link>
@@ -128,7 +126,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === "/"}
+                  end={item.to === "/agenda"}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-all duration-150",
@@ -201,7 +199,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === "/"}
+              end={item.to === "/agenda"}
               className={({ isActive }) =>
                 cn(
                   "flex flex-col items-center justify-center gap-0.5 rounded-lg py-1 px-3 text-[10px] font-medium transition-colors",

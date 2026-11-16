@@ -5,7 +5,6 @@ import { Layout } from "./ui/Layout";
 import { LoginPage } from "./pages/Login";
 import { OnboardingPage } from "./pages/Onboarding";
 import { OnboardingCompletePage } from "./pages/OnboardingComplete";
-import { DashboardPage } from "./pages/Dashboard";
 import { AgendaPage } from "./pages/Agenda";
 import { WaitingListPage } from "./pages/WaitingList";
 import { PatientsPage } from "./pages/Patients";
@@ -31,14 +30,14 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={me ? <Navigate to="/" replace /> : <LoginPage />} />
+        <Route path="/login" element={me ? <Navigate to="/agenda" replace /> : <LoginPage />} />
         <Route
           path="/signup"
-          element={me && !needsStripe ? <Navigate to="/" replace /> : <OnboardingPage />}
+          element={me && !needsStripe ? <Navigate to="/agenda" replace /> : <OnboardingPage />}
         />
         <Route
           path="/onboarding"
-          element={me && !needsStripe ? <Navigate to="/" replace /> : <OnboardingPage />}
+          element={me && !needsStripe ? <Navigate to="/agenda" replace /> : <OnboardingPage />}
         />
         <Route
           path="/onboarding/complete"
@@ -51,7 +50,7 @@ export function App() {
             me ? (
               <Layout>
                 <Routes>
-                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/" element={<Navigate to="/agenda" replace />} />
                   <Route path="/agenda" element={<AgendaPage />} />
                   <Route path="/waiting-list" element={<WaitingListPage />} />
                   <Route path="/patients" element={<PatientsPage />} />
@@ -60,7 +59,7 @@ export function App() {
                   <Route path="/users" element={<UsersPage />} />
                   <Route path="/settings" element={<ClinicAdminPage />} />
                   <Route path="/design-system" element={<DesignSystemPage />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
+                  <Route path="*" element={<Navigate to="/agenda" replace />} />
                 </Routes>
               </Layout>
             ) : (
