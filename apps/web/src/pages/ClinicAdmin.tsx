@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useState, useMemo, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Building2, Clock, Edit2, Plus, Sparkles, Stethoscope, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, Clock, Edit2, Layers, Plus, Sparkles, Stethoscope, Tag, Trash2 } from "lucide-react";
 import {
   Alert,
   Badge,
@@ -19,22 +19,25 @@ import {
   cn,
   type ClinicBudgetSettingsUI,
 } from "@dentistes/ui";
-import { defaultCabinetAvailability, type Cabinet, type CabinetDayAvailability, type Treatment } from "@dentistes/sdk";
+import { defaultCabinetAvailability, type Cabinet, type CabinetDayAvailability, type Treatment, type Specialty } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 import { useUiStore } from "../lib/store";
 import { UsersPage } from "./Users";
 import { BillingPage } from "./Billing";
 
-const TREATMENT_CATEGORIES = [
-  { value: "PREVENCION", label: "Diagnóstico y Prevención" },
-  { value: "CONSERVADORA", label: "Odontología Conservadora" },
-  { value: "ENDODONCIA", label: "Endodoncia" },
-  { value: "CIRUGIA", label: "Cirugía e Implantes" },
-  { value: "PERIODONCIA", label: "Periodoncia" },
-  { value: "PROTESIS", label: "Prótesis" },
-  { value: "ORTODONCIA", label: "Ortodoncia" },
-  { value: "ESTETICA", label: "Estética dental" },
-  { value: "GENERAL", label: "General" },
+const FALLBACK_SPECIALTIES: Specialty[] = [
+  { id: "sp_1", code: "PREVENCION", name: "Diagnóstico y Prevención", description: "Revisiones, diagnósticos y limpiezas preventivas", color_code: "#0EA5E9", is_active: true },
+  { id: "sp_2", code: "CONSERVADORA", name: "Odontología Conservadora", description: "Obturaciones, empastes simples y restauraciones", color_code: "#3B82F6", is_active: true },
+  { id: "sp_3", code: "ENDODONCIA", name: "Endodoncia", description: "Tratamientos de conductos radiculares", color_code: "#8B5CF6", is_active: true },
+  { id: "sp_4", code: "CIRUGIA", name: "Cirugía e Implantes", description: "Extracciones dentales, cirugía oral e implantología", color_code: "#F97316", is_active: true },
+  { id: "sp_5", code: "IMPLANTES", name: "Implantología", description: "Implantes dentales, cirugías guiadas y osteointegración", color_code: "#0F172A", is_active: true },
+  { id: "sp_6", code: "PERIODONCIA", name: "Periodoncia", description: "Tratamientos periodontales, raspados y curetajes", color_code: "#10B981", is_active: true },
+  { id: "sp_7", code: "PROTESIS", name: "Prótesis Dental", description: "Prótesis fijas, removibles y sobre implantes", color_code: "#D97706", is_active: true },
+  { id: "sp_8", code: "ORTODONCIA", name: "Ortodoncia", description: "Brackets, ortodoncia invisible y alineadores", color_code: "#EC4899", is_active: true },
+  { id: "sp_9", code: "ESTETICA", name: "Estética Dental", description: "Blanqueamientos, carillas y estética dental", color_code: "#F59E0B", is_active: true },
+  { id: "sp_10", code: "ODONTOPEDIATRIA", name: "Odontopediatría", description: "Odontología y atención infantil especializada", color_code: "#06B6D4", is_active: true },
+  { id: "sp_11", code: "HIGIENE", name: "Higiene Dental", description: "Profilaxis bucodental y mantenimientos", color_code: "#14B8A6", is_active: true },
+  { id: "sp_12", code: "GENERAL", name: "General", description: "Procedimientos y consultas generales", color_code: "#64748B", is_active: true },
 ];
 
 export function ClinicAdminPage() {
@@ -79,6 +82,106 @@ export function ClinicAdminPage() {
     queryKey: ["treatments"],
     queryFn: () => sdk.listTreatments({ all: true }),
     enabled: Boolean(me?.features?.agenda),
+  });
+
+  const specialtiesQuery = useQuery({
+    queryKey: ["specialties"],
+    queryFn: () => sdk.listSpecialties(),
+    enabled: Boolean(me?.active_tenant.id),
+  });
+
+  const rawSpecialties = specialtiesQuery.data?.specialties ?? [];
+  const specialtiesList = rawSpecialties.length > 0 ? rawSpecialties : FALLBACK_SPECIALTIES;
+  const activeSpecialties = useMemo(() => specialtiesList.filter((s) => s.is_active !== false), [specialtiesList]);
+
+  const specialtiesMap = useMemo(() => {
+    const map = new Map<string, { name: string; color_code: string }>();
+    for (const s of specialtiesList) {
+      map.set(s.code, { name: s.name, color_code: s.color_code });
+      map.set(s.name, { name: s.name, color_code: s.color_code });
+    }
+    return map;
+  }, [specialtiesList]);
+
+  // Specialties master state
+  const [specialtyModalOpen, setSpecialtyModalOpen] = useState(false);
+  const [editingSpecialty, setEditingSpecialty] = useState<Specialty | null>(null);
+  const [specialtyToDelete, setSpecialtyToDelete] = useState<Specialty | null>(null);
+  const [specialtySearch, setSpecialtySearch] = useState("");
+  const [specialtyForm, setSpecialtyForm] = useState({
+    name: "",
+    code: "",
+    description: "",
+    color_code: "#0D9488",
+  });
+
+  function openCreateSpecialty() {
+    setEditingSpecialty(null);
+    setSpecialtyForm({
+      name: "",
+      code: "",
+      description: "",
+      color_code: "#0D9488",
+    });
+    setSpecialtyModalOpen(true);
+  }
+
+  function openEditSpecialty(spec: Specialty) {
+    setEditingSpecialty(spec);
+    setSpecialtyForm({
+      name: spec.name,
+      code: spec.code,
+      description: spec.description || "",
+      color_code: spec.color_code || "#0D9488",
+    });
+    setSpecialtyModalOpen(true);
+  }
+
+  const saveSpecialtyMutation = useMutation({
+    mutationFn: async () => {
+      if (editingSpecialty) {
+        return sdk.updateSpecialty(editingSpecialty.id, {
+          name: specialtyForm.name.trim(),
+          description: specialtyForm.description.trim(),
+          color_code: specialtyForm.color_code,
+        });
+      }
+      return sdk.createSpecialty({
+        name: specialtyForm.name.trim(),
+        code: specialtyForm.code.trim() || undefined,
+        description: specialtyForm.description.trim(),
+        color_code: specialtyForm.color_code,
+      });
+    },
+    onSuccess: async () => {
+      setSpecialtyModalOpen(false);
+      setEditingSpecialty(null);
+      notify({ tone: "success", title: editingSpecialty ? "Especialidad actualizada" : "Especialidad creada" });
+      await queryClient.invalidateQueries({ queryKey: ["specialties"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo guardar la especialidad",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
+  });
+
+  const deleteSpecialtyMutation = useMutation({
+    mutationFn: (id: string) => sdk.deleteSpecialty(id),
+    onSuccess: async () => {
+      setSpecialtyToDelete(null);
+      notify({ tone: "success", title: "Especialidad desactivada (borrado lógico)" });
+      await queryClient.invalidateQueries({ queryKey: ["specialties"] });
+    },
+    onError: (err) => {
+      notify({
+        tone: "danger",
+        title: "No se pudo eliminar la especialidad",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    },
   });
 
   const clinicSettingsQuery = useQuery({
@@ -286,6 +389,16 @@ export function ClinicAdminPage() {
     return t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q);
   });
 
+  const filteredSpecialties = specialtiesList.filter((s) => {
+    if (!specialtySearch.trim()) return true;
+    const q = specialtySearch.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      s.code.toLowerCase().includes(q) ||
+      (s.description && s.description.toLowerCase().includes(q))
+    );
+  });
+
   return (
     <RoleGuard
       me={me}
@@ -370,11 +483,21 @@ export function ClinicAdminPage() {
                               )}
                               {cab.allowed_categories && cab.allowed_categories.length > 0 && (
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                  {cab.allowed_categories.map((c) => (
-                                    <span key={c} className="rounded bg-teal-50 border border-teal-200 px-1.5 py-0.2 text-[10px] font-semibold text-teal-800 uppercase">
-                                      {c}
-                                    </span>
-                                  ))}
+                                  {cab.allowed_categories.map((c) => {
+                                    const spec = specialtiesMap.get(c);
+                                    return (
+                                      <span
+                                        key={c}
+                                        className="inline-flex items-center gap-1 rounded bg-teal-50 border border-teal-200 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800"
+                                      >
+                                        <span
+                                          className="h-1.5 w-1.5 rounded-full"
+                                          style={{ backgroundColor: spec?.color_code || "#0D9488" }}
+                                        />
+                                        {spec?.name || c}
+                                      </span>
+                                    );
+                                  })}
                                 </div>
                               )}
                               <p className="mt-1 text-xs text-slate-500 flex items-center gap-1.5">
@@ -480,7 +603,9 @@ export function ClinicAdminPage() {
                                 </div>
                               </td>
                               <td className="px-4 py-3.5">
-                                <Badge tone="neutral">{t.category}</Badge>
+                                <Badge tone="neutral">
+                                  {specialtiesMap.get(t.category)?.name || t.category_label || t.category}
+                                </Badge>
                               </td>
                               <td className="px-4 py-3.5">
                                 <div className="flex items-center gap-1.5 text-slate-500">
@@ -507,6 +632,110 @@ export function ClinicAdminPage() {
                                     className="text-slate-400 hover:text-critical"
                                     title="Desactivar tratamiento"
                                     onClick={() => setTreatmentToDelete(t)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              id: "specialties",
+              label: "Especialidades",
+              content: (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Especialidades clínicas</h3>
+                      <p className="text-sm text-slate-500">
+                        Tabla maestra de especialidades compartida y sincronizada entre gabinetes y catálogo de tratamientos.
+                      </p>
+                    </div>
+                    <Button onClick={openCreateSpecialty}>
+                      <Plus className="h-4 w-4" />
+                      Nueva especialidad
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 max-w-sm">
+                    <Input
+                      placeholder="Buscar especialidad o código..."
+                      value={specialtySearch}
+                      onChange={(e) => setSpecialtySearch(e.target.value)}
+                    />
+                  </div>
+
+                  {specialtiesQuery.isLoading ? (
+                    <div className="py-8 text-center text-sm text-slate-500">Cargando especialidades...</div>
+                  ) : filteredSpecialties.length === 0 ? (
+                    <Card>
+                      <div className="py-8 text-center">
+                        <Sparkles className="mx-auto h-8 w-8 text-slate-400" />
+                        <p className="mt-2 text-sm font-medium text-slate-900">No se encontraron especialidades</p>
+                        <p className="text-xs text-slate-500">
+                          {specialtySearch ? "Prueba con otro término de búsqueda" : "Crea tu primera especialidad"}
+                        </p>
+                      </div>
+                    </Card>
+                  ) : (
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      <table className="w-full text-left text-sm text-slate-600">
+                        <thead className="border-b border-slate-100 bg-slate-50/75 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          <tr>
+                            <th className="px-4 py-3">Especialidad</th>
+                            <th className="px-4 py-3">Código</th>
+                            <th className="px-4 py-3">Descripción</th>
+                            <th className="px-4 py-3">Estado</th>
+                            <th className="px-4 py-3 text-right">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredSpecialties.map((spec) => (
+                            <tr key={spec.id || spec.code} className="hover:bg-slate-50/60 transition-colors">
+                              <td className="px-4 py-3.5">
+                                <div className="flex items-center gap-2.5">
+                                  <span
+                                    className="h-3 w-3 shrink-0 rounded-full"
+                                    style={{ backgroundColor: spec.color_code || "#0D9488" }}
+                                    title={spec.color_code}
+                                  />
+                                  <span className="font-medium text-slate-900">{spec.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 font-mono text-xs text-slate-500">
+                                {spec.code}
+                              </td>
+                              <td className="px-4 py-3.5 text-xs text-slate-600">
+                                {spec.description || "—"}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <Badge tone={spec.is_active ? "success" : "neutral"}>
+                                  {spec.is_active ? "Activa" : "Inactiva"}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    title="Editar especialidad"
+                                    onClick={() => openEditSpecialty(spec)}
+                                  >
+                                    <Edit2 className="h-4 w-4 text-slate-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-slate-400 hover:text-critical"
+                                    title="Eliminar especialidad (borrado lógico)"
+                                    onClick={() => setSpecialtyToDelete(spec)}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -618,36 +847,28 @@ export function ClinicAdminPage() {
                 Selecciona qué tipos de tratamientos permite realizar la equipación de este box (si no marcas ninguna, admite cualquier tratamiento).
               </p>
               <div className="flex flex-wrap gap-1.5 pt-1">
-                {[
-                  { id: "CONSERVADORA", label: "Conservadora" },
-                  { id: "CIRUGIA", label: "Cirugía" },
-                  { id: "IMPLANTES", label: "Implantes" },
-                  { id: "ENDODONCIA", label: "Endodoncia" },
-                  { id: "HIGIENE", label: "Higiene" },
-                  { id: "PREVENCION", label: "Prevención" },
-                  { id: "ORTODONCIA", label: "Ortodoncia" },
-                  { id: "PERIODONCIA", label: "Periodoncia" },
-                  { id: "PROTESIS", label: "Prótesis" },
-                  { id: "ESTETICA", label: "Estética" },
-                ].map((spec) => {
-                  const isChecked = cabinetAllowedCategories.includes(spec.id);
+                {activeSpecialties.map((spec) => {
+                  const isChecked = cabinetAllowedCategories.includes(spec.code) || cabinetAllowedCategories.includes(spec.name);
                   return (
                     <button
-                      key={spec.id}
+                      key={spec.id || spec.code}
                       type="button"
                       onClick={() => {
                         setCabinetAllowedCategories((prev) =>
-                          isChecked ? prev.filter((c) => c !== spec.id) : [...prev, spec.id],
+                          isChecked
+                            ? prev.filter((c) => c !== spec.code && c !== spec.name)
+                            : [...prev, spec.code],
                         );
                       }}
                       className={cn(
-                        "rounded-md border px-2.5 py-1 text-xs font-medium transition",
+                        "flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition",
                         isChecked
                           ? "border-teal-600 bg-teal-50 text-teal-800 font-bold"
                           : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
                       )}
                     >
-                      {isChecked ? `✓ ${spec.label}` : spec.label}
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: spec.color_code || "#0D9488" }} />
+                      {isChecked ? `✓ ${spec.name}` : spec.name}
                     </button>
                   );
                 })}
@@ -791,7 +1012,7 @@ export function ClinicAdminPage() {
               label="Especialidad o categoría"
               value={treatmentForm.category}
               onChange={(v) => setTreatmentForm({ ...treatmentForm, category: v })}
-              options={TREATMENT_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+              options={activeSpecialties.map((c) => ({ value: c.code, label: c.name }))}
             />
             <div className="grid grid-cols-2 gap-3">
               <Input
@@ -835,6 +1056,73 @@ export function ClinicAdminPage() {
           title={`¿Desactivar tratamiento "${treatmentToDelete?.name}"?`}
           description="El tratamiento dejará de estar disponible para agendar nuevas citas o presupuestos, pero se mantendrá en el histórico clínico."
           confirmLabel="Sí, desactivar tratamiento"
+        />
+
+        <Modal
+          open={specialtyModalOpen}
+          onClose={() => setSpecialtyModalOpen(false)}
+          title={editingSpecialty ? "Editar especialidad" : "Nueva especialidad"}
+          description="Configura el nombre, código, descripción y color distintivo para gabinetes y tratamientos."
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setSpecialtyModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                loading={saveSpecialtyMutation.isPending}
+                onClick={() => saveSpecialtyMutation.mutate()}
+                disabled={!specialtyForm.name.trim()}
+              >
+                Guardar especialidad
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4 py-2">
+            <Input
+              label="Nombre de la especialidad"
+              placeholder="Ej. Ortodoncia Invisible"
+              value={specialtyForm.name}
+              onChange={(e) => setSpecialtyForm({ ...specialtyForm, name: e.target.value })}
+              required
+            />
+            {!editingSpecialty && (
+              <Input
+                label="Código identificador (opcional)"
+                placeholder="Ej. ORTODONCIA_INVISIBLE"
+                value={specialtyForm.code}
+                onChange={(e) => setSpecialtyForm({ ...specialtyForm, code: e.target.value })}
+              />
+            )}
+            <Input
+              label="Descripción"
+              placeholder="Descripción del área clínica..."
+              value={specialtyForm.description}
+              onChange={(e) => setSpecialtyForm({ ...specialtyForm, description: e.target.value })}
+            />
+            <div>
+              <Input
+                label="Color identificativo"
+                type="color"
+                value={specialtyForm.color_code}
+                onChange={(e) => setSpecialtyForm({ ...specialtyForm, color_code: e.target.value })}
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                Se usará para distinguir los gabinetes y tratamientos asociados a esta especialidad.
+              </p>
+            </div>
+          </div>
+        </Modal>
+
+        <ConfirmDialog
+          open={Boolean(specialtyToDelete)}
+          onClose={() => setSpecialtyToDelete(null)}
+          onConfirm={() => specialtyToDelete && deleteSpecialtyMutation.mutate(specialtyToDelete.id)}
+          loading={deleteSpecialtyMutation.isPending}
+          danger
+          title={`¿Eliminar especialidad "${specialtyToDelete?.name}"?`}
+          description="La especialidad se desactivará mediante un borrado lógico. No se eliminarán ni alterarán los tratamientos o gabinetes históricos asociados."
+          confirmLabel="Sí, eliminar especialidad"
         />
 
         <ConfirmDialog

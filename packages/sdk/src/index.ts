@@ -546,6 +546,19 @@ export interface FindAvailableSlotsParams {
   limit?: number;
 }
 
+export interface Specialty {
+  id: string;
+  tenant_id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  color_code: string;
+  is_active: boolean;
+  deleted_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface MasterTreatment {
   code: string;
   name: string;
@@ -1251,6 +1264,37 @@ export class DentistesClient {
 
   deleteTreatment(id: string): Promise<{ ok: boolean }> {
     return this.request(`/v1/treatments/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  listSpecialties(params: { all?: boolean; include_deleted?: boolean } = {}): Promise<{ specialties: Specialty[] }> {
+    const includeDeleted = params.all || params.include_deleted;
+    const q = includeDeleted ? "?include_deleted=true" : "";
+    return this.request(`/v1/specialties${q}`);
+  }
+
+  createSpecialty(input: {
+    code?: string;
+    name: string;
+    description?: string;
+    color_code?: string;
+  }): Promise<{ specialty: Specialty }> {
+    return this.request("/v1/specialties", { method: "POST", body: input });
+  }
+
+  updateSpecialty(
+    id: string,
+    input: {
+      name?: string;
+      description?: string;
+      color_code?: string;
+      is_active?: boolean;
+    },
+  ): Promise<{ specialty: Specialty }> {
+    return this.request(`/v1/specialties/${encodeURIComponent(id)}`, { method: "PUT", body: input });
+  }
+
+  deleteSpecialty(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/specialties/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
 
   listDoctors(): Promise<{ doctors: Doctor[] }> {

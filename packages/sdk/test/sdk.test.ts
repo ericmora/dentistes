@@ -558,6 +558,96 @@ describe("Dentistes SDK Unit Tests", () => {
     assert.equal(del.ok, true);
   });
 
+  test("DentistesClient specialties master APIs", async () => {
+    const calls: Array<{ url: string; method: string; body?: any }> = [];
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString();
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(init.body.toString()) : undefined;
+      calls.push({ url, method, body });
+
+      if (url.includes("/v1/specialties") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            specialties: [
+              {
+                id: "spec_1",
+                code: "ORTODONCIA",
+                name: "Ortodoncia",
+                description: "Brackets y alineadores",
+                color_code: "#EC4899",
+                is_active: true,
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v1/specialties") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            specialty: {
+              id: "spec_2",
+              code: body.code ?? "SEDACION",
+              name: body.name,
+              description: body.description ?? "",
+              color_code: body.color_code ?? "#0D9488",
+              is_active: true,
+            },
+          }),
+          { status: 201 }
+        );
+      }
+      if (url.includes("/v1/specialties/spec_2") && method === "PUT") {
+        return new Response(
+          JSON.stringify({
+            specialty: {
+              id: "spec_2",
+              code: "SEDACION",
+              name: body.name,
+              description: body.description ?? "",
+              color_code: body.color_code ?? "#0D9488",
+              is_active: body.is_active ?? true,
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/v1/specialties/spec_2") && method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      getAccessToken: () => "auth-token",
+      fetch: mockFetch,
+    });
+
+    const list = await client.listSpecialties({ include_deleted: false });
+    assert.equal(list.specialties.length, 1);
+    assert.equal(list.specialties[0].code, "ORTODONCIA");
+
+    const created = await client.createSpecialty({
+      name: "Sedación Consciente",
+      code: "SEDACION",
+      description: "Técnica de relajación clínica",
+      color_code: "#6366F1",
+    });
+    assert.equal(created.specialty.name, "Sedación Consciente");
+    assert.equal(created.specialty.color_code, "#6366F1");
+
+    const updated = await client.updateSpecialty("spec_2", {
+      name: "Sedación Consciente Odontológica",
+    });
+    assert.equal(updated.specialty.name, "Sedación Consciente Odontológica");
+
+    const del = await client.deleteSpecialty("spec_2");
+    assert.equal(del.ok, true);
+  });
+
   test("DentistesClient patient invoices and payments APIs", async () => {
     const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
