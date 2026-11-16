@@ -903,6 +903,7 @@ export interface DentistesClientOptions {
   onAccessToken?: (token: string | null) => void;
   getRefreshToken?: () => string | null;
   onRefreshToken?: (token: string | null) => void;
+  onUnauthorized?: () => void;
 }
 
 interface RequestOptions {
@@ -922,6 +923,7 @@ export class DentistesClient {
   private readonly onAccessToken?: (token: string | null) => void;
   private readonly getRefreshToken?: () => string | null;
   private readonly onRefreshToken?: (token: string | null) => void;
+  private onUnauthorizedHandler?: () => void;
   private accessToken: string | null = null;
   private activeTenantId: string | null = null;
 
@@ -935,6 +937,11 @@ export class DentistesClient {
     this.onAccessToken = options.onAccessToken;
     this.getRefreshToken = options.getRefreshToken;
     this.onRefreshToken = options.onRefreshToken;
+    this.onUnauthorizedHandler = options.onUnauthorized;
+  }
+
+  setOnUnauthorized(handler: (() => void) | undefined): void {
+    this.onUnauthorizedHandler = handler;
   }
 
   setTenantId(tenantId: string | null): void {
@@ -1000,6 +1007,9 @@ export class DentistesClient {
       | { error?: ApiErrorBody }
       | null;
     if (!res.ok) {
+      if (res.status === 401 && opts.auth !== false) {
+        this.onUnauthorizedHandler?.();
+      }
       throw new DentistesError(res.status, payload?.error);
     }
     return payload as T;

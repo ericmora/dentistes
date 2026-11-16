@@ -85,6 +85,45 @@ describe("Dentistes SDK Unit Tests", () => {
     );
   });
 
+  test("DentistesClient invokes onUnauthorized on 401 unauthenticated response", async () => {
+    let unauthorizedTriggered = false;
+
+    const mockFetch = (async () => {
+      return new Response(
+        JSON.stringify({
+          error: {
+            code: "UNAUTHENTICATED",
+            message: "session expired",
+          },
+        }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      fetch: mockFetch,
+      onUnauthorized: () => {
+        unauthorizedTriggered = true;
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await client.listPatients();
+      },
+      (err: any) => {
+        assert.equal(err.status, 401);
+        return true;
+      }
+    );
+
+    assert.equal(unauthorizedTriggered, true);
+  });
+
   test("DentistesClient createLead sends public lead payload", async () => {
     let capturedMethod = "";
     let capturedBody = "";

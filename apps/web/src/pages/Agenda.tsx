@@ -665,6 +665,8 @@ export function AgendaPage() {
           <div className="lg:col-span-8 xl:col-span-9 min-h-0 overflow-y-auto">
             {appointmentsQuery.isLoading || cabinetsQuery.isLoading ? (
               <Skeleton className="h-full min-h-[520px] w-full rounded-xl" />
+            ) : cabinetsQuery.isError || !me ? (
+              <Skeleton className="h-full min-h-[520px] w-full rounded-xl" />
             ) : allCabinets.length === 0 ? (
               <Alert tone="warning">
                 No hay gabinetes configurados para esta clínica. Puedes crearlos en Administración.
