@@ -31,6 +31,9 @@ func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 		AllowedCategories []string                       `json:"allowed_categories"`
 		AllowedTreatments []string                       `json:"allowed_treatments"`
 		Availability      []store.CabinetDayAvailability `json:"availability"`
+		ChairID           *string                        `json:"chair_id"`
+		DoctorID          *string                        `json:"doctor_id"`
+		AssistantID       *string                        `json:"assistant_id"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -43,7 +46,7 @@ func (s *Server) handleCreateCabinet(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := claimsFrom(r.Context())
 	tx := txFrom(r.Context())
-	cab, err := s.store.CreateCabinet(r.Context(), tx, claims.TenantID, req.Name, strings.TrimSpace(req.ColorCode), strings.TrimSpace(req.Equipment), req.AllowedCategories, req.AllowedTreatments, req.Availability)
+	cab, err := s.store.CreateCabinet(r.Context(), tx, claims.TenantID, req.Name, strings.TrimSpace(req.ColorCode), strings.TrimSpace(req.Equipment), req.AllowedCategories, req.AllowedTreatments, req.Availability, req.ChairID, req.DoctorID, req.AssistantID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not create cabinet", nil)
 		return
@@ -64,6 +67,9 @@ func (s *Server) handleUpdateCabinet(w http.ResponseWriter, r *http.Request) {
 		AllowedCategories []string                       `json:"allowed_categories"`
 		AllowedTreatments []string                       `json:"allowed_treatments"`
 		Availability      []store.CabinetDayAvailability `json:"availability"`
+		ChairID           *string                        `json:"chair_id"`
+		DoctorID          *string                        `json:"doctor_id"`
+		AssistantID       *string                        `json:"assistant_id"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -71,7 +77,7 @@ func (s *Server) handleUpdateCabinet(w http.ResponseWriter, r *http.Request) {
 	}
 	claims := claimsFrom(r.Context())
 	tx := txFrom(r.Context())
-	cab, err := s.store.UpdateCabinet(r.Context(), tx, claims.TenantID, cabinetID, strings.TrimSpace(req.Name), strings.TrimSpace(req.ColorCode), strings.TrimSpace(req.Equipment), req.AllowedCategories, req.AllowedTreatments, req.Availability)
+	cab, err := s.store.UpdateCabinet(r.Context(), tx, claims.TenantID, cabinetID, strings.TrimSpace(req.Name), strings.TrimSpace(req.ColorCode), strings.TrimSpace(req.Equipment), req.AllowedCategories, req.AllowedTreatments, req.Availability, req.ChairID, req.DoctorID, req.AssistantID)
 	if errors.Is(err, store.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "cabinet not found", nil)
 		return
@@ -110,6 +116,16 @@ func (s *Server) handleListDoctors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"doctors": doctors})
+}
+
+func (s *Server) handleListAssistants(w http.ResponseWriter, r *http.Request) {
+	tx := txFrom(r.Context())
+	assistants, err := s.store.ListAssistants(r.Context(), tx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL", "internal error", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"assistants": assistants})
 }
 
 func (s *Server) handleListAppointments(w http.ResponseWriter, r *http.Request) {
@@ -231,14 +247,15 @@ func (s *Server) handleFindAvailableSlots(w http.ResponseWriter, r *http.Request
 
 func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		PatientID     string `json:"patient_id"`
-		DoctorID      string `json:"doctor_id"`
-		CabinetID     string `json:"cabinet_id"`
-		StartTime     string `json:"start_time"`
-		EndTime       string `json:"end_time"`
-		TreatmentType string `json:"treatment_type"`
-		IsForced      bool   `json:"is_forced"`
-		Notes         string `json:"notes"`
+		PatientID     string  `json:"patient_id"`
+		DoctorID      string  `json:"doctor_id"`
+		CabinetID     string  `json:"cabinet_id"`
+		AssistantID   *string `json:"assistant_id"`
+		StartTime     string  `json:"start_time"`
+		EndTime       string  `json:"end_time"`
+		TreatmentType string  `json:"treatment_type"`
+		IsForced      bool    `json:"is_forced"`
+		Notes         string  `json:"notes"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -266,6 +283,7 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		PatientID:     req.PatientID,
 		DoctorID:      req.DoctorID,
 		CabinetID:     req.CabinetID,
+		AssistantID:   req.AssistantID,
 		StartTime:     start,
 		EndTime:       end,
 		TreatmentType: req.TreatmentType,
@@ -273,7 +291,7 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		Notes:         strings.TrimSpace(req.Notes),
 	})
 	if errors.Is(err, store.ErrOverlap) {
-		writeError(w, http.StatusConflict, "APPOINTMENT_OVERLAP", "cabinet already has an appointment in that time range", nil)
+		writeError(w, http.StatusConflict, "APPOINTMENT_OVERLAP", "cabinet or doctor already has an appointment or approved absence in that time range", nil)
 		return
 	}
 	if err != nil {
@@ -288,14 +306,15 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var req struct {
-		DoctorID      string `json:"doctor_id"`
-		CabinetID     string `json:"cabinet_id"`
-		StartTime     string `json:"start_time"`
-		EndTime       string `json:"end_time"`
-		TreatmentType string `json:"treatment_type"`
-		IsForced      bool   `json:"is_forced"`
-		Notes         string `json:"notes"`
-		Version       *int   `json:"version"`
+		DoctorID      string  `json:"doctor_id"`
+		CabinetID     string  `json:"cabinet_id"`
+		AssistantID   *string `json:"assistant_id"`
+		StartTime     string  `json:"start_time"`
+		EndTime       string  `json:"end_time"`
+		TreatmentType string  `json:"treatment_type"`
+		IsForced      bool    `json:"is_forced"`
+		Notes         string  `json:"notes"`
+		Version       *int    `json:"version"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "invalid JSON body", nil)
@@ -330,6 +349,7 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 	appt, err := s.store.UpdateAppointment(r.Context(), tx, id, store.UpsertAppointmentInput{
 		DoctorID:      req.DoctorID,
 		CabinetID:     req.CabinetID,
+		AssistantID:   req.AssistantID,
 		StartTime:     start,
 		EndTime:       end,
 		TreatmentType: req.TreatmentType,
@@ -345,7 +365,7 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if errors.Is(err, store.ErrOverlap) {
-		writeError(w, http.StatusConflict, "APPOINTMENT_OVERLAP", "cabinet already has an appointment in that time range", nil)
+		writeError(w, http.StatusConflict, "APPOINTMENT_OVERLAP", "cabinet or doctor already has an appointment or approved absence in that time range", nil)
 		return
 	}
 	if err != nil {

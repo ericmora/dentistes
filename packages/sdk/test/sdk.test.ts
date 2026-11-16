@@ -1036,4 +1036,129 @@ describe("Dentistes SDK Unit Tests", () => {
     assert.equal(res.id, "img-123");
     assert.equal(res.reduction_percentage, 92.0);
   });
+
+  test("DentistesClient clinic.reactivate and admin winback methods work correctly", async () => {
+    let capturedUrl = "";
+    let capturedMethod = "";
+    let capturedBody: any = null;
+
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = input.toString();
+      capturedMethod = init?.method ?? "GET";
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+
+      if (capturedUrl.includes("/clinic/reactivate")) {
+        return new Response(
+          JSON.stringify({
+            tenant: { id: "t1", slug: "clinic-test", status: "ACTIVE" },
+            message: "Clínica reactivada con éxito",
+            free_month_applied: true,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (capturedUrl.includes("/admin/winback/metrics")) {
+        return new Response(
+          JSON.stringify({
+            total_canceled_clinics: 10,
+            active_winback_window: 4,
+            total_emails_sent: 25,
+            total_opened: 15,
+            total_clicked: 8,
+            total_reactivated: 3,
+            open_rate_pct: 60,
+            click_rate_pct: 32,
+            reactivation_rate_pct: 30,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (capturedUrl.includes("/admin/winback/logs")) {
+        return new Response(
+          JSON.stringify({ logs: [{ id: "log-1", step_number: 1, tracking_token: "tok-1" }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (capturedUrl.includes("/admin/winback/templates")) {
+        if (capturedMethod === "PUT") {
+          return new Response(
+            JSON.stringify({
+              template: { id: "tmpl-1", step_number: 1, subject: "Nuevo Asunto" },
+              message: "Plantilla actualizada",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response(
+          JSON.stringify({ templates: [{ id: "tmpl-1", step_number: 1, days_after: 5 }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (capturedUrl.includes("/admin/winback/test-email")) {
+        return new Response(
+          JSON.stringify({ ok: true, message: "Email de prueba enviado", tracking_token: "test-tok", tracking_pixel_url: "", rendered_preview: "" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (capturedUrl.includes("/admin/winback/trigger-cron")) {
+        return new Response(
+          JSON.stringify({ ok: true, evaluated_clinics: 10, emails_dispatched: 2 }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      fetch: mockFetch,
+    });
+
+    // Test clinic.reactivate
+    const reactivateRes = await client.clinic.reactivate("test-token-123");
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/clinic/reactivate");
+    assert.equal(capturedMethod, "POST");
+    assert.equal(capturedBody.token, "test-token-123");
+    assert.equal(reactivateRes.tenant.status, "ACTIVE");
+    assert.equal(reactivateRes.free_month_applied, true);
+
+    // Test admin.getWinbackMetrics
+    const metrics = await client.admin.getWinbackMetrics();
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/admin/winback/metrics");
+    assert.equal(metrics.total_canceled_clinics, 10);
+    assert.equal(metrics.open_rate_pct, 60);
+
+    // Test admin.listWinbackLogs
+    const logsRes = await client.admin.listWinbackLogs();
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/admin/winback/logs");
+    assert.equal(logsRes.logs.length, 1);
+    assert.equal(logsRes.logs[0].id, "log-1");
+
+    // Test admin.listWinbackTemplates
+    const templatesRes = await client.admin.listWinbackTemplates();
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/admin/winback/templates");
+    assert.equal(templatesRes.templates.length, 1);
+
+    // Test admin.updateWinbackTemplate
+    const updated = await client.admin.updateWinbackTemplate(1, { subject: "Nuevo Asunto" });
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/admin/winback/templates/1");
+    assert.equal(capturedMethod, "PUT");
+    assert.equal(capturedBody.subject, "Nuevo Asunto");
+    assert.equal(updated.template.subject, "Nuevo Asunto");
+
+    // Test admin.sendTestWinbackEmail
+    const testEmailRes = await client.admin.sendTestWinbackEmail("test@dentistes.test", 15);
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/admin/winback/test-email");
+    assert.equal(capturedMethod, "POST");
+    assert.equal(capturedBody.recipient_email, "test@dentistes.test");
+    assert.equal(capturedBody.step_day, 15);
+    assert.equal(testEmailRes.tracking_token, "test-tok");
+
+    // Test admin.triggerWinbackCron
+    const cronRes = await client.admin.triggerWinbackCron();
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/admin/winback/trigger-cron");
+    assert.equal(capturedMethod, "POST");
+    assert.equal(cronRes.emails_dispatched, 2);
+  });
 });

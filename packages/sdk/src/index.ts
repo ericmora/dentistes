@@ -97,6 +97,53 @@ export interface OptimizedImageUploadResponse {
   reduction_percentage: number;
 }
 
+export interface CancellationEmailTemplate {
+  id: string;
+  step_day: number;
+  name: string;
+  subject: string;
+  preview_text: string;
+  body_html: string;
+  body_text: string;
+  has_free_month_offer: boolean;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CancellationEmailLog {
+  id: string;
+  tenant_id: string;
+  recipient_email: string;
+  recipient_name: string;
+  clinic_name: string;
+  step_day: number;
+  subject: string;
+  tracking_token: string;
+  sent_at: string;
+  opened_at?: string | null;
+  open_count: number;
+  last_opened_at?: string | null;
+  clicked_at?: string | null;
+  click_count: number;
+  reactivated_at?: string | null;
+  user_agent?: string | null;
+  ip_address?: string | null;
+  created_at?: string;
+}
+
+export interface WinbackMetrics {
+  total_canceled_clinics: number;
+  active_in_custody: number;
+  total_emails_sent: number;
+  total_emails_opened: number;
+  open_rate_percent: number;
+  total_clicks: number;
+  click_rate_percent: number;
+  total_reactivations: number;
+  reactivation_rate_percent: number;
+}
+
 export interface MeResponse {
   user: User;
   memberships: Membership[];
@@ -281,6 +328,16 @@ export function defaultCabinetAvailability(): CabinetDayAvailability[] {
   ];
 }
 
+export interface DentalChair {
+  id: string;
+  name: string;
+  color_code: string;
+  equipment?: string;
+  allowed_categories?: string[];
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Cabinet {
   id: string;
   name: string;
@@ -289,6 +346,12 @@ export interface Cabinet {
   allowed_categories?: string[];
   allowed_treatments?: string[];
   is_active: boolean;
+  chair_id?: string;
+  chair_name?: string;
+  doctor_id?: string;
+  doctor_name?: string;
+  assistant_id?: string;
+  assistant_name?: string;
   availability?: CabinetDayAvailability[];
   created_at: string;
 }
@@ -1542,6 +1605,8 @@ export class DentistesClient {
       this.request("/v1/clinic/settings", { method: "PUT", body: input }),
     cancel: (confirmSubdomain: string): Promise<{ status: string }> =>
       this.request("/v1/clinic/cancel", { method: "POST", body: { confirm_subdomain: confirmSubdomain } }),
+    reactivate: (token?: string): Promise<{ ok: boolean; status: string; message: string }> =>
+      this.request("/v1/clinic/reactivate", { method: "POST", body: { token } }),
   };
 
   fiscal = {
@@ -1605,6 +1670,18 @@ export class DentistesClient {
     },
     updateLeadStatus: (id: string, status: LeadStatus): Promise<{ lead: Lead }> =>
       this.request(`/v1/admin/leads/${id}`, { method: "PATCH", body: { status } }),
+    getWinbackMetrics: (): Promise<{ metrics: WinbackMetrics }> =>
+      this.request("/v1/admin/winback/metrics"),
+    listWinbackLogs: (): Promise<{ logs: CancellationEmailLog[] }> =>
+      this.request("/v1/admin/winback/logs"),
+    listWinbackTemplates: (): Promise<{ templates: CancellationEmailTemplate[] }> =>
+      this.request("/v1/admin/winback/templates"),
+    updateWinbackTemplate: (id: string, input: Partial<CancellationEmailTemplate>): Promise<{ template: CancellationEmailTemplate }> =>
+      this.request(`/v1/admin/winback/templates/${id}`, { method: "PUT", body: input }),
+    sendTestWinbackEmail: (recipientEmail: string, stepDay = 15): Promise<{ ok: boolean; message: string; tracking_token: string; tracking_pixel_url: string; rendered_preview: string }> =>
+      this.request("/v1/admin/winback/test-email", { method: "POST", body: { recipient_email: recipientEmail, step_day: stepDay } }),
+    triggerWinbackCron: (): Promise<{ ok: boolean; evaluated_clinics: number; emails_dispatched: number }> =>
+      this.request("/v1/admin/winback/trigger-cron", { method: "POST", body: {} }),
   };
 
   async uploadImage(

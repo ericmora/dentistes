@@ -24,6 +24,7 @@ type ClinicBudgetSettings struct {
 	MarginLeftMm                  int    `json:"margin_left_mm"`
 	MarginRightMm                 int    `json:"margin_right_mm"`
 	HideHeaderLogoOnPrint         bool   `json:"hide_header_logo_on_print"`
+	AutoApproveAbsences           bool   `json:"auto_approve_absences"`
 }
 
 func DefaultClinicBudgetSettings() ClinicBudgetSettings {
@@ -41,6 +42,7 @@ func DefaultClinicBudgetSettings() ClinicBudgetSettings {
 		MarginLeftMm:                  15,
 		MarginRightMm:                 15,
 		HideHeaderLogoOnPrint:         false,
+		AutoApproveAbsences:           false,
 	}
 }
 
@@ -60,6 +62,7 @@ func NormalizeClinicBudgetSettings(in ClinicBudgetSettings) ClinicBudgetSettings
 		MarginLeftMm:                  in.MarginLeftMm,
 		MarginRightMm:                 in.MarginRightMm,
 		HideHeaderLogoOnPrint:         in.HideHeaderLogoOnPrint,
+		AutoApproveAbsences:           in.AutoApproveAbsences,
 	}
 	if out.BudgetDefaultValidityDays < 1 || out.BudgetDefaultValidityDays > 365 {
 		out.BudgetDefaultValidityDays = def.BudgetDefaultValidityDays

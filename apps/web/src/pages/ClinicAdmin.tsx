@@ -45,7 +45,7 @@ export function ClinicAdminPage() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const { clinicBudgetSettings, setClinicBudgetSettings } = useUiStore();
-  const [activeTab, setActiveTab] = useState("billing");
+  const [activeTab, setActiveTab] = useState("account");
   const [cabinetName, setCabinetName] = useState("");
   const [cabinetColor, setCabinetColor] = useState("#0D9488");
   const [cabinetEquipment, setCabinetEquipment] = useState("");
@@ -420,9 +420,58 @@ export function ClinicAdminPage() {
           onChange={setActiveTab}
           items={[
             {
-              id: "billing",
-              label: "Facturación y Facturas",
-              content: <BillingPage embedded />,
+              id: "account",
+              label: "Gestión de cuenta",
+              content: (
+                <div className="space-y-8">
+                  {/* Facturación y suscripción arriba */}
+                  <BillingPage embedded />
+
+                  {/* Cancelación de cuenta abajo del todo */}
+                  {me?.role === "OWNER" ? (
+                    <Card
+                      title="Cancelación de la cuenta de la clínica"
+                      description="Custodia y retención de datos durante 90 días con reactivación garantizada."
+                    >
+                      <div className="space-y-4">
+                        <Alert tone="warning" title="Período de custodia de 90 días y reactivación en 30 días">
+                          <div className="space-y-2 text-sm text-slate-700">
+                            <p>
+                              Al cancelar tu cuenta, tu suscripción se detendrá de inmediato. Todos los historiales clínicos, pacientes, citas y facturas quedarán <strong>guardados de forma segura durante 90 días</strong>.
+                            </p>
+                            <p>
+                              Dispones de <strong>30 días de plazo para reactivar tu cuenta</strong> con un solo clic recuperando el 100% de la operativa al instante. Recibirás recordatorios periódicos con instrucciones de reactivación. Si no se reactiva, pasados los 90 días los datos se purgarán de manera definitiva conforme a la normativa vigente.
+                            </p>
+                          </div>
+                        </Alert>
+
+                        <div className="rounded-lg border border-red-200 bg-red-50/50 p-4">
+                          <h4 className="text-sm font-semibold text-red-900">Confirmación de baja del servicio</h4>
+                          <p className="mt-1 text-xs text-red-700">
+                            Para proceder con la cancelación, escribe el subdominio de tu clínica: <strong>{me.active_tenant.subdomain}</strong>
+                          </p>
+                          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <div className="max-w-xs flex-1">
+                              <Input
+                                value={confirmSubdomain}
+                                onChange={(e) => setConfirmSubdomain(e.target.value)}
+                                placeholder={me.active_tenant.subdomain}
+                              />
+                            </div>
+                            <Button
+                              variant="destructive"
+                              disabled={confirmSubdomain.trim() !== me.active_tenant.subdomain}
+                              onClick={() => setCancelAccountOpen(true)}
+                            >
+                              Cancelar cuenta de la clínica
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  ) : null}
+                </div>
+              ),
             },
             {
               id: "branding-budgets",
@@ -750,47 +799,6 @@ export function ClinicAdminPage() {
                 </div>
               ),
             },
-            ...(me?.role === "OWNER"
-              ? [
-                  {
-                    id: "danger",
-                    label: "Cancelación de cuenta",
-                    content: (
-                      <Card
-                        title="Cerrar y cancelar cuenta de la clínica"
-                        description="Acción irreversible: cancela inmediatamente la suscripción en Stripe, revoca los accesos del equipo y archiva la cuenta."
-                      >
-                        <div className="space-y-4">
-                          <Alert tone="danger" title="Zona de baja de clínica (solo titular)">
-                            <div className="flex items-start gap-2">
-                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                              <span>
-                                Para confirmar la baja definitiva, escribe el identificador de la clínica:{" "}
-                                <strong>{me.active_tenant.subdomain}</strong>
-                              </span>
-                            </div>
-                          </Alert>
-                          <div className="max-w-sm">
-                            <Input
-                              label="Identificador de confirmación"
-                              value={confirmSubdomain}
-                              onChange={(e) => setConfirmSubdomain(e.target.value)}
-                              placeholder={me.active_tenant.subdomain}
-                            />
-                          </div>
-                          <Button
-                            variant="destructive"
-                            disabled={confirmSubdomain.trim() !== me.active_tenant.subdomain}
-                            onClick={() => setCancelAccountOpen(true)}
-                          >
-                            Cancelar cuenta definitivamente
-                          </Button>
-                        </div>
-                      </Card>
-                    ),
-                  },
-                ]
-              : []),
           ]}
         />
 
@@ -1131,9 +1139,9 @@ export function ClinicAdminPage() {
           onConfirm={() => cancelAccountMutation.mutate()}
           loading={cancelAccountMutation.isPending}
           danger
-          title="¿Cancelar cuenta de la clínica?"
-          description="Se cancelará la suscripción en Stripe inmediatamente y se revocarán todas las sesiones activas."
-          confirmLabel="Sí, cerrar cuenta"
+          title="¿Confirmar cancelación de la cuenta de la clínica?"
+          description="Se cancelará la suscripción de forma inmediata. Tus datos clínicos y de facturación se custodiarán durante 90 días con una ventana de 30 días para reactivación preferente con un solo clic."
+          confirmLabel="Sí, cancelar cuenta"
         />
       </div>
     </RoleGuard>

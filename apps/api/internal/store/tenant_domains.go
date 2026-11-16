@@ -133,7 +133,11 @@ func (s *Store) GetPublicTenantByHostname(ctx context.Context, tx pgx.Tx, hostna
 var cabinetColors = []string{"#0D9488", "#2563EB", "#7C3AED", "#D97706", "#059669", "#DC2626"}
 
 func (s *Store) CreateDefaultCabinet(ctx context.Context, tx pgx.Tx, tenantID, name string) error {
-	_, err := tx.Exec(ctx, `insert into cabinets (tenant_id, name, color_code) values ($1, $2, '#0D9488')`, tenantID, name)
+	var chairID string
+	if err := tx.QueryRow(ctx, `insert into dental_chairs (tenant_id, name, color_code) values ($1, 'Butaca 1', '#0D9488') returning id`, tenantID).Scan(&chairID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `insert into cabinets (tenant_id, name, color_code, chair_id) values ($1, $2, '#0D9488', $3::uuid)`, tenantID, name, chairID)
 	return err
 }
 
@@ -144,7 +148,12 @@ func (s *Store) CreateCabinets(ctx context.Context, tx pgx.Tx, tenantID string, 
 	for i := 0; i < count; i++ {
 		color := cabinetColors[i%len(cabinetColors)]
 		name := "Gabinete " + strconv.Itoa(i+1)
-		if _, err := tx.Exec(ctx, `insert into cabinets (tenant_id, name, color_code) values ($1, $2, $3)`, tenantID, name, color); err != nil {
+		chairName := "Butaca " + strconv.Itoa(i+1)
+		var chairID string
+		if err := tx.QueryRow(ctx, `insert into dental_chairs (tenant_id, name, color_code) values ($1, $2, $3) returning id`, tenantID, chairName, color).Scan(&chairID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `insert into cabinets (tenant_id, name, color_code, chair_id) values ($1, $2, $3, $4::uuid)`, tenantID, name, color, chairID); err != nil {
 			return err
 		}
 	}

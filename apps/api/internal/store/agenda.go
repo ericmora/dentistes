@@ -79,6 +79,12 @@ type Cabinet struct {
 	AllowedCategories []string                 `json:"allowed_categories"`
 	AllowedTreatments []string                 `json:"allowed_treatments"`
 	IsActive          bool                     `json:"is_active"`
+	ChairID           *string                  `json:"chair_id,omitempty"`
+	ChairName         *string                  `json:"chair_name,omitempty"`
+	DoctorID          *string                  `json:"doctor_id,omitempty"`
+	DoctorName        *string                  `json:"doctor_name,omitempty"`
+	AssistantID       *string                  `json:"assistant_id,omitempty"`
+	AssistantName     *string                  `json:"assistant_name,omitempty"`
 	Availability      []CabinetDayAvailability `json:"availability"`
 	CreatedAt         time.Time                `json:"created_at"`
 }
@@ -144,12 +150,17 @@ type Appointment struct {
 	Version            int       `json:"version"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
+	AssistantID        *string   `json:"assistant_id,omitempty"`
+	AssistantName      string    `json:"assistant_name,omitempty"`
+	ChairID            *string   `json:"chair_id,omitempty"`
+	ChairName          string    `json:"chair_name,omitempty"`
 }
 
 type UpsertAppointmentInput struct {
 	PatientID     string
 	DoctorID      string
 	CabinetID     string
+	AssistantID   *string
 	StartTime     time.Time
 	EndTime       time.Time
 	TreatmentType string
@@ -159,8 +170,17 @@ type UpsertAppointmentInput struct {
 }
 
 func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) {
-	rows, err := tx.Query(ctx, `select id, name, coalesce(color_code, '#0D9488'), coalesce(equipment, ''), coalesce(allowed_categories, '[]'::jsonb), coalesce(allowed_treatments, '[]'::jsonb), is_active, coalesce(availability, '[]'::jsonb), created_at
-		from cabinets where is_active = true order by created_at, name`)
+	rows, err := tx.Query(ctx, `select c.id, c.name, coalesce(c.color_code, '#0D9488'), coalesce(c.equipment, ''),
+		coalesce(c.allowed_categories, '[]'::jsonb), coalesce(c.allowed_treatments, '[]'::jsonb), c.is_active,
+		coalesce(c.availability, '[]'::jsonb), c.created_at,
+		c.chair_id::text, coalesce(ch.name, ''),
+		c.doctor_id::text, coalesce(ud.full_name, ''),
+		c.assistant_id::text, coalesce(ua.full_name, '')
+		from cabinets c
+		left join dental_chairs ch on ch.id = c.chair_id
+		left join users ud on ud.id = c.doctor_id
+		left join users ua on ua.id = c.assistant_id
+		where c.is_active = true order by c.created_at, c.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -169,8 +189,22 @@ func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) 
 	for rows.Next() {
 		var c Cabinet
 		var catBytes, treatBytes, availBytes []byte
-		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &catBytes, &treatBytes, &c.IsActive, &availBytes, &c.CreatedAt); err != nil {
+		var chairID, chairName, docID, docName, asstID, asstName *string
+		if err := rows.Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &catBytes, &treatBytes, &c.IsActive, &availBytes, &c.CreatedAt,
+			&chairID, &chairName, &docID, &docName, &asstID, &asstName); err != nil {
 			return nil, err
+		}
+		if chairID != nil && *chairID != "" {
+			c.ChairID = chairID
+			c.ChairName = chairName
+		}
+		if docID != nil && *docID != "" {
+			c.DoctorID = docID
+			c.DoctorName = docName
+		}
+		if asstID != nil && *asstID != "" {
+			c.AssistantID = asstID
+			c.AssistantName = asstName
 		}
 		if len(catBytes) > 0 {
 			_ = json.Unmarshal(catBytes, &c.AllowedCategories)
@@ -189,47 +223,57 @@ func (s *Store) ListCabinets(ctx context.Context, tx pgx.Tx) ([]Cabinet, error) 
 	return out, rows.Err()
 }
 
-func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode, equipment string, allowedCategories, allowedTreatments []string, availability []CabinetDayAvailability) (*Cabinet, error) {
-	if colorCode == "" {
-		colorCode = "#0D9488"
-	}
-	if len(availability) == 0 {
-		availability = DefaultCabinetAvailability()
-	}
-	if allowedCategories == nil {
-		allowedCategories = []string{}
-	}
-	if allowedTreatments == nil {
-		allowedTreatments = []string{}
-	}
-	availBytes, err := json.Marshal(availability)
-	if err != nil {
-		return nil, err
-	}
-	catBytes, _ := json.Marshal(allowedCategories)
-	treatBytes, _ := json.Marshal(allowedTreatments)
+func (s *Store) GetCabinetByID(ctx context.Context, tx pgx.Tx, cabinetID string) (*Cabinet, error) {
+	row := tx.QueryRow(ctx, `select c.id, c.name, coalesce(c.color_code, '#0D9488'), coalesce(c.equipment, ''),
+		coalesce(c.allowed_categories, '[]'::jsonb), coalesce(c.allowed_treatments, '[]'::jsonb), c.is_active,
+		coalesce(c.availability, '[]'::jsonb), c.created_at,
+		c.chair_id::text, coalesce(ch.name, ''),
+		c.doctor_id::text, coalesce(ud.full_name, ''),
+		c.assistant_id::text, coalesce(ua.full_name, '')
+		from cabinets c
+		left join dental_chairs ch on ch.id = c.chair_id
+		left join users ud on ud.id = c.doctor_id
+		left join users ua on ua.id = c.assistant_id
+		where c.id = $1::uuid`, cabinetID)
 
 	var c Cabinet
-	var rawCats, rawTreats, rawAvail []byte
-	err = tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code, equipment, allowed_categories, allowed_treatments, availability)
-		values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
-		returning id, name, color_code, coalesce(equipment, ''), allowed_categories, allowed_treatments, is_active, availability, created_at`,
-		tenantID, name, colorCode, equipment, catBytes, treatBytes, availBytes).
-		Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &rawCats, &rawTreats, &c.IsActive, &rawAvail, &c.CreatedAt)
-	if err != nil {
+	var catBytes, treatBytes, availBytes []byte
+	var chairID, chairName, docID, docName, asstID, asstName *string
+	if err := row.Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &catBytes, &treatBytes, &c.IsActive, &availBytes, &c.CreatedAt,
+		&chairID, &chairName, &docID, &docName, &asstID, &asstName); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-	_ = json.Unmarshal(rawCats, &c.AllowedCategories)
-	_ = json.Unmarshal(rawTreats, &c.AllowedTreatments)
-	if len(rawAvail) > 0 {
-		_ = json.Unmarshal(rawAvail, &c.Availability)
-	} else {
-		c.Availability = availability
+	if chairID != nil && *chairID != "" {
+		c.ChairID = chairID
+		c.ChairName = chairName
+	}
+	if docID != nil && *docID != "" {
+		c.DoctorID = docID
+		c.DoctorName = docName
+	}
+	if asstID != nil && *asstID != "" {
+		c.AssistantID = asstID
+		c.AssistantName = asstName
+	}
+	if len(catBytes) > 0 {
+		_ = json.Unmarshal(catBytes, &c.AllowedCategories)
+	}
+	if len(treatBytes) > 0 {
+		_ = json.Unmarshal(treatBytes, &c.AllowedTreatments)
+	}
+	if len(availBytes) > 0 {
+		_ = json.Unmarshal(availBytes, &c.Availability)
+	}
+	if len(c.Availability) == 0 {
+		c.Availability = DefaultCabinetAvailability()
 	}
 	return &c, nil
 }
 
-func (s *Store) UpdateCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID, name, colorCode, equipment string, allowedCategories, allowedTreatments []string, availability []CabinetDayAvailability) (*Cabinet, error) {
+func (s *Store) CreateCabinet(ctx context.Context, tx pgx.Tx, tenantID, name, colorCode, equipment string, allowedCategories, allowedTreatments []string, availability []CabinetDayAvailability, chairID, doctorID, assistantID *string) (*Cabinet, error) {
 	if colorCode == "" {
 		colorCode = "#0D9488"
 	}
@@ -249,33 +293,57 @@ func (s *Store) UpdateCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetI
 	catBytes, _ := json.Marshal(allowedCategories)
 	treatBytes, _ := json.Marshal(allowedTreatments)
 
-	var c Cabinet
-	var rawCats, rawTreats, rawAvail []byte
-	err = tx.QueryRow(ctx, `update cabinets
+	var id string
+	err = tx.QueryRow(ctx, `insert into cabinets (tenant_id, name, color_code, equipment, allowed_categories, allowed_treatments, availability, chair_id, doctor_id, assistant_id)
+		values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8::uuid, $9::uuid, $10::uuid)
+		returning id`,
+		tenantID, name, colorCode, equipment, catBytes, treatBytes, availBytes, chairID, doctorID, assistantID).
+		Scan(&id)
+	if err != nil {
+		return nil, err
+	}
+	return s.GetCabinetByID(ctx, tx, id)
+}
+
+func (s *Store) UpdateCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID, name, colorCode, equipment string, allowedCategories, allowedTreatments []string, availability []CabinetDayAvailability, chairID, doctorID, assistantID *string) (*Cabinet, error) {
+	if colorCode == "" {
+		colorCode = "#0D9488"
+	}
+	if len(availability) == 0 {
+		availability = DefaultCabinetAvailability()
+	}
+	if allowedCategories == nil {
+		allowedCategories = []string{}
+	}
+	if allowedTreatments == nil {
+		allowedTreatments = []string{}
+	}
+	availBytes, err := json.Marshal(availability)
+	if err != nil {
+		return nil, err
+	}
+	catBytes, _ := json.Marshal(allowedCategories)
+	treatBytes, _ := json.Marshal(allowedTreatments)
+
+	cmd, err := tx.Exec(ctx, `update cabinets
 		set name = coalesce(nullif($3, ''), name),
 			color_code = coalesce(nullif($4, ''), color_code),
 			equipment = $5,
 			allowed_categories = $6::jsonb,
 			allowed_treatments = $7::jsonb,
-			availability = $8::jsonb
-		where id = $1::uuid and tenant_id = $2::uuid and is_active = true
-		returning id, name, color_code, coalesce(equipment, ''), allowed_categories, allowed_treatments, is_active, availability, created_at`,
-		cabinetID, tenantID, name, colorCode, equipment, catBytes, treatBytes, availBytes).
-		Scan(&c.ID, &c.Name, &c.ColorCode, &c.Equipment, &rawCats, &rawTreats, &c.IsActive, &rawAvail, &c.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
+			availability = $8::jsonb,
+			chair_id = $9::uuid,
+			doctor_id = $10::uuid,
+			assistant_id = $11::uuid
+		where id = $1::uuid and tenant_id = $2::uuid and is_active = true`,
+		cabinetID, tenantID, name, colorCode, equipment, catBytes, treatBytes, availBytes, chairID, doctorID, assistantID)
 	if err != nil {
 		return nil, err
 	}
-	_ = json.Unmarshal(rawCats, &c.AllowedCategories)
-	_ = json.Unmarshal(rawTreats, &c.AllowedTreatments)
-	if len(rawAvail) > 0 {
-		_ = json.Unmarshal(rawAvail, &c.Availability)
-	} else {
-		c.Availability = availability
+	if cmd.RowsAffected() == 0 {
+		return nil, ErrNotFound
 	}
-	return &c, nil
+	return s.GetCabinetByID(ctx, tx, cabinetID)
 }
 
 func (s *Store) DeleteCabinet(ctx context.Context, tx pgx.Tx, tenantID, cabinetID string) error {
@@ -311,31 +379,66 @@ func (s *Store) ListDoctors(ctx context.Context, tx pgx.Tx) ([]Doctor, error) {
 	return out, rows.Err()
 }
 
+func (s *Store) ListAssistants(ctx context.Context, tx pgx.Tx) ([]Doctor, error) {
+	rows, err := tx.Query(ctx, `select u.id, u.full_name, m.role
+		from memberships m
+		join users u on u.id = m.user_id
+		where m.is_active = true and u.is_active = true
+		  and m.role in ('ASSISTANT', 'HYGIENIST', 'ADMIN', 'OWNER')
+		order by u.full_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Doctor{}
+	for rows.Next() {
+		var d Doctor
+		if err := rows.Scan(&d.ID, &d.FullName, &d.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 const appointmentSelect = `select a.id, a.patient_id, p.last_name || ', ' || p.first_name,
 		coalesce((p.medical_alerts->>'high_risk')::boolean, false),
 		a.doctor_id, u.full_name, a.cabinet_id, c.name,
 		a.start_time, a.end_time, a.treatment_type, a.status, a.cancellation_reason,
 		coalesce(a.is_forced, false), a.notes,
-		a.version, a.created_at, a.updated_at
+		a.version, a.created_at, a.updated_at,
+		a.assistant_id::text, coalesce(ua.full_name, ''),
+		c.chair_id::text, coalesce(ch.name, '')
 	from appointments a
 	join patients p on p.id = a.patient_id
 	join users u on u.id = a.doctor_id
-	join cabinets c on c.id = a.cabinet_id`
+	join cabinets c on c.id = a.cabinet_id
+	left join users ua on ua.id = a.assistant_id
+	left join dental_chairs ch on ch.id = c.chair_id`
 
 func scanAppointment(row pgx.Row) (*Appointment, error) {
 	var a Appointment
+	var asstID, chairID *string
 	err := row.Scan(
 		&a.ID, &a.PatientID, &a.PatientName, &a.PatientHighRisk,
 		&a.DoctorID, &a.DoctorName, &a.CabinetID, &a.CabinetName,
 		&a.StartTime, &a.EndTime, &a.TreatmentType, &a.Status, &a.CancellationReason,
 		&a.IsForced, &a.Notes,
 		&a.Version, &a.CreatedAt, &a.UpdatedAt,
+		&asstID, &a.AssistantName,
+		&chairID, &a.ChairName,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
+	}
+	if asstID != nil && *asstID != "" {
+		a.AssistantID = asstID
+	}
+	if chairID != nil && *chairID != "" {
+		a.ChairID = chairID
 	}
 	return &a, nil
 }
@@ -354,14 +457,23 @@ func (s *Store) ListAppointments(ctx context.Context, tx pgx.Tx, start, end time
 	out := []Appointment{}
 	for rows.Next() {
 		var a Appointment
+		var asstID, chairID *string
 		if err := rows.Scan(
 			&a.ID, &a.PatientID, &a.PatientName, &a.PatientHighRisk,
 			&a.DoctorID, &a.DoctorName, &a.CabinetID, &a.CabinetName,
 			&a.StartTime, &a.EndTime, &a.TreatmentType, &a.Status, &a.CancellationReason,
 			&a.IsForced, &a.Notes,
 			&a.Version, &a.CreatedAt, &a.UpdatedAt,
+			&asstID, &a.AssistantName,
+			&chairID, &a.ChairName,
 		); err != nil {
 			return nil, err
+		}
+		if asstID != nil && *asstID != "" {
+			a.AssistantID = asstID
+		}
+		if chairID != nil && *chairID != "" {
+			a.ChairID = chairID
 		}
 		out = append(out, a)
 	}
@@ -381,7 +493,23 @@ func (s *Store) hasAppointmentOverlap(ctx context.Context, tx pgx.Tx, cabinetID,
 		  and start_time < $4 and end_time > $3
 		  and ($5 = '' or id::text <> $5)
 	)`, cabinetID, doctorID, start, end, excludeID).Scan(&exists)
-	return exists, err
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+	// Check if doctor has an APPROVED staff absence on that date
+	startDateStr := start.Format("2006-01-02")
+	endDateStr := end.Format("2006-01-02")
+	var isAbsent bool
+	err = tx.QueryRow(ctx, `select exists(
+		select 1 from staff_absences
+		where user_id = $1::uuid
+		  and status = 'APPROVED'
+		  and start_date <= $3::date and end_date >= $2::date
+	)`, doctorID, startDateStr, endDateStr).Scan(&isAbsent)
+	return isAbsent, err
 }
 
 func (s *Store) CreateAppointment(ctx context.Context, tx pgx.Tx, tenantID string, in UpsertAppointmentInput) (*Appointment, error) {
@@ -398,12 +526,20 @@ func (s *Store) CreateAppointment(ctx context.Context, tx pgx.Tx, tenantID strin
 	if status == "" {
 		status = "SCHEDULED"
 	}
+	asstID := in.AssistantID
+	if asstID == nil || *asstID == "" {
+		var cabAsst *string
+		_ = tx.QueryRow(ctx, `select assistant_id::text from cabinets where id = $1::uuid`, in.CabinetID).Scan(&cabAsst)
+		if cabAsst != nil && *cabAsst != "" {
+			asstID = cabAsst
+		}
+	}
 	var id string
 	err := tx.QueryRow(ctx, `insert into appointments
-			(tenant_id, patient_id, doctor_id, cabinet_id, start_time, end_time, treatment_type, status, is_forced, notes)
-		values ($1, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, nullif($10, ''))
+			(tenant_id, patient_id, doctor_id, cabinet_id, assistant_id, start_time, end_time, treatment_type, status, is_forced, notes)
+		values ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10, nullif($11, ''))
 		returning id`,
-		tenantID, in.PatientID, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType, status, in.IsForced, in.Notes).
+		tenantID, in.PatientID, in.DoctorID, in.CabinetID, asstID, in.StartTime, in.EndTime, in.TreatmentType, status, in.IsForced, in.Notes).
 		Scan(&id)
 	if err != nil {
 		return nil, err
@@ -434,17 +570,27 @@ func (s *Store) UpdateAppointment(ctx context.Context, tx pgx.Tx, id string, in 
 		}
 	}
 
+	asstID := in.AssistantID
+	if asstID == nil || *asstID == "" {
+		var cabAsst *string
+		_ = tx.QueryRow(ctx, `select assistant_id::text from cabinets where id = $1::uuid`, in.CabinetID).Scan(&cabAsst)
+		if cabAsst != nil && *cabAsst != "" {
+			asstID = cabAsst
+		}
+	}
+
 	_, err = tx.Exec(ctx, `update appointments
 		set doctor_id = $2::uuid,
 			cabinet_id = $3::uuid,
-			start_time = $4,
-			end_time = $5,
-			treatment_type = $6,
-			is_forced = $7,
-			notes = nullif($8, ''),
+			assistant_id = $4::uuid,
+			start_time = $5,
+			end_time = $6,
+			treatment_type = $7,
+			is_forced = $8,
+			notes = nullif($9, ''),
 			version = version + 1
 		where id = $1`,
-		id, in.DoctorID, in.CabinetID, in.StartTime, in.EndTime, in.TreatmentType, in.IsForced, in.Notes)
+		id, in.DoctorID, in.CabinetID, asstID, in.StartTime, in.EndTime, in.TreatmentType, in.IsForced, in.Notes)
 	if err != nil {
 		return nil, err
 	}
@@ -502,6 +648,7 @@ type CalculateSlotsContext struct {
 	Overrides    []ShiftOverride
 	Holidays     []ClinicHoliday
 	Appointments []Appointment
+	Absences     []StaffAbsence
 	DoctorNames  map[string]string
 	Filter       AvailableSlotSearchFilter
 }
@@ -746,6 +893,9 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 				}
 
 				for _, docID := range doctors {
+					if docID != "" && IsUserAbsentOnDate(calcCtx.Absences, docID, dateStr) {
+						continue
+					}
 					// Gather busy intervals for this cabinet and this doctor
 					busy := append([]timeInterval{}, holidayIntervals...)
 
@@ -885,6 +1035,16 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 
 		for _, cab := range calcCtx.Cabinets {
 			if filter.CabinetID != "" && cab.ID != filter.CabinetID {
+				continue
+			}
+			if cab.DoctorID != nil && *cab.DoctorID != "" {
+				if IsUserAbsentOnDate(calcCtx.Absences, *cab.DoctorID, dateStr) {
+					continue
+				}
+				if filter.DoctorID != "" && *cab.DoctorID != filter.DoctorID {
+					continue
+				}
+			} else if filter.DoctorID != "" {
 				continue
 			}
 
@@ -1027,11 +1187,23 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 							if t >= 14*60 {
 								shiftName = "afternoon"
 							}
+							docID := ""
+							if cab.DoctorID != nil {
+								docID = *cab.DoctorID
+							}
+							docName := ""
+							if cab.DoctorName != nil {
+								docName = *cab.DoctorName
+							} else if docID != "" && calcCtx.DoctorNames != nil {
+								docName = calcCtx.DoctorNames[docID]
+							}
 							results = append(results, AvailableSlot{
 								CabinetID:        cab.ID,
 								CabinetName:      cab.Name,
 								CabinetColor:     cab.ColorCode,
 								CabinetEquipment: cab.Equipment,
+								DoctorID:         docID,
+								DoctorName:       docName,
 								Date:             dateStr,
 								StartTime:        formatMinutesToHHMM(t),
 								EndTime:          formatMinutesToHHMM(t + filter.DurationMinutes),
@@ -1060,17 +1232,29 @@ func CalculateAvailableSlotsWithContext(calcCtx CalculateSlotsContext) []Availab
 					if t >= 14*60 {
 						shiftName = "afternoon"
 					}
+					docID := ""
+					if cab.DoctorID != nil {
+						docID = *cab.DoctorID
+					}
+					docName := ""
+					if cab.DoctorName != nil {
+						docName = *cab.DoctorName
+					} else if docID != "" && calcCtx.DoctorNames != nil {
+						docName = calcCtx.DoctorNames[docID]
+					}
 					results = append(results, AvailableSlot{
 						CabinetID:        cab.ID,
 						CabinetName:      cab.Name,
 						CabinetColor:     cab.ColorCode,
 						CabinetEquipment: cab.Equipment,
+						DoctorID:         docID,
+						DoctorName:       docName,
 						Date:             dateStr,
 						StartTime:        formatMinutesToHHMM(t),
 						EndTime:          formatMinutesToHHMM(t + filter.DurationMinutes),
 						DurationMinutes:  filter.DurationMinutes,
 						Shift:            shiftName,
-						FormattedDate:   formatSpanishDate(currentDate),
+						FormattedDate:    formatSpanishDate(currentDate),
 					})
 					if len(results) >= filter.Limit {
 						return results
@@ -1368,12 +1552,36 @@ func (s *Store) FindAvailableSlots(ctx context.Context, tx pgx.Tx, filter Availa
 		docNames[d.ID] = d.FullName
 	}
 
+	absencesRows, err := tx.Query(ctx, `select a.id, a.user_id, coalesce(u.full_name, ''), coalesce(m.role, ''),
+		a.absence_type, a.start_date::text, a.end_date::text, a.status,
+		a.auto_rescheduled_count, coalesce(a.notes, ''), a.created_at, a.updated_at
+		from staff_absences a
+		join users u on u.id = a.user_id
+		left join memberships m on m.user_id = u.id and m.tenant_id = a.tenant_id
+		where a.status = 'APPROVED'
+		  and a.end_date >= $1::date and a.start_date <= $2::date`, startDateStr, endDateStr)
+	var absences []StaffAbsence
+	if err == nil {
+		defer absencesRows.Close()
+		for absencesRows.Next() {
+			var ab StaffAbsence
+			if err := absencesRows.Scan(
+				&ab.ID, &ab.UserID, &ab.UserName, &ab.UserRole,
+				&ab.AbsenceType, &ab.StartDate, &ab.EndDate, &ab.Status,
+				&ab.AutoRescheduledCount, &ab.Notes, &ab.CreatedAt, &ab.UpdatedAt,
+			); err == nil {
+				absences = append(absences, ab)
+			}
+		}
+	}
+
 	return CalculateAvailableSlotsWithContext(CalculateSlotsContext{
 		Cabinets:     cabinets,
 		Shifts:       shifts,
 		Overrides:    overrides,
 		Holidays:     holidays,
 		Appointments: appointments,
+		Absences:     absences,
 		DoctorNames:  docNames,
 		Filter:       filter,
 	}), nil

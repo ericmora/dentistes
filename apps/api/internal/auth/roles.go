@@ -8,6 +8,7 @@ const (
 	RoleDentist      = "DENTIST"
 	RoleDoctor       = "DENTIST"
 	RoleHygienist    = "HYGIENIST"
+	RoleAssistant    = "ASSISTANT"
 	RoleReceptionist = "RECEPTIONIST"
 )
 
@@ -30,6 +31,11 @@ var rolePermissions = map[string][]string{
 		"patients:read",
 		"clinical:alerts",
 		"appointments:read", "appointments:write",
+	},
+	"ASSISTANT": {
+		"patients:read",
+		"clinical:alerts",
+		"appointments:read",
 	},
 	"RECEPTIONIST": {
 		"patients:read", "patients:write",

@@ -44,7 +44,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !auth.ValidRole(req.Role) || req.Role == "OWNER" {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "rol inválido (usa ADMIN, DENTIST, HYGIENIST o RECEPTIONIST)", nil)
+		writeError(w, http.StatusBadRequest, "VALIDATION", "rol inválido (usa ADMIN, DENTIST, HYGIENIST, ASSISTANT o RECEPTIONIST)", nil)
 		return
 	}
 	if len(req.Password) < 10 {

@@ -305,7 +305,7 @@ func (s *Server) handleCancelClinicAccount(w http.ResponseWriter, r *http.Reques
 		_ = s.syncSubscription(r.Context(), tx, claims.TenantID, updated)
 	}
 
-	if err := s.store.UpdateTenantStatus(r.Context(), tx, claims.TenantID, "CANCELED"); err != nil {
+	if err := s.store.RecordTenantCancellation(r.Context(), tx, claims.TenantID); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not cancel clinic account", nil)
 		return
 	}

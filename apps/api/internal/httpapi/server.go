@@ -67,9 +67,14 @@ func (s *Server) Router() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
 	})
 	r.Get("/uploads/images/{id}", s.handleGetUploadedImage)
+	r.Get("/tracking/pixel/{token}", s.handleTrackingPixel)
+	r.Get("/tracking/click/{token}", s.handleTrackingClick)
 
 	v1Handler := func(r chi.Router) {
 		r.Get("/uploads/images/{id}", s.handleGetUploadedImage)
+		r.Get("/tracking/pixel/{token}", s.handleTrackingPixel)
+		r.Get("/tracking/click/{token}", s.handleTrackingClick)
+		r.Post("/clinic/reactivate", s.handleReactivateClinicAccount)
 		r.Get("/public/plans", s.handlePublicPlans)
 		r.Get("/public/tenant", s.handlePublicTenant)
 		r.Get("/public/fiscal-configs", s.handlePublicFiscalConfigs)
@@ -155,12 +160,27 @@ func (s *Server) Router() http.Handler {
 					r.Patch("/{id}", s.handleUpdateUser)
 				})
 
+				r.Route("/chairs", func(r chi.Router) {
+					r.Use(s.requireFeature("agenda"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListChairs)
+					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateChair)
+					r.With(s.requirePermission("settings:manage")).Put("/{id}", s.handleUpdateChair)
+					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteChair)
+				})
+
 				r.Route("/cabinets", func(r chi.Router) {
 					r.Use(s.requireFeature("agenda"))
 					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListCabinets)
 					r.With(s.requirePermission("settings:manage")).Post("/", s.handleCreateCabinet)
 					r.With(s.requirePermission("settings:manage")).Put("/{id}", s.handleUpdateCabinet)
 					r.With(s.requirePermission("settings:manage")).Delete("/{id}", s.handleDeleteCabinet)
+				})
+
+				r.Route("/absences", func(r chi.Router) {
+					r.Use(s.requireFeature("agenda"))
+					r.With(s.requirePermission("appointments:read")).Get("/", s.handleListStaffAbsences)
+					r.With(s.requirePermission("appointments:read")).Post("/", s.handleCreateStaffAbsence)
+					r.With(s.requirePermission("settings:manage")).Put("/{id}/status", s.handleUpdateStaffAbsenceStatus)
 				})
 
 				r.Route("/shifts", func(r chi.Router) {
@@ -196,6 +216,7 @@ func (s *Server) Router() http.Handler {
 				})
 
 				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/doctors", s.handleListDoctors)
+				r.With(s.requireFeature("agenda"), s.requirePermission("appointments:read")).Get("/assistants", s.handleListAssistants)
 
 				r.Route("/appointments", func(r chi.Router) {
 					r.Use(s.requireFeature("agenda"))
@@ -231,6 +252,12 @@ func (s *Server) Router() http.Handler {
 				r.Put("/plans/{key}", s.handleAdminUpdatePlan)
 				r.Get("/leads", s.handleAdminListLeads)
 				r.Patch("/leads/{id}", s.handleAdminUpdateLeadStatus)
+				r.Get("/winback/metrics", s.handleAdminGetWinbackMetrics)
+				r.Get("/winback/logs", s.handleAdminListWinbackLogs)
+				r.Get("/winback/templates", s.handleAdminListWinbackTemplates)
+				r.Put("/winback/templates/{id}", s.handleAdminUpdateWinbackTemplate)
+				r.Post("/winback/test-email", s.handleAdminSendTestWinbackEmail)
+				r.Post("/winback/trigger-cron", s.handleAdminTriggerWinbackCron)
 			})
 		})
 	}

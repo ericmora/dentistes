@@ -20,13 +20,14 @@ import {
   type TenantSummary,
   type User,
 } from "@dentistes/sdk";
+import { WinbackPanel } from "./WinbackPanel";
 
 const sdk = new DentistesClient({
   baseUrl: import.meta.env.VITE_API_URL ?? "http://localhost:8080",
   mode: "browser",
 });
 
-type Tab = "tenants" | "plans" | "leads";
+type Tab = "tenants" | "plans" | "leads" | "winback";
 
 export function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -133,6 +134,7 @@ function AdminApp({ user, onLogout }: { user: User; onLogout: () => void }) {
             ["tenants", "Tenants"],
             ["plans", "Planes"],
             ["leads", "Leads"],
+            ["winback", "Cancelaciones & Winback"],
           ] as const).map(([key, label]) => (
             <button
               key={key}
@@ -147,7 +149,15 @@ function AdminApp({ user, onLogout }: { user: User; onLogout: () => void }) {
         </nav>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-8">
-        {tab === "tenants" ? <TenantsPanel /> : tab === "plans" ? <PlansPanel /> : <LeadsPanel />}
+        {tab === "tenants" ? (
+          <TenantsPanel />
+        ) : tab === "plans" ? (
+          <PlansPanel />
+        ) : tab === "leads" ? (
+          <LeadsPanel />
+        ) : (
+          <WinbackPanel sdk={sdk} />
+        )}
       </main>
     </div>
   );
