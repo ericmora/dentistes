@@ -19,10 +19,12 @@ CREATE TABLE IF NOT EXISTS findings_catalog (
 
 CREATE INDEX IF NOT EXISTS idx_findings_catalog_tenant ON findings_catalog(tenant_id) WHERE deleted_at IS NULL;
 
+DROP TRIGGER IF EXISTS findings_catalog_updated_at ON findings_catalog;
 CREATE TRIGGER findings_catalog_updated_at BEFORE UPDATE ON findings_catalog FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 ALTER TABLE findings_catalog ENABLE ROW LEVEL SECURITY;
 ALTER TABLE findings_catalog FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS findings_catalog_tenant ON findings_catalog;
 CREATE POLICY findings_catalog_tenant ON findings_catalog FOR ALL
     USING (tenant_id = current_tenant_id()) WITH CHECK (tenant_id = current_tenant_id());
 
