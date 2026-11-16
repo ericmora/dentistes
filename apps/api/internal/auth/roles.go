@@ -22,7 +22,7 @@ var rolePermissions = map[string][]string{
 	},
 	"DENTIST": {
 		"patients:read", "patients:write",
-		"clinical:read", "clinical:write",
+		"clinical:read", "clinical:write", "clinical:alerts",
 		"appointments:read", "appointments:write",
 		"billing:read", "billing:write",
 	},

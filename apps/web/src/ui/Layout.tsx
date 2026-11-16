@@ -18,15 +18,13 @@ import { UserAlarms } from "./UserAlarms";
 function getRoleLabel(role: string): string {
   switch (role) {
     case "OWNER":
-      return "Director / Titular";
+      return "Propietario";
     case "ADMIN":
       return "Administrador";
     case "DENTIST":
-      return "Odontólogo";
     case "HYGIENIST":
-      return "Higienista";
     case "RECEPTIONIST":
-      return "Recepción";
+      return "Profesional de clínica";
     default:
       return role;
   }

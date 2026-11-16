@@ -12,12 +12,34 @@ import {
 import type { TenantUser } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
 
-const ROLES = ["ADMIN", "DENTIST", "HYGIENIST", "RECEPTIONIST"];
+export const ASSIGNABLE_ROLES = [
+  {
+    value: "ADMIN",
+    label: "Administrador",
+    description: "Control total de la clínica, gestión de equipo y finanzas",
+  },
+  {
+    value: "DENTIST",
+    label: "Profesional de clínica",
+    description: "Acceso operativo a agenda, pacientes, odontograma e historial",
+  },
+] as const;
+
+export function normalizeUserRole(role: string): string {
+  if (role === "ADMIN" || role === "OWNER") return role;
+  return "DENTIST";
+}
+
+export function getRoleDisplayName(role: string): string {
+  if (role === "OWNER") return "Propietario";
+  const match = ASSIGNABLE_ROLES.find((r) => r.value === role);
+  return match ? match.label : "Profesional de clínica";
+}
 
 export function UsersPage() {
   const { sdk, me } = useSession();
   const [users, setUsers] = useState<TenantUser[]>([]);
-  const [form, setForm] = useState({ email: "", full_name: "", password: "", role: "RECEPTIONIST" });
+  const [form, setForm] = useState({ email: "", full_name: "", password: "", role: "DENTIST" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,7 +66,7 @@ export function UsersPage() {
     setError(null);
     try {
       await sdk.users.create(form);
-      setForm({ email: "", full_name: "", password: "", role: "RECEPTIONIST" });
+      setForm({ email: "", full_name: "", password: "", role: "DENTIST" });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear el usuario");
@@ -75,7 +97,7 @@ export function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="Equipo y permisos" description="Profesionales, asistentes y permisos de acceso a la clínica" />
+      <PageHeader title="Equipo y roles" description="Gestión del personal y permisos simplificados de acceso a la clínica" />
       {error ? (
         <div className="mb-4">
           <Alert tone="danger">{error}</Alert>
@@ -108,16 +130,17 @@ export function UsersPage() {
                       </td>
                       <td className="py-3">
                         {user.role === "OWNER" ? (
-                          <Badge tone="info">OWNER</Badge>
+                          <Badge tone="info">Propietario</Badge>
                         ) : (
                           <select
-                            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm"
-                            value={user.role}
+                            aria-label={`Rol de ${user.full_name}`}
+                            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 focus:border-brand-500 focus:outline-none"
+                            value={normalizeUserRole(user.role)}
                             onChange={(e) => void updateRole(user, e.target.value)}
                           >
-                            {ROLES.map((role) => (
-                              <option key={role} value={role}>
-                                {role}
+                            {ASSIGNABLE_ROLES.map((role) => (
+                              <option key={role.value} value={role.value}>
+                                {role.label}
                               </option>
                             ))}
                           </select>
@@ -158,15 +181,16 @@ export function UsersPage() {
               <Input label="Nombre completo" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} hint="Requerido si el usuario es nuevo" />
               <Input label="Contraseña temporal" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} hint="Mínimo 10 caracteres; se ignora si el usuario ya existe" required />
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">Rol</span>
+                <span className="mb-1 block text-sm font-medium text-slate-700">Rol en la clínica</span>
                 <select
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  aria-label="Rol en la clínica"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 focus:border-brand-500 focus:outline-none"
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                 >
-                  {ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
+                  {ASSIGNABLE_ROLES.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label} — {role.description}
                     </option>
                   ))}
                 </select>
