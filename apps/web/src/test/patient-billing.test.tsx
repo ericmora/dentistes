@@ -460,7 +460,7 @@ describe("Patient Clinical Invoicing & Multi-Option Budgets Components (F6/F7)",
         clinicName="Clínica Dental Barcelona"
         clinicTaxId="B-12345678"
         initialSettings={{
-          logo_url: "",
+          logo_url: "https://clinica.example.com/logo.svg",
           clinic_contact_line: "Calle Mayor 12, Madrid",
           budget_default_validity_days: 30,
           budget_default_series: "PRE",
@@ -472,9 +472,9 @@ describe("Patient Clinical Invoicing & Multi-Option Budgets Components (F6/F7)",
       />,
     );
 
-    // Update logo URL, default validity days (e.g. preset 60 días), series and validity legal terms
-    const logoInput = screen.getByLabelText(/URL o imagen del logo de la clínica/i);
-    fireEvent.change(logoInput, { target: { value: "https://clinica.example.com/logo.svg" } });
+    // Verify sample logo button is removed and preview is rendered
+    expect(screen.queryByText(/Usar logo dental de muestra/i)).toBeNull();
+    expect(screen.getByRole("img", { name: /Vista previa logo Clínica Dental Barcelona/i })).toBeInTheDocument();
 
     const preset60Btn = screen.getByRole("button", { name: "60 días" });
     fireEvent.click(preset60Btn);

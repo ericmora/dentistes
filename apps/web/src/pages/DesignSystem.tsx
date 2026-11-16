@@ -11,6 +11,7 @@ import {
   CriticalAlertBanner,
   CurrencyInput,
   DropdownMenu,
+  ImageUploader,
   Input,
   InvoiceLineEditor,
   Modal,
@@ -42,6 +43,7 @@ export function DesignSystemPage() {
   const [switched, setSwitched] = useState(false);
   const [comboVal, setComboVal] = useState("1");
   const [radioVal, setRadioVal] = useState("morning");
+  const [uploadedImg, setUploadedImg] = useState<string>("");
   const [tab, setTab] = useState("primitives");
   const [teeth, setTeeth] = useState<Record<number, ToothState>>({});
   const [tool, setTool] = useState<OdontogramActiveTool>("caries");
@@ -123,6 +125,19 @@ export function DesignSystemPage() {
                         { value: "morning", label: "Matins" },
                         { value: "afternoon", label: "Tardes" },
                       ]}
+                    />
+                  </div>
+                </Card>
+
+                <Card title="Pujada i Optimització d'Imatges (ImageUploader)" className="lg:col-span-2">
+                  <div className="max-w-xl">
+                    <ImageUploader
+                      id="ds-image-uploader-demo"
+                      label="Logotip o imatge clínica"
+                      description="Processament automàtic en backend: reescalat màxim, compressió intel·ligent (WebP/JPEG/PNG), preservació alfa i previsualització instantània."
+                      value={uploadedImg}
+                      onChange={(url) => setUploadedImg(url)}
+                      onRemove={() => setUploadedImg("")}
                     />
                   </div>
                 </Card>

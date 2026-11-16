@@ -66,8 +66,10 @@ func (s *Server) Router() http.Handler {
 	r.Get("/live", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
 	})
+	r.Get("/uploads/images/{id}", s.handleGetUploadedImage)
 
 	v1Handler := func(r chi.Router) {
+		r.Get("/uploads/images/{id}", s.handleGetUploadedImage)
 		r.Get("/public/plans", s.handlePublicPlans)
 		r.Get("/public/tenant", s.handlePublicTenant)
 		r.Get("/public/fiscal-configs", s.handlePublicFiscalConfigs)
@@ -99,6 +101,7 @@ func (s *Server) Router() http.Handler {
 				r.Get("/clinic/settings", s.handleGetClinicSettings)
 				r.With(s.requirePermission("settings:manage")).Put("/clinic/settings", s.handleUpdateClinicSettings)
 				r.With(s.requirePermission("settings:manage")).Post("/clinic/cancel", s.handleCancelClinicAccount)
+				r.Post("/uploads/images", s.handleUploadImage)
 
 				r.Route("/patients", func(r chi.Router) {
 					r.Use(s.requireFeature("patients"))

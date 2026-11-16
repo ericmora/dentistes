@@ -18,7 +18,7 @@ import {
   Trash2,
   UserCheck,
 } from "lucide-react";
-import { Badge, Button, cn, formatMoney, type Tone } from "./primitives";
+import { Badge, Button, cn, formatMoney, ImageUploader, type Tone } from "./primitives";
 
 export interface MedicalAllergy {
   name: string;
@@ -4206,16 +4206,7 @@ export function BudgetPrintFormatDocument({
               alt={`Logo de ${clinicName}`}
               className="h-14 max-w-[180px] object-contain shrink-0"
             />
-          ) : (
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-900 text-white shadow-2xs"
-              aria-hidden="true"
-            >
-              <svg viewBox="0 0 36 36" className="h-7 w-7 fill-current">
-                <path d="M11 8C8 8 6.5 11 6.5 14.5C6.5 19 8.5 23 10 27C11 29.5 12.2 30 13.5 27.5C14.8 25 15.8 21.5 18 21.5C20.2 21.5 21.2 25 22.5 27.5C23.8 30 25 29.5 26 27C27.5 23 29.5 19 29.5 14.5C29.5 11 28 8 25 8C22 8 20.2 9.8 18 9.8C15.8 9.8 14 8 11 8Z" />
-              </svg>
-            </div>
-          )}
+          ) : null}
 
           <div className="space-y-0.5">
             <p className="text-sm font-extrabold uppercase tracking-wider text-brand-800">
@@ -4502,59 +4493,17 @@ export function ClinicBrandingAndBudgetSettingsCard({
             </p>
           </div>
 
-          {/* 1. Clinic Logo Configuration */}
-          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
-            <label
-              htmlFor="clinic-logo-url-input"
-              className="block text-xs font-bold uppercase tracking-wider text-slate-700"
-            >
-              URL o imagen del logo de la clínica
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="clinic-logo-url-input"
-                type="text"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://tu-clinica.com/logo.png o sube una imagen…"
-                className="h-9 flex-1 min-w-[200px] rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-brand-500 focus:outline-none"
-              />
-              <label className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                <span>Subir imagen</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      if (typeof reader.result === "string") {
-                        setLogoUrl(reader.result);
-                      }
-                    };
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => setLogoUrl(SAMPLE_CLINIC_LOGO_DATA_URL)}
-                className="h-9 rounded-lg border border-brand-200 bg-brand-50 px-2.5 text-xs font-semibold text-brand-800 hover:bg-brand-100"
-              >
-                Usar logo dental de muestra
-              </button>
-              {logoUrl ? (
-                <button
-                  type="button"
-                  onClick={() => setLogoUrl("")}
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-500 hover:bg-red-50 hover:text-red-700"
-                >
-                  Quitar logo
-                </button>
-              ) : null}
-            </div>
+          {/* 1. Clinic Logo Configuration with Design System ImageUploader */}
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+            <ImageUploader
+              id="clinic-logo-uploader"
+              label="Logotipo oficial de la clínica"
+              description="Sube tu imagen (PNG, JPG, WebP, SVG). Se optimiza automáticamente en el servidor para almacenar a alta calidad con el menor peso."
+              value={logoUrl}
+              onChange={(nextUrl) => setLogoUrl(nextUrl)}
+              onRemove={() => setLogoUrl("")}
+              maxDim={800}
+            />
 
             <div className="pt-1">
               <label
@@ -4719,11 +4668,7 @@ export function ClinicBrandingAndBudgetSettingsCard({
                     alt={`Vista previa logo ${clinicName}`}
                     className="h-11 max-w-[140px] object-contain shrink-0"
                   />
-                ) : (
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-900 text-white font-extrabold">
-                    CD
-                  </div>
-                )}
+                ) : null}
                 <div>
                   <p className="font-extrabold uppercase text-brand-800">{clinicName}</p>
                   {clinicTaxId ? <p className="text-[10px] text-slate-500">NIF: {clinicTaxId}</p> : null}

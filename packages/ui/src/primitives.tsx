@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, Search, X, UploadCloud, RefreshCw, Trash2, Image as ImageIcon } from "lucide-react";
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -683,6 +683,306 @@ export function BrandLogo({
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export interface OptimizedImageDetails {
+  id?: string;
+  url: string;
+  data_url?: string;
+  original_filename?: string;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+  original_size_bytes?: number;
+  optimized_size_bytes?: number;
+  reduction_percentage?: number;
+}
+
+export interface ImageUploaderProps {
+  id?: string;
+  value?: string;
+  onChange: (value: string, details?: OptimizedImageDetails) => void;
+  onRemove?: () => void;
+  maxDim?: number;
+  label?: string;
+  description?: string;
+  accept?: string;
+  disabled?: boolean;
+  previewClassName?: string;
+  uploadFn?: (file: File) => Promise<OptimizedImageDetails>;
+  className?: string;
+}
+
+export function ImageUploader({
+  id,
+  value,
+  onChange,
+  onRemove,
+  maxDim = 1200,
+  label,
+  description,
+  accept = "image/png,image/jpeg,image/webp,image/svg+xml,image/gif",
+  disabled = false,
+  previewClassName,
+  uploadFn,
+  className,
+}: ImageUploaderProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastStats, setLastStats] = useState<OptimizedImageDetails | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function processAndUploadFile(file: File) {
+    if (!file.type.startsWith("image/") && !file.name.endsWith(".svg")) {
+      setError("Por favor, selecciona un archivo de imagen válido (PNG, JPG, WebP, SVG).");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (uploadFn) {
+        const res = await uploadFn(file);
+        setLastStats(res);
+        onChange(res.url || res.data_url || "", res);
+        return;
+      }
+
+      // Default upload flow via backend API with client-side canvas fallback
+      const token = typeof window !== "undefined" ? localStorage.getItem("dentistes_access_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+
+      const endpoint = `${import.meta.env?.VITE_API_URL ?? ""}/api/v1/uploads/images?max_dim=${maxDim}`;
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: formData,
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data: OptimizedImageDetails = await res.json();
+        setLastStats(data);
+        onChange(data.url || data.data_url || "", data);
+      } else {
+        // Hermetic fallback: Read file and generate optimized DataURL
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const rawDataUrl = e.target?.result as string;
+          if (!rawDataUrl) return;
+
+          if (typeof window !== "undefined" && typeof Image !== "undefined") {
+            const img = new Image();
+            img.onload = () => {
+              let w = img.width;
+              let h = img.height;
+              if (w > maxDim || h > maxDim) {
+                if (w >= h) {
+                  h = Math.round((h * maxDim) / w);
+                  w = maxDim;
+                } else {
+                  w = Math.round((w * maxDim) / h);
+                  h = maxDim;
+                }
+              }
+
+              const canvas = document.createElement("canvas");
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.drawImage(img, 0, 0, w, h);
+                const optUrl = canvas.toDataURL("image/webp", 0.85);
+                const originalSize = file.size;
+                const optSize = Math.round((optUrl.length * 3) / 4);
+                const reduction = originalSize > optSize ? Math.round(((originalSize - optSize) / originalSize) * 100) : 0;
+
+                const details: OptimizedImageDetails = {
+                  url: optUrl,
+                  data_url: optUrl,
+                  width: w,
+                  height: h,
+                  original_size_bytes: originalSize,
+                  optimized_size_bytes: optSize,
+                  reduction_percentage: reduction,
+                  original_filename: file.name,
+                };
+                setLastStats(details);
+                onChange(optUrl, details);
+              } else {
+                onChange(rawDataUrl);
+              }
+            };
+            img.src = rawDataUrl;
+          } else {
+            onChange(rawDataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al procesar la imagen");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    if (disabled || loading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) void processAndUploadFile(file);
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) void processAndUploadFile(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleRemove() {
+    setLastStats(null);
+    setError(null);
+    onChange("");
+    onRemove?.();
+  }
+
+  return (
+    <div className={cn("space-y-2", className)}>
+      {label ? (
+        <label htmlFor={id} className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+          {label}
+        </label>
+      ) : null}
+
+      {value && value.trim() ? (
+        // Preview State
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded-lg border border-slate-200/90 bg-slate-50/80 p-1.5 overflow-hidden">
+                <img
+                  src={value.trim()}
+                  alt={label ?? "Imagen subida"}
+                  className={cn("h-full w-full object-contain", previewClassName)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-slate-800">
+                  {lastStats?.original_filename ?? "Imagen optimizada"}
+                </p>
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                  {lastStats?.width && lastStats?.height ? (
+                    <span className="font-medium text-slate-600">
+                      {lastStats.width} × {lastStats.height} px
+                    </span>
+                  ) : null}
+                  {lastStats?.optimized_size_bytes ? (
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.2 text-[10px] font-semibold text-emerald-700 border border-emerald-200/60">
+                      {Math.round(lastStats.optimized_size_bytes / 1024)} KB
+                      {lastStats.reduction_percentage ? ` (-${Math.round(lastStats.reduction_percentage)}%)` : ""}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                id={id}
+                type="file"
+                accept={accept}
+                disabled={disabled || loading}
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled || loading}
+                onClick={() => fileInputRef.current?.click()}
+                className="h-8 gap-1.5 text-xs"
+              >
+                {loading ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                <span>Cambiar</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={disabled || loading}
+                onClick={handleRemove}
+                className="h-8 gap-1.5 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Quitar</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Upload Dropzone State (No image, clean upload box)
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!disabled && !loading) setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={cn(
+            "relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors",
+            isDragging
+              ? "border-brand-500 bg-brand-50/50"
+              : "border-slate-300 bg-slate-50/50 hover:border-slate-400 hover:bg-slate-50/80",
+            disabled ? "opacity-50 pointer-events-none" : "cursor-pointer",
+          )}
+          onClick={() => !loading && fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            id={id}
+            type="file"
+            accept={accept}
+            disabled={disabled || loading}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-2xs border border-slate-200 text-brand-700 mb-2">
+            {loading ? <Spinner className="h-5 w-5 text-brand-600" /> : <UploadCloud className="h-5 w-5" />}
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-800">
+              {loading ? (
+                "Optimizando y subiendo imagen…"
+              ) : (
+                <>
+                  <span className="text-brand-700 underline underline-offset-2">Haz clic para subir</span> o arrastra tu archivo aquí
+                </>
+              )}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              PNG, JPG, WebP o SVG (máx. dimensión {maxDim}px, compresión automática sin pérdida visible)
+            </p>
+          </div>
+        </div>
+      )}
+
+      {description ? <p className="text-[11px] text-slate-500">{description}</p> : null}
+      {error ? <p className="text-[11px] font-medium text-rose-600">{error}</p> : null}
     </div>
   );
 }

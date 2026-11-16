@@ -906,4 +906,44 @@ describe("Dentistes SDK Unit Tests", () => {
     assert.equal(invoiced.budget.status, "INVOICED");
     assert.equal(invoiced.invoice.invoice_number, 99);
   });
+
+  test("DentistesClient uploadImage optimizes and sends image payload", async () => {
+    let capturedUrl = "";
+    let capturedBody: any = null;
+
+    const mockFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = input.toString();
+      capturedBody = init?.body ? JSON.parse(init.body as string) : null;
+      return new Response(
+        JSON.stringify({
+          id: "img-123",
+          url: "/api/v1/uploads/images/img-123",
+          data_url: "data:image/jpeg;base64,abc",
+          original_filename: "logo.png",
+          mime_type: "image/jpeg",
+          width: 800,
+          height: 600,
+          original_size_bytes: 500000,
+          optimized_size_bytes: 40000,
+          reduction_percentage: 92.0,
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    const client = new DentistesClient({
+      baseUrl: "http://api.dentistes.test",
+      fetch: mockFetch,
+    });
+
+    const res = await client.uploadImage(
+      { dataUrl: "data:image/png;base64,dummy", filename: "logo.png" },
+      { maxDim: 800 },
+    );
+
+    assert.equal(capturedUrl, "http://api.dentistes.test/v1/uploads/images?max_dim=800");
+    assert.equal(capturedBody.filename, "logo.png");
+    assert.equal(res.id, "img-123");
+    assert.equal(res.reduction_percentage, 92.0);
+  });
 });

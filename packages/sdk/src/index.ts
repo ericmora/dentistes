@@ -72,6 +72,19 @@ export interface Subscription {
   trial_ends_at?: string;
 }
 
+export interface OptimizedImageUploadResponse {
+  id: string;
+  url: string;
+  data_url: string;
+  original_filename: string;
+  mime_type: string;
+  width: number;
+  height: number;
+  original_size_bytes: number;
+  optimized_size_bytes: number;
+  reduction_percentage: number;
+}
+
 export interface MeResponse {
   user: User;
   memberships: Membership[];
@@ -1537,6 +1550,50 @@ export class DentistesClient {
     updateLeadStatus: (id: string, status: LeadStatus): Promise<{ lead: Lead }> =>
       this.request(`/v1/admin/leads/${id}`, { method: "PATCH", body: { status } }),
   };
+
+  async uploadImage(
+    fileOrPayload: File | Blob | { dataUrl: string; filename?: string },
+    options: { maxDim?: number } = {},
+  ): Promise<OptimizedImageUploadResponse> {
+    const query = options.maxDim ? `?max_dim=${options.maxDim}` : "";
+    if (typeof fileOrPayload === "object" && "dataUrl" in fileOrPayload) {
+      return this.request(`/v1/uploads/images${query}`, {
+        method: "POST",
+        body: { data_url: fileOrPayload.dataUrl, filename: fileOrPayload.filename },
+      });
+    }
+
+    if (typeof FormData !== "undefined" && fileOrPayload instanceof Blob) {
+      const form = new FormData();
+      const filename = "name" in fileOrPayload ? (fileOrPayload as File).name : "upload.jpg";
+      form.append("file", fileOrPayload, filename);
+
+      const headers: Record<string, string> = {};
+      const token = await this.token();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (this.activeTenantId) headers["X-Tenant-ID"] = this.activeTenantId;
+
+      const res = await this.fetchImpl(`${this.baseUrl}/v1/uploads/images${query}`, {
+        method: "POST",
+        headers,
+        body: form,
+      });
+
+      if (!res.ok) {
+        let errBody: any;
+        try {
+          errBody = await res.json();
+        } catch {
+          errBody = { message: res.statusText };
+        }
+        throw new DentistesError(res.status, errBody);
+      }
+
+      return res.json();
+    }
+
+    throw new Error("Unsupported image upload input");
+  }
 }
 
 export function hasFeature(me: MeResponse | null, feature: string): boolean {
