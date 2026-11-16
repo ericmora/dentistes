@@ -31,9 +31,9 @@ ALTER TABLE cabinets ADD COLUMN IF NOT EXISTS assistant_id UUID REFERENCES users
 -- Backfill chair_id on cabinets
 UPDATE cabinets SET chair_id = id WHERE chair_id IS NULL;
 
--- Extend tenant_memberships role check to include ASSISTANT
-ALTER TABLE tenant_memberships DROP CONSTRAINT IF EXISTS tenant_memberships_role_check;
-ALTER TABLE tenant_memberships ADD CONSTRAINT tenant_memberships_role_check CHECK (role IN ('OWNER', 'ADMIN', 'DENTIST', 'HYGIENIST', 'ASSISTANT', 'RECEPTIONIST'));
+-- Extend memberships role check to include ASSISTANT
+ALTER TABLE memberships DROP CONSTRAINT IF EXISTS memberships_role_check;
+ALTER TABLE memberships ADD CONSTRAINT memberships_role_check CHECK (role IN ('OWNER', 'ADMIN', 'DENTIST', 'HYGIENIST', 'ASSISTANT', 'RECEPTIONIST'));
 
 -- Extend appointments to include assistant_id
 ALTER TABLE appointments ADD COLUMN IF NOT EXISTS assistant_id UUID REFERENCES users(id) ON DELETE SET NULL;
