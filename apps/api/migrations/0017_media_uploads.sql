@@ -1,8 +1,8 @@
 -- Migration 0017: Create media_uploads table for optimized image storage
 CREATE TABLE IF NOT EXISTS media_uploads (
     id TEXT PRIMARY KEY,
-    tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    uploader_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    uploader_id UUID REFERENCES users(id) ON DELETE SET NULL,
     original_filename TEXT NOT NULL,
     mime_type TEXT NOT NULL,
     width INT NOT NULL DEFAULT 0,

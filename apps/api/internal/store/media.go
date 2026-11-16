@@ -223,7 +223,7 @@ func (s *Store) SaveMediaUpload(ctx context.Context, db DBExecutor, tenantID str
 
 	query := `
 		INSERT INTO media_uploads (id, tenant_id, uploader_id, original_filename, mime_type, width, height, size_bytes, data, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING created_at
 	`
 	err := db.QueryRow(ctx, query,
@@ -247,7 +247,7 @@ func (s *Store) GetMediaUpload(ctx context.Context, db DBExecutor, id string) (*
 	}
 
 	query := `
-		SELECT id, tenant_id, uploader_id, original_filename, mime_type, width, height, size_bytes, data, created_at
+		SELECT id, tenant_id::text, uploader_id::text, original_filename, mime_type, width, height, size_bytes, data, created_at
 		FROM media_uploads
 		WHERE id = $1
 	`
