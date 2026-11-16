@@ -6,7 +6,6 @@ import {
   Settings,
   Users,
   Building2,
-  Plus,
   ChevronDown,
   LogOut,
   CreditCard,
@@ -14,6 +13,7 @@ import {
 import { Badge, BrandLogo, Button, DropdownMenu, cn } from "@dentistes/ui";
 import { can } from "@dentistes/sdk";
 import { useSession } from "../lib/session";
+import { UserAlarms } from "./UserAlarms";
 
 function getRoleLabel(role: string): string {
   switch (role) {
@@ -143,14 +143,9 @@ export function Layout({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          {/* Right: Quick Action & User Profile Dropdown */}
+          {/* Right: User Alarms & User Profile Dropdown */}
           <div className="flex items-center gap-2">
-            <Link to="/agenda">
-              <Button size="sm" className="hidden sm:inline-flex min-h-[30px] items-center gap-1 px-2.5 py-1 text-xs shadow-2xs">
-                <Plus className="h-3.5 w-3.5" />
-                <span>Nueva cita</span>
-              </Button>
-            </Link>
+            <UserAlarms />
 
             {me.entitlements.blocked_reason ? (
               <Badge tone="danger">Pago pendiente</Badge>
