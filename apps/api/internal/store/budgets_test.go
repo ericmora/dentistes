@@ -329,6 +329,12 @@ func TestNormalizeClinicBudgetSettings(t *testing.T) {
 		BudgetWarningDaysBeforeExpiry: 10,
 		BudgetValidityTerms:           "  Vigencia garantizada durante 60 días naturales.  ",
 		BudgetAutoExpire:              true,
+		CustomMarginsEnabled:          true,
+		MarginTopMm:                   35,
+		MarginBottomMm:                25,
+		MarginLeftMm:                  20,
+		MarginRightMm:                 18,
+		HideHeaderLogoOnPrint:         true,
 	})
 	if custom.LogoURL != "https://clinica.example.com/logo.png" {
 		t.Errorf("expected trimmed logo URL, got %q", custom.LogoURL)
@@ -342,12 +348,17 @@ func TestNormalizeClinicBudgetSettings(t *testing.T) {
 	if custom.BudgetWarningDaysBeforeExpiry != 10 {
 		t.Errorf("expected warning days 10, got %d", custom.BudgetWarningDaysBeforeExpiry)
 	}
+	if !custom.CustomMarginsEnabled || custom.MarginTopMm != 35 || custom.MarginBottomMm != 25 || custom.MarginLeftMm != 20 || custom.MarginRightMm != 18 || !custom.HideHeaderLogoOnPrint {
+		t.Errorf("expected custom margins preserved, got %+v", custom)
+	}
 
 	// Out-of-range values fall back safely
 	clamped := NormalizeClinicBudgetSettings(ClinicBudgetSettings{
 		BudgetDefaultValidityDays:     -5,
 		BudgetDefaultSeries:           "   ",
 		BudgetWarningDaysBeforeExpiry: 999,
+		MarginTopMm:                   -10,
+		MarginBottomMm:                200,
 	})
 	if clamped.BudgetDefaultValidityDays != 30 {
 		t.Errorf("expected fallback validity days 30 for negative input, got %d", clamped.BudgetDefaultValidityDays)
@@ -357,6 +368,9 @@ func TestNormalizeClinicBudgetSettings(t *testing.T) {
 	}
 	if clamped.BudgetWarningDaysBeforeExpiry != 7 {
 		t.Errorf("expected fallback warning days 7 for out-of-range input, got %d", clamped.BudgetWarningDaysBeforeExpiry)
+	}
+	if clamped.MarginTopMm != 15 || clamped.MarginBottomMm != 15 {
+		t.Errorf("expected fallback margins 15mm for out-of-range input, got top=%d bottom=%d", clamped.MarginTopMm, clamped.MarginBottomMm)
 	}
 }
 

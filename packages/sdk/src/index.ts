@@ -34,6 +34,12 @@ export interface ClinicBudgetSettings {
   budget_warning_days_before_expiry: number;
   budget_validity_terms: string;
   budget_auto_expire: boolean;
+  custom_margins_enabled?: boolean;
+  margin_top_mm?: number;
+  margin_bottom_mm?: number;
+  margin_left_mm?: number;
+  margin_right_mm?: number;
+  hide_header_logo_on_print?: boolean;
 }
 
 export function defaultClinicBudgetSettings(): ClinicBudgetSettings {
@@ -46,6 +52,12 @@ export function defaultClinicBudgetSettings(): ClinicBudgetSettings {
     budget_validity_terms:
       "Presupuesto válido durante el periodo de vigencia indicado. Los importes reflejados incluyen los materiales y controles clínicos especificados para cada alternativa de tratamiento.",
     budget_auto_expire: true,
+    custom_margins_enabled: false,
+    margin_top_mm: 15,
+    margin_bottom_mm: 15,
+    margin_left_mm: 15,
+    margin_right_mm: 15,
+    hide_header_logo_on_print: false,
   };
 }
 

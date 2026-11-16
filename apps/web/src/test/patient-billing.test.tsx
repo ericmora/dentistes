@@ -496,7 +496,103 @@ describe("Patient Clinical Invoicing & Multi-Option Budgets Components (F6/F7)",
         budget_default_validity_days: 60,
         budget_default_series: "PTO",
         budget_validity_terms: "Presupuesto garantizado durante 60 días naturales.",
+        custom_margins_enabled: false,
       }),
     );
+  });
+
+  it("renders ClinicBrandingAndBudgetSettingsCard with customizable print margins for pre-printed paper", () => {
+    const onSave = vi.fn();
+
+    render(
+      <ClinicBrandingAndBudgetSettingsCard
+        clinicName="Clínica Dental Preimpresos"
+        initialSettings={{
+          logo_url: "https://clinica.example.com/logo.svg",
+          custom_margins_enabled: false,
+        }}
+        onSave={onSave}
+      />,
+    );
+
+    // Toggle custom margins
+    const toggle = screen.getByLabelText(/Activar personalización de márgenes de página/i);
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).toBeChecked();
+
+    // Configure margin top, bottom, left and right
+    const topInput = screen.getByLabelText(/Margen Superior/i);
+    fireEvent.change(topInput, { target: { value: "35" } });
+
+    const bottomInput = screen.getByLabelText(/Margen Inferior/i);
+    fireEvent.change(bottomInput, { target: { value: "25" } });
+
+    const leftInput = screen.getByLabelText(/Margen Izquierdo/i);
+    fireEvent.change(leftInput, { target: { value: "20" } });
+
+    const rightInput = screen.getByLabelText(/Margen Derecho/i);
+    fireEvent.change(rightInput, { target: { value: "18" } });
+
+    // Toggle hide header logo for preprinted letterhead
+    const hideHeaderToggle = screen.getByLabelText(/Ocultar logotipo y cabecera digital en la hoja impresa/i);
+    fireEvent.click(hideHeaderToggle);
+    expect(hideHeaderToggle).toBeChecked();
+
+    // Verify preprinted notice appears in live preview
+    expect(screen.getByText(/Espacio reservado para el membrete preimpreso/i)).toBeInTheDocument();
+
+    const saveBtn = screen.getByRole("button", { name: /Guardar logo y parámetros de vigencia/i });
+    fireEvent.click(saveBtn);
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        custom_margins_enabled: true,
+        margin_top_mm: 35,
+        margin_bottom_mm: 25,
+        margin_left_mm: 20,
+        margin_right_mm: 18,
+        hide_header_logo_on_print: true,
+      }),
+    );
+  });
+
+  it("renders BudgetPrintFormatDocument with custom margins and pre-printed sheet mode", () => {
+    const budget = {
+      id: "bud-margins-1",
+      patient_id: "pat-1",
+      doctor_id: "doc-1",
+      doctor_name: "Dr. Jordi Martí",
+      series: "PRE",
+      budget_number: 101,
+      title: "Tratamiento Integral",
+      issue_date: "2026-11-16",
+      validity_days: 30,
+      valid_until: "2026-12-16",
+      status: "PRESENTED" as const,
+      min_estimate_amount: 500,
+      max_estimate_amount: 500,
+      accepted_amount: 500,
+      notes: "",
+      created_at: "2026-11-16T10:00:00Z",
+      updated_at: "2026-11-16T10:00:00Z",
+      findings_blocks: [],
+    };
+
+    render(
+      <BudgetPrintFormatDocument
+        budget={budget}
+        patientName="Carlos Soto"
+        clinicName="Clínica Membretada"
+        customMarginsEnabled={true}
+        marginTopMm={40}
+        marginBottomMm={30}
+        marginLeftMm={25}
+        marginRightMm={25}
+        hideHeaderLogoOnPrint={true}
+      />,
+    );
+
+    expect(screen.getByText(/Modo Hoja Preimpresa Activo/i)).toBeInTheDocument();
   });
 });

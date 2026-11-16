@@ -18,6 +18,12 @@ type ClinicBudgetSettings struct {
 	BudgetWarningDaysBeforeExpiry int    `json:"budget_warning_days_before_expiry"`
 	BudgetValidityTerms           string `json:"budget_validity_terms"`
 	BudgetAutoExpire              bool   `json:"budget_auto_expire"`
+	CustomMarginsEnabled          bool   `json:"custom_margins_enabled"`
+	MarginTopMm                   int    `json:"margin_top_mm"`
+	MarginBottomMm                int    `json:"margin_bottom_mm"`
+	MarginLeftMm                  int    `json:"margin_left_mm"`
+	MarginRightMm                 int    `json:"margin_right_mm"`
+	HideHeaderLogoOnPrint         bool   `json:"hide_header_logo_on_print"`
 }
 
 func DefaultClinicBudgetSettings() ClinicBudgetSettings {
@@ -29,6 +35,12 @@ func DefaultClinicBudgetSettings() ClinicBudgetSettings {
 		BudgetWarningDaysBeforeExpiry: 7,
 		BudgetValidityTerms:           "Presupuesto válido durante el periodo de vigencia indicado. Los importes reflejados incluyen los materiales y controles clínicos especificados para cada alternativa de tratamiento.",
 		BudgetAutoExpire:              true,
+		CustomMarginsEnabled:          false,
+		MarginTopMm:                   15,
+		MarginBottomMm:                15,
+		MarginLeftMm:                  15,
+		MarginRightMm:                 15,
+		HideHeaderLogoOnPrint:         false,
 	}
 }
 
@@ -42,6 +54,12 @@ func NormalizeClinicBudgetSettings(in ClinicBudgetSettings) ClinicBudgetSettings
 		BudgetWarningDaysBeforeExpiry: in.BudgetWarningDaysBeforeExpiry,
 		BudgetValidityTerms:           strings.TrimSpace(in.BudgetValidityTerms),
 		BudgetAutoExpire:              in.BudgetAutoExpire,
+		CustomMarginsEnabled:          in.CustomMarginsEnabled,
+		MarginTopMm:                   in.MarginTopMm,
+		MarginBottomMm:                in.MarginBottomMm,
+		MarginLeftMm:                  in.MarginLeftMm,
+		MarginRightMm:                 in.MarginRightMm,
+		HideHeaderLogoOnPrint:         in.HideHeaderLogoOnPrint,
 	}
 	if out.BudgetDefaultValidityDays < 1 || out.BudgetDefaultValidityDays > 365 {
 		out.BudgetDefaultValidityDays = def.BudgetDefaultValidityDays
@@ -57,6 +75,18 @@ func NormalizeClinicBudgetSettings(in ClinicBudgetSettings) ClinicBudgetSettings
 	}
 	if out.BudgetValidityTerms == "" {
 		out.BudgetValidityTerms = def.BudgetValidityTerms
+	}
+	if out.MarginTopMm < 0 || out.MarginTopMm > 150 {
+		out.MarginTopMm = def.MarginTopMm
+	}
+	if out.MarginBottomMm < 0 || out.MarginBottomMm > 150 {
+		out.MarginBottomMm = def.MarginBottomMm
+	}
+	if out.MarginLeftMm < 0 || out.MarginLeftMm > 150 {
+		out.MarginLeftMm = def.MarginLeftMm
+	}
+	if out.MarginRightMm < 0 || out.MarginRightMm > 150 {
+		out.MarginRightMm = def.MarginRightMm
 	}
 	return out
 }

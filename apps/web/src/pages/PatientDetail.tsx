@@ -2655,6 +2655,12 @@ export function PatientDetailPage() {
             clinicContactLine={effectiveClinicSettings.clinic_contact_line}
             validityTerms={effectiveClinicSettings.budget_validity_terms}
             currency={me?.active_tenant.billing_currency ?? "EUR"}
+            customMarginsEnabled={effectiveClinicSettings.custom_margins_enabled}
+            marginTopMm={effectiveClinicSettings.margin_top_mm}
+            marginBottomMm={effectiveClinicSettings.margin_bottom_mm}
+            marginLeftMm={effectiveClinicSettings.margin_left_mm}
+            marginRightMm={effectiveClinicSettings.margin_right_mm}
+            hideHeaderLogoOnPrint={effectiveClinicSettings.hide_header_logo_on_print}
             onPrint={() => window.print()}
           />
         ) : null}

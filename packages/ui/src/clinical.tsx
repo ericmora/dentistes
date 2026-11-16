@@ -4119,6 +4119,12 @@ export interface ClinicBudgetSettingsUI {
   budget_warning_days_before_expiry: number;
   budget_validity_terms: string;
   budget_auto_expire: boolean;
+  custom_margins_enabled?: boolean;
+  margin_top_mm?: number;
+  margin_bottom_mm?: number;
+  margin_left_mm?: number;
+  margin_right_mm?: number;
+  hide_header_logo_on_print?: boolean;
 }
 
 export const DEFAULT_CLINIC_BUDGET_SETTINGS: ClinicBudgetSettingsUI = {
@@ -4130,6 +4136,12 @@ export const DEFAULT_CLINIC_BUDGET_SETTINGS: ClinicBudgetSettingsUI = {
   budget_validity_terms:
     "Presupuesto válido durante el periodo de vigencia indicado. Los importes reflejados incluyen los materiales y controles clínicos especificados para cada alternativa de tratamiento.",
   budget_auto_expire: true,
+  custom_margins_enabled: false,
+  margin_top_mm: 15,
+  margin_bottom_mm: 15,
+  margin_left_mm: 15,
+  margin_right_mm: 15,
+  hide_header_logo_on_print: false,
 };
 
 export const SAMPLE_CLINIC_LOGO_DATA_URL =
@@ -4153,6 +4165,12 @@ export function BudgetPrintFormatDocument({
   clinicContactLine,
   validityTerms,
   currency = "EUR",
+  customMarginsEnabled = false,
+  marginTopMm = 15,
+  marginBottomMm = 15,
+  marginLeftMm = 15,
+  marginRightMm = 15,
+  hideHeaderLogoOnPrint = false,
   onPrint,
 }: {
   budget: PatientBudgetUI;
@@ -4164,6 +4182,12 @@ export function BudgetPrintFormatDocument({
   clinicContactLine?: string;
   validityTerms?: string;
   currency?: string;
+  customMarginsEnabled?: boolean;
+  marginTopMm?: number;
+  marginBottomMm?: number;
+  marginLeftMm?: number;
+  marginRightMm?: number;
+  hideHeaderLogoOnPrint?: boolean;
   onPrint?: () => void;
 }) {
   const issueDateFormatted = new Date(budget.issue_date).toLocaleDateString("es-ES", {
@@ -4184,12 +4208,46 @@ export function BudgetPrintFormatDocument({
     <div
       data-print-budget="true"
       className="print-budget-sheet space-y-5 rounded-xl border border-slate-300 bg-white p-6 text-slate-900 shadow-xs"
+      style={
+        customMarginsEnabled
+          ? {
+              paddingTop: `${Math.max(10, Math.round(marginTopMm * 0.9))}px`,
+              paddingBottom: `${Math.max(10, Math.round(marginBottomMm * 0.9))}px`,
+              paddingLeft: `${Math.max(10, Math.round(marginLeftMm * 0.9))}px`,
+              paddingRight: `${Math.max(10, Math.round(marginRightMm * 0.9))}px`,
+            }
+          : undefined
+      }
     >
+      {customMarginsEnabled ? (
+        <style>{`
+          @media print {
+            @page {
+              margin-top: ${marginTopMm}mm !important;
+              margin-bottom: ${marginBottomMm}mm !important;
+              margin-left: ${marginLeftMm}mm !important;
+              margin-right: ${marginRightMm}mm !important;
+            }
+            .print-budget-sheet {
+              padding-top: ${marginTopMm}mm !important;
+              padding-bottom: ${marginBottomMm}mm !important;
+              padding-left: ${marginLeftMm}mm !important;
+              padding-right: ${marginRightMm}mm !important;
+            }
+          }
+        `}</style>
+      ) : null}
+
       {/* Top Action Bar (Hidden when printing) */}
       {onPrint ? (
         <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 px-4 py-2.5">
           <div className="text-xs text-brand-950">
             <span className="font-bold">Vista previa de impresión A4</span> · Optimizada para papel y exportación a PDF sin bordes ni menús.
+            {customMarginsEnabled ? (
+              <span className="ml-2 font-semibold text-brand-700">
+                (Márgenes: Sup. {marginTopMm}mm · Inf. {marginBottomMm}mm · Izq. {marginLeftMm}mm · Der. {marginRightMm}mm)
+              </span>
+            ) : null}
           </div>
           <Button size="sm" onClick={onPrint}>
             Imprimir / Guardar PDF para el cliente
@@ -4197,8 +4255,19 @@ export function BudgetPrintFormatDocument({
         </div>
       ) : null}
 
+      {customMarginsEnabled && hideHeaderLogoOnPrint ? (
+        <div className="no-print rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium text-amber-900">
+          📄 <strong>Modo Hoja Preimpresa Activo:</strong> La cabecera digital se omitirá automáticamente al imprimir para respetar el membrete físico de la clínica.
+        </div>
+      ) : null}
+
       {/* Editorial Clinical Document Header */}
-      <div className="print-avoid-break flex flex-wrap items-start justify-between gap-6 border-b-2 border-slate-900 pb-5">
+      <div
+        className={cn(
+          "print-avoid-break flex flex-wrap items-start justify-between gap-6 border-b-2 border-slate-900 pb-5",
+          customMarginsEnabled && hideHeaderLogoOnPrint && "print:hidden",
+        )}
+      >
         <div className="flex items-start gap-4">
           {clinicLogoUrl && clinicLogoUrl.trim() ? (
             <img
@@ -4472,6 +4541,24 @@ export function ClinicBrandingAndBudgetSettingsCard({
   const [autoExpire, setAutoExpire] = useState<boolean>(
     initialSettings?.budget_auto_expire ?? DEFAULT_CLINIC_BUDGET_SETTINGS.budget_auto_expire,
   );
+  const [customMargins, setCustomMargins] = useState<boolean>(
+    initialSettings?.custom_margins_enabled ?? DEFAULT_CLINIC_BUDGET_SETTINGS.custom_margins_enabled ?? false,
+  );
+  const [marginTop, setMarginTop] = useState<number>(
+    initialSettings?.margin_top_mm ?? DEFAULT_CLINIC_BUDGET_SETTINGS.margin_top_mm ?? 15,
+  );
+  const [marginBottom, setMarginBottom] = useState<number>(
+    initialSettings?.margin_bottom_mm ?? DEFAULT_CLINIC_BUDGET_SETTINGS.margin_bottom_mm ?? 15,
+  );
+  const [marginLeft, setMarginLeft] = useState<number>(
+    initialSettings?.margin_left_mm ?? DEFAULT_CLINIC_BUDGET_SETTINGS.margin_left_mm ?? 15,
+  );
+  const [marginRight, setMarginRight] = useState<number>(
+    initialSettings?.margin_right_mm ?? DEFAULT_CLINIC_BUDGET_SETTINGS.margin_right_mm ?? 15,
+  );
+  const [hideHeaderLogo, setHideHeaderLogo] = useState<boolean>(
+    initialSettings?.hide_header_logo_on_print ?? DEFAULT_CLINIC_BUDGET_SETTINGS.hide_header_logo_on_print ?? false,
+  );
 
   const previewValidUntil = useMemo(() => {
     const d = new Date();
@@ -4630,6 +4717,153 @@ export function ClinicBrandingAndBudgetSettingsCard({
             </label>
           </div>
 
+          {/* 3. Pre-printed sheets & Custom margins configuration */}
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                  Márgenes de Impresión y Hojas Preimpresas
+                </span>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Para clínicas con papel físico preimpreso o membretado, personaliza los márgenes para encajar el texto perfectamente.
+                </p>
+              </div>
+              <Badge tone={customMargins ? "success" : "neutral"}>
+                {customMargins ? "Personalizados" : "Estándar"}
+              </Badge>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-800 cursor-pointer pt-1">
+              <input
+                id="custom-margins-toggle"
+                type="checkbox"
+                checked={customMargins}
+                onChange={(e) => setCustomMargins(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span>Activar personalización de márgenes de página</span>
+            </label>
+
+            {customMargins ? (
+              <div className="space-y-3 pt-2 border-t border-slate-200">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label htmlFor="margin-top-input" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Margen Superior
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="margin-top-input"
+                        type="number"
+                        min={0}
+                        max={150}
+                        value={marginTop}
+                        onChange={(e) => setMarginTop(Math.max(0, Math.min(150, Number(e.target.value) || 0)))}
+                        className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-bold tabular-nums text-slate-900"
+                      />
+                      <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 font-medium">mm</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="margin-bottom-input" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Margen Inferior
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="margin-bottom-input"
+                        type="number"
+                        min={0}
+                        max={150}
+                        value={marginBottom}
+                        onChange={(e) => setMarginBottom(Math.max(0, Math.min(150, Number(e.target.value) || 0)))}
+                        className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-bold tabular-nums text-slate-900"
+                      />
+                      <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 font-medium">mm</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="margin-left-input" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Margen Izquierdo
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="margin-left-input"
+                        type="number"
+                        min={0}
+                        max={150}
+                        value={marginLeft}
+                        onChange={(e) => setMarginLeft(Math.max(0, Math.min(150, Number(e.target.value) || 0)))}
+                        className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-bold tabular-nums text-slate-900"
+                      />
+                      <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 font-medium">mm</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="margin-right-input" className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      Margen Derecho
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="margin-right-input"
+                        type="number"
+                        min={0}
+                        max={150}
+                        value={marginRight}
+                        onChange={(e) => setMarginRight(Math.max(0, Math.min(150, Number(e.target.value) || 0)))}
+                        className="h-8 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-bold tabular-nums text-slate-900"
+                      />
+                      <span className="absolute right-2.5 top-2 text-[10px] text-slate-400 font-medium">mm</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-slate-500 font-medium mr-1">Preajustes rápidos:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setMarginTop(15); setMarginBottom(15); setMarginLeft(15); setMarginRight(15); }}
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Estándar (15 mm)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMarginTop(35); setMarginBottom(15); setMarginLeft(15); setMarginRight(15); }}
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Membrete Superior (35 mm)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMarginTop(35); setMarginBottom(25); setMarginLeft(20); setMarginRight(20); }}
+                    className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-slate-100"
+                  >
+                    Membrete Completo (35/25 mm)
+                  </button>
+                </div>
+
+                <label className="flex items-start gap-2 text-xs text-slate-700 cursor-pointer pt-1">
+                  <input
+                    id="hide-header-logo-toggle"
+                    type="checkbox"
+                    checked={hideHeaderLogo}
+                    onChange={(e) => setHideHeaderLogo(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 mt-0.5"
+                  />
+                  <span>
+                    <strong>Ocultar logotipo y cabecera digital en la hoja impresa</strong>
+                    <span className="block text-[11px] text-slate-500">
+                      Ideal si tus hojas ya tienen el membrete impreso por imprenta para evitar duplicar el logo al imprimir.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ) : null}
+          </div>
+
           <div className="flex justify-end pt-1">
             <Button
               loading={saving}
@@ -4642,6 +4876,12 @@ export function ClinicBrandingAndBudgetSettingsCard({
                   budget_warning_days_before_expiry: Number(warningDays) || 7,
                   budget_validity_terms: validityTerms.trim(),
                   budget_auto_expire: autoExpire,
+                  custom_margins_enabled: customMargins,
+                  margin_top_mm: Number(marginTop) || 15,
+                  margin_bottom_mm: Number(marginBottom) || 15,
+                  margin_left_mm: Number(marginLeft) || 15,
+                  margin_right_mm: Number(marginRight) || 15,
+                  hide_header_logo_on_print: hideHeaderLogo,
                 })
               }
             >
@@ -4659,30 +4899,51 @@ export function ClinicBrandingAndBudgetSettingsCard({
             <Badge tone="info">Formato A4</Badge>
           </div>
 
-          <div className="space-y-4 rounded-xl border border-slate-300 bg-white p-4 shadow-xs text-xs">
-            <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-3">
-              <div className="flex items-start gap-2.5">
-                {logoUrl.trim() ? (
-                  <img
-                    src={logoUrl.trim()}
-                    alt={`Vista previa logo ${clinicName}`}
-                    className="h-11 max-w-[140px] object-contain shrink-0"
-                  />
-                ) : null}
-                <div>
-                  <p className="font-extrabold uppercase text-brand-800">{clinicName}</p>
-                  {clinicTaxId ? <p className="text-[10px] text-slate-500">NIF: {clinicTaxId}</p> : null}
-                  {contactLine ? <p className="text-[10px] text-slate-500">{contactLine}</p> : null}
+          {customMargins ? (
+            <div className="rounded-lg border border-brand-200 bg-brand-50/70 px-3 py-1.5 text-[10px] text-brand-900 flex items-center justify-between">
+              <span>Márgenes: Sup. {marginTop}mm · Inf. {marginBottom}mm · Izq. {marginLeft}mm · Der. {marginRight}mm</span>
+              {hideHeaderLogo ? <span className="font-semibold text-amber-700">Logo oculto en papel</span> : null}
+            </div>
+          ) : null}
+
+          <div
+            className="space-y-4 rounded-xl border border-slate-300 bg-white p-4 shadow-xs text-xs transition-all"
+            style={{
+              paddingTop: customMargins ? `${Math.max(8, Math.round(marginTop * 0.8))}px` : undefined,
+              paddingBottom: customMargins ? `${Math.max(8, Math.round(marginBottom * 0.8))}px` : undefined,
+              paddingLeft: customMargins ? `${Math.max(8, Math.round(marginLeft * 0.8))}px` : undefined,
+              paddingRight: customMargins ? `${Math.max(8, Math.round(marginRight * 0.8))}px` : undefined,
+            }}
+          >
+            {customMargins && hideHeaderLogo ? (
+              <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-2 text-center text-[10px] text-amber-800">
+                📄 Espacio reservado para el membrete preimpreso de la clínica (cabecera omitida al imprimir)
+              </div>
+            ) : (
+              <div className="flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-3">
+                <div className="flex items-start gap-2.5">
+                  {logoUrl.trim() ? (
+                    <img
+                      src={logoUrl.trim()}
+                      alt={`Vista previa logo ${clinicName}`}
+                      className="h-11 max-w-[140px] object-contain shrink-0"
+                    />
+                  ) : null}
+                  <div>
+                    <p className="font-extrabold uppercase text-brand-800">{clinicName}</p>
+                    {clinicTaxId ? <p className="text-[10px] text-slate-500">NIF: {clinicTaxId}</p> : null}
+                    {contactLine ? <p className="text-[10px] text-slate-500">{contactLine}</p> : null}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-[10px]">
+                  <p className="font-extrabold text-slate-900">{defaultSeries || "PRE"}-101</p>
+                  <p className="font-semibold text-brand-800">
+                    Vigencia: {validityDays} días (hasta {previewValidUntil})
+                  </p>
                 </div>
               </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-right text-[10px]">
-                <p className="font-extrabold text-slate-900">{defaultSeries || "PRE"}-101</p>
-                <p className="font-semibold text-brand-800">
-                  Vigencia: {validityDays} días (hasta {previewValidUntil})
-                </p>
-              </div>
-            </div>
+            )}
 
             <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-2.5 text-[11px] text-slate-600">
               <strong className="text-slate-800">Condiciones de vigencia ({validityDays} días):</strong>{" "}
