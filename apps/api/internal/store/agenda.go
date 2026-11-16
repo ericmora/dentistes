@@ -513,8 +513,24 @@ func (s *Store) hasAppointmentOverlap(ctx context.Context, tx pgx.Tx, cabinetID,
 }
 
 func (s *Store) CreateAppointment(ctx context.Context, tx pgx.Tx, tenantID string, in UpsertAppointmentInput) (*Appointment, error) {
+	docID := in.DoctorID
+	asstID := in.AssistantID
+
+	var cabDoc, cabAsst *string
+	_ = tx.QueryRow(ctx, `select doctor_id::text, assistant_id::text from cabinets where id = $1::uuid`, in.CabinetID).Scan(&cabDoc, &cabAsst)
+	if cabDoc != nil && *cabDoc != "" {
+		docID = *cabDoc
+	}
+	if cabAsst != nil && *cabAsst != "" {
+		asstID = cabAsst
+	}
+
+	if docID == "" {
+		return nil, errors.New("cabinet has no assigned doctor and no doctor was specified")
+	}
+
 	if !in.IsForced {
-		overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.DoctorID, in.StartTime, in.EndTime, "")
+		overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, docID, in.StartTime, in.EndTime, "")
 		if err != nil {
 			return nil, err
 		}
@@ -526,20 +542,12 @@ func (s *Store) CreateAppointment(ctx context.Context, tx pgx.Tx, tenantID strin
 	if status == "" {
 		status = "SCHEDULED"
 	}
-	asstID := in.AssistantID
-	if asstID == nil || *asstID == "" {
-		var cabAsst *string
-		_ = tx.QueryRow(ctx, `select assistant_id::text from cabinets where id = $1::uuid`, in.CabinetID).Scan(&cabAsst)
-		if cabAsst != nil && *cabAsst != "" {
-			asstID = cabAsst
-		}
-	}
 	var id string
 	err := tx.QueryRow(ctx, `insert into appointments
 			(tenant_id, patient_id, doctor_id, cabinet_id, assistant_id, start_time, end_time, treatment_type, status, is_forced, notes)
 		values ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10, nullif($11, ''))
 		returning id`,
-		tenantID, in.PatientID, in.DoctorID, in.CabinetID, asstID, in.StartTime, in.EndTime, in.TreatmentType, status, in.IsForced, in.Notes).
+		tenantID, in.PatientID, docID, in.CabinetID, asstID, in.StartTime, in.EndTime, in.TreatmentType, status, in.IsForced, in.Notes).
 		Scan(&id)
 	if err != nil {
 		return nil, err
@@ -560,22 +568,29 @@ func (s *Store) UpdateAppointment(ctx context.Context, tx pgx.Tx, id string, in 
 		return nil, ErrVersionConflict
 	}
 
+	docID := in.DoctorID
+	asstID := in.AssistantID
+
+	var cabDoc, cabAsst *string
+	_ = tx.QueryRow(ctx, `select doctor_id::text, assistant_id::text from cabinets where id = $1::uuid`, in.CabinetID).Scan(&cabDoc, &cabAsst)
+	if cabDoc != nil && *cabDoc != "" {
+		docID = *cabDoc
+	}
+	if cabAsst != nil && *cabAsst != "" {
+		asstID = cabAsst
+	}
+
+	if docID == "" {
+		return nil, errors.New("cabinet has no assigned doctor and no doctor was specified")
+	}
+
 	if !in.IsForced {
-		overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, in.DoctorID, in.StartTime, in.EndTime, id)
+		overlap, err := s.hasAppointmentOverlap(ctx, tx, in.CabinetID, docID, in.StartTime, in.EndTime, id)
 		if err != nil {
 			return nil, err
 		}
 		if overlap {
 			return nil, ErrOverlap
-		}
-	}
-
-	asstID := in.AssistantID
-	if asstID == nil || *asstID == "" {
-		var cabAsst *string
-		_ = tx.QueryRow(ctx, `select assistant_id::text from cabinets where id = $1::uuid`, in.CabinetID).Scan(&cabAsst)
-		if cabAsst != nil && *cabAsst != "" {
-			asstID = cabAsst
 		}
 	}
 
@@ -590,7 +605,7 @@ func (s *Store) UpdateAppointment(ctx context.Context, tx pgx.Tx, id string, in 
 			notes = nullif($9, ''),
 			version = version + 1
 		where id = $1`,
-		id, in.DoctorID, in.CabinetID, asstID, in.StartTime, in.EndTime, in.TreatmentType, in.IsForced, in.Notes)
+		id, docID, in.CabinetID, asstID, in.StartTime, in.EndTime, in.TreatmentType, in.IsForced, in.Notes)
 	if err != nil {
 		return nil, err
 	}

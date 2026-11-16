@@ -272,8 +272,8 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	req.TreatmentType = strings.TrimSpace(req.TreatmentType)
-	if req.PatientID == "" || req.DoctorID == "" || req.CabinetID == "" || req.TreatmentType == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "patient_id, doctor_id, cabinet_id and treatment_type are required", nil)
+	if req.PatientID == "" || req.CabinetID == "" || req.TreatmentType == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "patient_id, cabinet_id and treatment_type are required", nil)
 		return
 	}
 
@@ -295,6 +295,10 @@ func (s *Server) handleCreateAppointment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err != nil {
+		if strings.Contains(err.Error(), "no assigned doctor") {
+			writeError(w, http.StatusBadRequest, "VALIDATION", err.Error(), nil)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not create appointment", nil)
 		return
 	}
@@ -339,8 +343,8 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	req.TreatmentType = strings.TrimSpace(req.TreatmentType)
-	if req.DoctorID == "" || req.CabinetID == "" || req.TreatmentType == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION", "doctor_id, cabinet_id and treatment_type are required", nil)
+	if req.CabinetID == "" || req.TreatmentType == "" {
+		writeError(w, http.StatusBadRequest, "VALIDATION", "cabinet_id and treatment_type are required", nil)
 		return
 	}
 
@@ -369,6 +373,10 @@ func (s *Server) handleUpdateAppointment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err != nil {
+		if strings.Contains(err.Error(), "no assigned doctor") {
+			writeError(w, http.StatusBadRequest, "VALIDATION", err.Error(), nil)
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "INTERNAL", "could not update appointment", nil)
 		return
 	}

@@ -1643,7 +1643,7 @@ export class DentistesClient {
 
   createAppointment(input: {
     patient_id: string;
-    doctor_id: string;
+    doctor_id?: string;
     cabinet_id: string;
     assistant_id?: string;
     start_time: string;
@@ -1658,7 +1658,7 @@ export class DentistesClient {
   updateAppointment(
     id: string,
     input: {
-      doctor_id: string;
+      doctor_id?: string;
       cabinet_id: string;
       assistant_id?: string;
       start_time: string;
