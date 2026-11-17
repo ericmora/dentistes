@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ClinicAdminPage } from "../pages/ClinicAdmin";
@@ -312,6 +313,37 @@ describe("Butacas, Gabinetes and Staff Absences (ClinicAdminPage)", () => {
         }),
       );
     });
+  });
+
+  it("keeps input focus when typing in chair name and equipment fields inside the modal", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<ClinicAdminPage />);
+
+    const chairsTab = screen.getByRole("tab", { name: /Butacas/i });
+    fireEvent.click(chairsTab);
+
+    await waitFor(() => {
+      expect(screen.getByText("Sillón Quirúrgico A")).toBeInTheDocument();
+    });
+
+    const newChairBtn = screen.getByRole("button", { name: /Nueva butaca/i });
+    fireEvent.click(newChairBtn);
+
+    const nameInput = screen.getByLabelText(/Nombre de la butaca/i);
+    await user.click(nameInput);
+    expect(document.activeElement).toBe(nameInput);
+
+    await user.type(nameInput, "Sillón Ortho 1");
+    expect(nameInput).toHaveValue("Sillón Ortho 1");
+    expect(document.activeElement).toBe(nameInput);
+
+    const equipInput = screen.getByLabelText(/Equipamiento técnico instalado/i);
+    await user.click(equipInput);
+    expect(document.activeElement).toBe(equipInput);
+
+    await user.type(equipInput, "Motor endo");
+    expect(equipInput).toHaveValue("Motor endo");
+    expect(document.activeElement).toBe(equipInput);
   });
 
   it("renders Vacaciones y Bajas tab and allows toggling auto_approve_absences", async () => {
